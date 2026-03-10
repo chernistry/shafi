@@ -1,0 +1,290 @@
+from __future__ import annotations
+
+import re
+
+from rag_challenge.config import get_settings
+from rag_challenge.models import QueryComplexity
+
+_MULTI_PART_RE = re.compile(
+    r"(?:;\s*(?:and\s+)?|(?:\band\s+also\b)|(?:\badditionally\b)|(?:\bfurthermore\b)|(?:\bmoreover\b))",
+    re.IGNORECASE,
+)
+
+_LEGAL_ENTITY_RE = re.compile(
+    r"(?:§\s*\d+[\w().-]*"
+    r"|\d+\s+U\.?S\.?C\.?\s*§?\s*\d+[\w().-]*"
+    r"|Law\s+No\.?\s*\d+\s+of\s+\d{4}"
+    r"|(?:CFI|CA|SCT|ENF|DEC|TCD|ARB)\s*\d{1,3}[/-]\d{4}"
+    r"|\d+\s+[A-Z][A-Za-z.]+\s+\d+"
+    r"|[A-Z][A-Za-z]+\s+v\.?\s+[A-Z][A-Za-z]+"
+    r"|(?:Article|Section|Clause|Part|Schedule|Appendix)\s+\d+)",
+    re.IGNORECASE,
+)
+
+_USC_RE = re.compile(r"(\d+)\s*U\.?S\.?C\.?\s*§?\s*(\d+)", re.IGNORECASE)
+_LAW_NO_RE = re.compile(r"\blaw\s*no\.?\s*(\d+)\s*of\s*(\d{4})\b", re.IGNORECASE)
+_DIFC_CASE_RE = re.compile(
+    r"\b(CFI|CA|SCT|ENF|DEC|TCD|ARB)\s*[-\s]*0*(\d{1,4})\s*[/-]\s*(\d{4})\b", re.IGNORECASE
+)
+_LAW_TITLE_RE = re.compile(
+    r"\b([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,10}\s+Law)\s+(\d{4})\b",
+    re.IGNORECASE,
+)
+_REG_TITLE_RE = re.compile(
+    r"\b([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,10}\s+Regulations?)\b(?:\s+(\d{4}))?\b",
+    re.IGNORECASE,
+)
+_ARTICLE_SUB_RE = re.compile(r"\barticle\s+(\d+)\s*\(\s*([^)]+?)\s*\)", re.IGNORECASE)
+_MULTI_WS_RE = re.compile(r"\s+")
+
+_ACRONYMS = {
+    "DIFC",
+    "DFSA",
+    "UAE",
+    "AI",
+    "AML",
+    "CFT",
+    "CRS",
+    "ICC",
+    "IC",
+    "LLP",
+    "PJSC",
+}
+
+
+class QueryClassifier:
+    """Zero-latency heuristic query classifier + normalizer."""
+
+    def __init__(self) -> None:
+        self._settings = get_settings().llm
+
+    @staticmethod
+    def normalize_query(query: str) -> str:
+        text = query.strip()
+        text = _USC_RE.sub(r"\1 U.S.C. § \2", text)
+        text = _LAW_NO_RE.sub(r"Law No. \1 of \2", text)
+        text = _DIFC_CASE_RE.sub(lambda m: f"{m.group(1).upper()} {int(m.group(2)):03d}/{m.group(3)}", text)
+        text = _ARTICLE_SUB_RE.sub(r"Article \1(\2)", text)
+        text = _MULTI_WS_RE.sub(" ", text)
+        return text
+
+    @staticmethod
+    def _normalize_law_title(raw_title: str, year: str) -> str:
+        title = _MULTI_WS_RE.sub(" ", raw_title.strip())
+        if not title or not year.strip():
+            return ""
+        stopwords = {
+            "the",
+            "of",
+            "in",
+            "under",
+            "for",
+            "to",
+            "and",
+            "or",
+            "a",
+            "an",
+            "by",
+            "on",
+            "at",
+            "from",
+            "see",
+            "compare",
+        }
+
+        tokens: list[str] = []
+        for word in title.split(" "):
+            clean = re.sub(r"[^A-Za-z0-9]", "", word)
+            if clean:
+                tokens.append(clean)
+        if not tokens:
+            return ""
+
+        kept_rev: list[str] = []
+        for token in reversed(tokens):
+            if kept_rev and token.lower() in stopwords:
+                break
+            kept_rev.append(token)
+        kept = list(reversed(kept_rev))
+        if not kept:
+            return ""
+
+        words: list[str] = []
+        for token in kept:
+            if any(ch.isdigit() for ch in token):
+                words.append(token)
+                continue
+            upper = token.upper()
+            if upper in _ACRONYMS:
+                words.append(upper)
+            else:
+                words.append(token[0].upper() + token[1:].lower())
+        if not words:
+            return ""
+        if words[-1].lower() != "law":
+            words.append("Law")
+        else:
+            words[-1] = "Law"
+        return f"{' '.join(words)} {year.strip()}"
+
+    @staticmethod
+    def _normalize_reg_title(raw_title: str, year: str | None) -> str:
+        title = _MULTI_WS_RE.sub(" ", raw_title.strip())
+        if not title:
+            return ""
+        stopwords = {
+            "the",
+            "of",
+            "in",
+            "under",
+            "for",
+            "to",
+            "and",
+            "or",
+            "a",
+            "an",
+            "by",
+            "on",
+            "at",
+            "from",
+            "see",
+            "compare",
+        }
+
+        tokens: list[str] = []
+        for word in title.split(" "):
+            clean = re.sub(r"[^A-Za-z0-9]", "", word)
+            if clean:
+                tokens.append(clean)
+        if not tokens:
+            return ""
+
+        kept_rev: list[str] = []
+        for token in reversed(tokens):
+            if kept_rev and token.lower() in stopwords:
+                break
+            kept_rev.append(token)
+        kept = list(reversed(kept_rev))
+        if not kept:
+            return ""
+
+        words: list[str] = []
+        for token in kept:
+            if any(ch.isdigit() for ch in token):
+                words.append(token)
+                continue
+            upper = token.upper()
+            if upper in _ACRONYMS:
+                words.append(upper)
+            else:
+                words.append(token[0].upper() + token[1:].lower())
+        if not words:
+            return ""
+
+        last = words[-1].lower()
+        if last == "regulation":
+            words[-1] = "Regulations"
+        elif last != "regulations":
+            words.append("Regulations")
+        else:
+            words[-1] = "Regulations"
+
+        if year is not None and year.strip():
+            return f"{' '.join(words)} {year.strip()}"
+        return " ".join(words)
+
+    @staticmethod
+    def _normalize_article(raw: str) -> str:
+        text = raw.strip()
+        if not text:
+            return ""
+        text = re.sub(r"\barticle\b", "Article", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s*\(\s*", "(", text)
+        text = re.sub(r"\s*\)\s*", ")", text)
+        return text.strip()
+
+    @classmethod
+    def extract_doc_refs(cls, query: str) -> list[str]:
+        """Extract DIFC-style document identifiers from a query for retrieval filtering.
+
+        Returned refs are normalized to match ingestion chunk metadata, e.g.:
+        - "Law No. 12 of 2004"
+        - "CFI 010/2024"
+        """
+        normalized = cls.normalize_query(query)
+        refs: list[str] = []
+
+        for match in _LAW_NO_RE.finditer(normalized):
+            refs.append(f"Law No. {int(match.group(1))} of {match.group(2)}")
+
+        for match in _DIFC_CASE_RE.finditer(normalized):
+            refs.append(f"{match.group(1).upper()} {int(match.group(2)):03d}/{match.group(3)}")
+
+        # Dedupe, preserve order.
+        seen: set[str] = set()
+        out: list[str] = []
+        for ref in refs:
+            if ref in seen:
+                continue
+            seen.add(ref)
+            out.append(ref)
+        return out
+
+    @classmethod
+    def extract_query_refs(cls, query: str) -> list[str]:
+        """Extract a broader set of normalized legal references from a query.
+
+        This is intended for *analysis/guardrails* (e.g., multi-document grounding checks),
+        not for retrieval filtering. It includes law titles like "Trust Law 2018".
+        """
+        normalized = cls.normalize_query(query)
+        refs: list[str] = []
+
+        refs.extend(cls.extract_doc_refs(normalized))
+        for match in _LAW_TITLE_RE.finditer(normalized):
+            normalized_title = cls._normalize_law_title(match.group(1), match.group(2))
+            if normalized_title:
+                refs.append(normalized_title)
+        for match in _REG_TITLE_RE.finditer(normalized):
+            year = match.group(2) if match.lastindex and match.lastindex >= 2 else None
+            normalized_title = cls._normalize_reg_title(match.group(1), year)
+            if normalized_title:
+                refs.append(normalized_title)
+
+        seen: set[str] = set()
+        out: list[str] = []
+        for ref in refs:
+            if ref in seen:
+                continue
+            seen.add(ref)
+            out.append(ref)
+        return out
+
+    def classify(self, query: str) -> QueryComplexity:
+        if len(query) > int(self._settings.complex_min_length):
+            return QueryComplexity.COMPLEX
+
+        query_lower = query.lower()
+        keyword_hits = sum(1 for kw in self._settings.complex_keywords if kw.lower() in query_lower)
+        if keyword_hits >= int(self._settings.complex_min_entities):
+            return QueryComplexity.COMPLEX
+
+        entities = _LEGAL_ENTITY_RE.findall(query)
+        if len(entities) >= int(self._settings.complex_min_entities):
+            return QueryComplexity.COMPLEX
+
+        if _MULTI_PART_RE.search(query):
+            return QueryComplexity.COMPLEX
+
+        return QueryComplexity.SIMPLE
+
+    def select_model(self, complexity: QueryComplexity) -> str:
+        if complexity == QueryComplexity.COMPLEX:
+            return self._settings.complex_model
+        return self._settings.simple_model
+
+    def select_max_tokens(self, complexity: QueryComplexity) -> int:
+        if complexity == QueryComplexity.COMPLEX:
+            return int(self._settings.complex_max_tokens)
+        return int(self._settings.simple_max_tokens)

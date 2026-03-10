@@ -1,0 +1,36 @@
+{
+  "include": [
+    "src",
+    "pyproject.toml",
+    "uv.lock",
+    "README.md",
+    "Dockerfile",
+    "docker-compose.yml",
+    ".env.example"
+  ],
+  "exclude_globs": [
+    ".git/**",
+    ".venv/**",
+    ".cache/**",
+    ".pytest_cache/**",
+    ".ruff_cache/**",
+    ".rapidocr_models/**",
+    ".benchmarks/**",
+    ".cursor/**",
+    ".sdd/**",
+    "data/**",
+    "dataset/**",
+    "src/rag_challenge/eval/**",
+    "src/rag_challenge/prompts/eval/**",
+    "src/rag_challenge/tools/**",
+    "starter_kit/**",
+    "platform_runs/**",
+    "**/__pycache__/**",
+    "**/.DS_Store",
+    "*.pyc",
+    "*.pyo",
+    "*.log",
+    ".env",
+    ".env.local"
+  ]
+}

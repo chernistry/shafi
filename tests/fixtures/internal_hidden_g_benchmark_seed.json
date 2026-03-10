@@ -1,0 +1,1746 @@
+{
+  "name": "hidden_g_benchmark_seed_v2",
+  "source_eval": "eval_100326_075559_benchmark_first.json",
+  "description": "Tracked seed benchmark derived from the latest accepted local Docker eval. Manually curated high-risk cases keep item/slot gold pages, while uncovered public cases inherit seed page ids from the accepted eval as a regression-only guardrail.",
+  "cases": [
+    {
+      "question_id": "89fd4fbcdcf5c17ba256395ee64378a3f2125b081394a9568964defb28fdef75",
+      "gold_page_ids": [
+        "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_4",
+        "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_4",
+        "f3ef6ad7f5231c706997189baa89e8199fe5c7bd43cb0d6c84ef1f6a884be79b_4",
+        "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_4",
+        "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5",
+        "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4",
+        "65e069c97a1a51601f44a9e318191b3f714e4f754e3ecff47d030a46fe848db8_2",
+        "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_3",
+        "735fd64cb8caa16a5ebd7bb58631cd8b40080ffb13fc91c1598341de01c63cda_3",
+        "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_8",
+        "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_8",
+        "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_5"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "6e8d0c41f3e5b8a5383db8964a64254de33aec88f0c7abea793c37ecf4c4db43",
+      "gold_page_ids": [
+        "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32_1",
+        "849bf95cdc57e206fdab9597da97c15e608252902252e4ac6ac3c7cb1db89aa8_1",
+        "c850b3f04668abe265441e338a92d3ec1c547948b895cf1c27e4a7f2506bb130_1",
+        "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_1",
+        "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_1",
+        "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_1",
+        "96853cbb2873718b7613b42de18dcf417aac607e7fd3e143cab9db7f40622263_1",
+        "5c9d86f9661b03024861c781332d81f275b34fc894d2d5bc11f9e0e1cfbb4b93_1",
+        "3efee4fe904cb89605ab5baee9f20a97242c4e40e9a496c682448f91c9515497_1",
+        "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_1",
+        "bac066005f21591dbcff19a56cdef279bd4f32482e3758925a38c478e75b81a8_1",
+        "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "4aa0f4e28b151c9fb03acbccd37d724bb0f9fae137c8fdc268c6c03cd6c7c7ac",
+      "gold_page_ids": [
+        "ace28d887202e102b4a45ee48840b538f90e21c5d989a9cef767f58ba22ef999_4",
+        "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_3",
+        "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533_4",
+        "709720c8dbdec5b25dee24c384f0cae7d2b94e3704c44f57c5a98ddf87b94f54_4",
+        "44526eeeb977304793a333fd1851448f5f6d2e75ac0979cc265b03d819be99c5_6",
+        "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_2",
+        "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54_3",
+        "c94f011cc2ece6e5f8f45479a21a1ef18764e6616ac0d50ab9055e2a99383af9_3",
+        "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f_3",
+        "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_4",
+        "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "2b4df6b47be14235fb3f3d5b75491ba3232be4e471db296b992446105369b60e",
+      "gold_page_ids": [
+        "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_1",
+        "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_1",
+        "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_1",
+        "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_1",
+        "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_1",
+        "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533_1",
+        "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_1",
+        "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "36a833768836b02a61938fcb5914f069b6b342eaf47d1a67ca2c5acc6d71bc0e",
+      "gold_page_ids": [
+        "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_1",
+        "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_1",
+        "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_1",
+        "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_1",
+        "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_1",
+        "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_1",
+        "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_1",
+        "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "c595f1180b440f4e6ea5e130563fb4c2e9705557d3abf10e401948c0eb73b268",
+      "gold_page_ids": [
+        "be59024d9c82dbc4a8b716e94bd1169387066998e415fb598e677eb9ad104c29_1",
+        "2367e45430240e0210f1c54962e7e3a96b6b0908c56e01eb77ced99e114d61be_2"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "be59024d9c82dbc4a8b716e94bd1169387066998e415fb598e677eb9ad104c29_1",
+            "2367e45430240e0210f1c54962e7e3a96b6b0908c56e01eb77ced99e114d61be_2"
+          ],
+          "slots": [
+            {
+              "name": "superseded_articles",
+              "gold_page_ids": [
+                "be59024d9c82dbc4a8b716e94bd1169387066998e415fb598e677eb9ad104c29_1"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "article_4_theme",
+              "gold_page_ids": [
+                "2367e45430240e0210f1c54962e7e3a96b6b0908c56e01eb77ced99e114d61be_2"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "170221727c50538d8728268a4e4b0d0cb8bfac6a8b9c159d47d8ceea7f6a3bfd",
+      "gold_page_ids": [
+        "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_1",
+        "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_1"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_1",
+            "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_1"
+          ],
+          "slots": [
+            {
+              "name": "law_5_of_2018_title_and_update",
+              "gold_page_ids": [
+                "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_1"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "law_4_of_2019_title_and_update",
+              "gold_page_ids": [
+                "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_1"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": true,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "4ce050c0d6261bf3ee2eafa9c7d5fc7273e390a4a1c09ab6e26f691c68199d1b",
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Direct source audit confirms Leasing Law page 4 and canonical Trust Law page 5 both contain the administration clause; consolidated Trust family pages are surrogate context, not gold.",
+      "gold_page_ids": [
+        "8c6d34f8833e88c664c99576d875f0d1bcab6bd6360e9c6fe6dec3f50f9bde01_4",
+        "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "8c6d34f8833e88c664c99576d875f0d1bcab6bd6360e9c6fe6dec3f50f9bde01_4",
+            "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5"
+          ],
+          "slots": [
+            {
+              "name": "leasing_law_administration",
+              "gold_page_ids": [
+                "8c6d34f8833e88c664c99576d875f0d1bcab6bd6360e9c6fe6dec3f50f9bde01_4"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "trust_law_administration",
+              "gold_page_ids": [
+                "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": true
+    },
+    {
+      "question_id": "6351cfe2534da67df395e52e3370b7b5f724a1ac5d23e053b3d8ebc88a5f634c",
+      "gold_page_ids": [
+        "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_4",
+        "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_4",
+        "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "b4d8c1cc3b6017107e2f566421d5548b95844e6fa9f6c9e40a695f4bbc11ee6a",
+      "gold_page_ids": [
+        "bee43bdc6ca06c2a04f4126d4b94fa4be3d47a62e8b3bdd8d0ddce986dff25a6_4",
+        "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "e14388d8fe61056e07ce155e692acf4552e070e0ee88d73b20c15c3c750dbc0d",
+      "gold_page_ids": [
+        "fb4addc95a4cf4e622a048ba729de434400e523f293197cb979514485c067b1b_1",
+        "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32_1"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "fb4addc95a4cf4e622a048ba729de434400e523f293197cb979514485c067b1b_1",
+            "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32_1"
+          ],
+          "slots": [
+            {
+              "name": "law_no_3_of_2024_commencement",
+              "gold_page_ids": [
+                "fb4addc95a4cf4e622a048ba729de434400e523f293197cb979514485c067b1b_1"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "law_no_4_of_2024_commencement",
+              "gold_page_ids": [
+                "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32_1"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": true,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "d9c088343bcf9b1b7a17a4a92b394925494a8ae2a2f86b09d10d267179eb01bb",
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manual multi-slot enacted-plus-amended benchmark case.",
+      "gold_page_ids": [
+        "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d_1",
+        "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533_1",
+        "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_1"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d_1",
+            "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533_1",
+            "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_1"
+          ],
+          "slots": [
+            {
+              "name": "enactment_date",
+              "gold_page_ids": [
+                "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d_1"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "amended_limited_partnership_law",
+              "gold_page_ids": [
+                "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533_1"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "amended_foundations_law",
+              "gold_page_ids": [
+                "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_1"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false
+    },
+    {
+      "question_id": "54103603d632383a733ea81fe983eac4982a22bbd77f1e8a0daa333c249cd5c9",
+      "gold_page_ids": [
+        "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4",
+        "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_3"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4",
+            "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_3"
+          ],
+          "slots": [
+            {
+              "name": "llp_administration",
+              "gold_page_ids": [
+                "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "npio_administration",
+              "gold_page_ids": [
+                "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_3"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": true,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "2180c75894515d7db767c477c26326e97f1cd69c17c4f1746706e859f2d0e10d",
+      "gold_page_ids": [
+        "406365706456d37cf871ccb1cfc4618bca6af7d838fbefca08b4a87a3cbe583d_3",
+        "e431a7be5d2271f185d4a8469c7927de116be1343291e4be4aae83366edc1b65_3"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "115a9bca032550a20271240b8785b922d35a7117f7f1760250eba1c34345be9e",
+      "gold_page_ids": [
+        "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_1",
+        "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "1107e2844571d4c05755c1607e1a847a54fc023777f8b4f87e2ac50d5256c3d8",
+      "gold_page_ids": [
+        "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_4"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_4"
+          ],
+          "slots": [
+            {
+              "name": "data_protection_law_commencement",
+              "gold_page_ids": [
+                "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_4"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "b909797db886eacd0f6264bf87649f2ada41f9b7d6c02bc12fe7ea21a02a7418",
+      "gold_page_ids": [
+        "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4",
+        "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_6",
+        "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_8"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "f35f42eba75cda26f5f6439caee02d4c5ef2648ec6d61831f1324c0f631ea10a",
+      "gold_page_ids": [
+        "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_3",
+        "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_1"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_3",
+            "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_1"
+          ],
+          "slots": [
+            {
+              "name": "account_effective_dates",
+              "gold_page_ids": [
+                "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_3"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "enactment_date",
+              "gold_page_ids": [
+                "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_1"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "5d8fd8335f98f500b33d96269161657f4493445e6fc6afc5f2a4baba3bd49a3e",
+      "gold_page_ids": [
+        "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_4",
+        "6f7b339b6759620ad7d44a10ee5f4891c1b16fec4e56c1045c6b98cdb194c70d_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "acd3200d75f4507d2cfbbcb1c568d7adf8da409063bee2e2e0b7832c4894a5a9",
+      "gold_page_ids": [
+        "bee43bdc6ca06c2a04f4126d4b94fa4be3d47a62e8b3bdd8d0ddce986dff25a6_39",
+        "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_43",
+        "fbdd7f9dd299d83b1f398778da2e6765dfaaed62005667264734a1f76ec09071_14"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "bd8d0befc731315ee2a477221feb950b44e68d9596823a90c47f78fc04870870",
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manual high-risk boolean title-year benchmark case.",
+      "gold_page_ids": [
+        "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_4",
+        "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_4",
+            "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4"
+          ],
+          "slots": [
+            {
+              "name": "employment_law_year",
+              "gold_page_ids": [
+                "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_4"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "intellectual_property_law_year",
+              "gold_page_ids": [
+                "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false
+    },
+    {
+      "question_id": "96bccc8b15e2795578584484ea3533e71d6e044d13420cf77a32393b7502fc1c",
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Direct source audit confirms canonical Trust Law page 5 contains 'Administration of this Law'; predicted consolidated Trust page 4 is a same-law surrogate and should not replace the gold page.",
+      "gold_page_ids": [
+        "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4",
+        "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4",
+            "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5"
+          ],
+          "slots": [
+            {
+              "name": "intellectual_property_law_administration",
+              "gold_page_ids": [
+                "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "trust_law_administration",
+              "gold_page_ids": [
+                "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": true
+    },
+    {
+      "question_id": "9f9fb4b911d75c22f2c9a42bb852848ac45594179a7d0d126c8ef0ac8941b18d",
+      "gold_page_ids": [
+        "78ffe994cdc61ce6a2a6937c79fc52751bb5d2b4eaa4019f088fbccf70569c26_1",
+        "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917_11"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "78ffe994cdc61ce6a2a6937c79fc52751bb5d2b4eaa4019f088fbccf70569c26_1",
+            "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917_11"
+          ],
+          "slots": [
+            {
+              "name": "case_ca_004_parties",
+              "gold_page_ids": [
+                "78ffe994cdc61ce6a2a6937c79fc52751bb5d2b4eaa4019f088fbccf70569c26_1"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "case_sct_295_parties",
+              "gold_page_ids": [
+                "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917_11"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "737940cf4c4cd4c7f6f6d3b8b30570e853538790e06d40583631acf017eb6029",
+      "gold_page_ids": [
+        "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_2",
+        "c66b8374d326d16ec5ff48195825798c3ba696c787ad8a59c23a7a2908f34a0d_1"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_2",
+            "c66b8374d326d16ec5ff48195825798c3ba696c787ad8a59c23a7a2908f34a0d_1"
+          ],
+          "slots": [
+            {
+              "name": "case_cfi_010_main_party",
+              "gold_page_ids": [
+                "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_2"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "case_enf_053_main_party",
+              "gold_page_ids": [
+                "c66b8374d326d16ec5ff48195825798c3ba696c787ad8a59c23a7a2908f34a0d_1"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "bfa089d55bda48890b3f84ec000ad2c3c682031ff7153cc8023efeeb8c1ff9e3",
+      "gold_page_ids": [
+        "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21",
+        "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_2"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21",
+            "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_2"
+          ],
+          "slots": [
+            {
+              "name": "case_cfi_010_judge",
+              "gold_page_ids": [
+                "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "case_dec_001_judge",
+              "gold_page_ids": [
+                "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_2"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "54d56331536ad42544a97a57c5d700cf82d9b5b46dc2e6a08a31992d5b755fb0",
+      "gold_page_ids": [
+        "6248961b681ea0deb189f354be0c8286f35974dcdb211c13c921c3dd0e566a6e_4",
+        "62930da32fa3172edf2f2bbf3da268455bd99a7b5fab34d72358730d8cd5da30_2"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "6248961b681ea0deb189f354be0c8286f35974dcdb211c13c921c3dd0e566a6e_4",
+            "62930da32fa3172edf2f2bbf3da268455bd99a7b5fab34d72358730d8cd5da30_2"
+          ],
+          "slots": [
+            {
+              "name": "case_tcd_001_party",
+              "gold_page_ids": [
+                "6248961b681ea0deb189f354be0c8286f35974dcdb211c13c921c3dd0e566a6e_4"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "case_cfi_016_party",
+              "gold_page_ids": [
+                "62930da32fa3172edf2f2bbf3da268455bd99a7b5fab34d72358730d8cd5da30_2"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "fba6e86a3169728c19a02ccbad9cd87599344fdd0bfd0589e5ab7bf6e16a09b9",
+      "gold_page_ids": [
+        "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21",
+        "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_20"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21",
+            "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_20"
+          ],
+          "slots": [
+            {
+              "name": "case_dec_001_judge",
+              "gold_page_ids": [
+                "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "case_cfi_057_judge",
+              "gold_page_ids": [
+                "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_20"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "1e1121d0cc14259a4f345408302ef2ddf8e474cdb9ad60a34b060bd789b95298",
+      "gold_page_ids": [
+        "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_19",
+        "6306079a16b1dec85690f75c715cdbd78b0685a3e19ee30250d481bc32f2e29a_1"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_19",
+            "6306079a16b1dec85690f75c715cdbd78b0685a3e19ee30250d481bc32f2e29a_1"
+          ],
+          "slots": [
+            {
+              "name": "case_dec_001_main_party",
+              "gold_page_ids": [
+                "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_19"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "case_sct_514_main_party",
+              "gold_page_ids": [
+                "6306079a16b1dec85690f75c715cdbd78b0685a3e19ee30250d481bc32f2e29a_1"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "3c19ecbe27fe9701f742589a927a11a5b701f064e49d35d631deef0d478aa99f",
+      "gold_page_ids": [
+        "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21",
+        "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54_5"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21",
+            "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54_5"
+          ],
+          "slots": [
+            {
+              "name": "case_dec_001_judge",
+              "gold_page_ids": [
+                "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21"
+              ],
+              "evidence_markers": []
+            },
+            {
+              "name": "case_tcd_001_judge",
+              "gold_page_ids": [
+                "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54_5"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "117267649104e2ac88d57b64c615721dc2b3f0631b7d4914f6f85323651e8cb4",
+      "gold_page_ids": [
+        "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f_10"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f_10"
+          ],
+          "slots": [
+            {
+              "name": "restriction_effectiveness_rule",
+              "gold_page_ids": [
+                "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f_10"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "6e3abab5157d5897a698c91d0c980646b14e5cc1e773e6c6537e918dcb26275e",
+      "gold_page_ids": [
+        "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_6"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_6"
+          ],
+          "slots": [
+            {
+              "name": "page_1",
+              "gold_page_ids": [
+                "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_6"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "0149374f1699ab209f6169cffcdd94f45072fca07fbf7a580720760f5c32f658",
+      "gold_page_ids": [
+        "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7"
+          ],
+          "slots": [
+            {
+              "name": "page_1",
+              "gold_page_ids": [
+                "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "d204a13070fd2f18eb3e9e939fdc80855a915dfafd7f49f8fc8e80d6a3d7637b",
+      "gold_page_ids": [
+        "437568a801115019fe8278385c0484bdf07ab86f9a499ecaba2b7969b37c764b_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "7700103c51940db23ba51a0efefbef679201af5b0a60935853d10bf81a260466",
+      "trust_tier": "trusted",
+      "gold_origin": "reviewed_correction",
+      "audit_note": "Corrected after direct source audit: Employment Law Amendment Law enactment notice page explicitly states DIFC Law No. 4 of 2021; previous Trust Law gold was mismatched.",
+      "gold_page_ids": [
+        "bac066005f21591dbcff19a56cdef279bd4f32482e3758925a38c478e75b81a8_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false
+    },
+    {
+      "question_id": "4cbb1883a9d09e09cbf273aea34dd9ce104eacf5ffa1b3e95e2a5c18440f778c",
+      "gold_page_ids": [
+        "bac066005f21591dbcff19a56cdef279bd4f32482e3758925a38c478e75b81a8_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "dd97e6cdec41ef77576ed86e037565fc88ff891edcdd39018e2d062e28f9605f",
+      "gold_page_ids": [
+        "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_1"
+      ],
+      "gold_items": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "",
+          "gold_page_ids": [
+            "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_1"
+          ],
+          "slots": [
+            {
+              "name": "enactment_date",
+              "gold_page_ids": [
+                "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_1"
+              ],
+              "evidence_markers": []
+            }
+          ]
+        }
+      ],
+      "wrong_document_risk": false,
+      "trust_tier": "trusted",
+      "gold_origin": "manual_override",
+      "audit_note": "Manually curated hidden-G benchmark case."
+    },
+    {
+      "question_id": "82664b585f15bcd8afa3bd6acf97c3fa415fcad7d60762d8ad80421418caf3f5",
+      "gold_page_ids": [
+        "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "f032929682fae6c65c184050d97635e4024703a6d40ed3028a9dde70856ecfad",
+      "gold_page_ids": [
+        "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54_3"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "be535a44eec463ed7edfac6f145990d962ea6394f22877b7c991c6140433e056",
+      "gold_page_ids": [
+        "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54_3"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "06034335eee6dbe0df799fd5ce57e8f311ac8ad693dbeeb8dad4edaa9edb53eb",
+      "gold_page_ids": [
+        "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_12"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "bb67fc19f45527933d0c7319a2c96b4bf5e782f83018254b6a0d34685b219ec5",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "52a35cfabe76f2c538c6f72a841a08e0cc85bbe8f732874a4d2827383794c213",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "d5bc744160e9f3690c91cd3ee29e601a00444ac66a53b0e8e4d7991e1bf7de20",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "af8d46901ce0daf134701c809e7ae02f5682b9676a20a226b61eaa40512dbc4e",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "89f4b2e86cf7e48e185b9d5775d67e7c8a51beccbb20abce8dac2a1b0e80b723",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "84941458c4ade946dae84cf5ebc4abf362a6f6e6fec835ba5c43ad2d3b4b14d7",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "cb9cb3ecb09af7477b20abee3d5f9567c09a99fb6f4840daf933da74680ef030",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "5bf060b3f9965c46f19e59c4d9afa555d6a1b04e9b9675ed35ef6b85249bb811",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": true,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "cdddeb6a063f29cbea5f10b3dccbd83aa16849e1f3124e223d141d1578efeb0a",
+      "gold_page_ids": [
+        "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "df0f24b2b339c62162b82eb3add3a2a71a275ee768fbb2835ccdd66bc79cd04f",
+      "gold_page_ids": [
+        "58eae81bf668e7f6c58619f419a49b5e35e2e5c9c7475475ace28ec562580545_1",
+        "58eae81bf668e7f6c58619f419a49b5e35e2e5c9c7475475ace28ec562580545_2"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "d64868661e961ce09219969e101edd52b26c8f70a2f6325209f34372e95baf44",
+      "gold_page_ids": [
+        "58eae81bf668e7f6c58619f419a49b5e35e2e5c9c7475475ace28ec562580545_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "6f9c0b194e9e654d320fe873627afcd5403fd3ff3f4f939d6389e9431c20f413",
+      "gold_page_ids": [
+        "62930da32fa3172edf2f2bbf3da268455bd99a7b5fab34d72358730d8cd5da30_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "fcabd6aa14e2df4b7ca00fa516a70eba6de58b74dfde30270e3fe3eec6d1da7a",
+      "gold_page_ids": [
+        "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "6618184ee84fbebc360162dc3825868eec4e5e81aae1901eb18a8e741fd323f3",
+      "gold_page_ids": [
+        "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_1",
+        "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_2",
+        "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_3"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "2d436eb3d28cb6d4eacebcb6d703e402800a56bc2f8b4d4185ea5961d5e53960",
+      "gold_page_ids": [
+        "437568a801115019fe8278385c0484bdf07ab86f9a499ecaba2b7969b37c764b_7",
+        "437568a801115019fe8278385c0484bdf07ab86f9a499ecaba2b7969b37c764b_14"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "571f60136b26b5ce872f29817024fa60d27e8d3e49cec533d162fa48af9d4b13",
+      "gold_page_ids": [
+        "65e069c97a1a51601f44a9e318191b3f714e4f754e3ecff47d030a46fe848db8_1",
+        "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "fb1de34d3ebe58b03c5e9898c2e29d1d8c6297fa570f0021967986e43b62da62",
+      "gold_page_ids": [
+        "20be16a68c4d24768f569bcde5ddb29437204006c0c4262296c350b365672cd1_3"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "8e3b4683596d94dbc9a66f20104329939e0e8d4da1e1dbf6df5784247c2ea373",
+      "gold_page_ids": [
+        "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54_5",
+        "437568a801115019fe8278385c0484bdf07ab86f9a499ecaba2b7969b37c764b_7"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "b9dc2dae206c155bc5936c971272e8154d22b4f9e3fa65795eb8b49a80d26b6f",
+      "gold_page_ids": [
+        "5d3df6d69fac3ef91e13ac835b43a35e9e434fbc7e72ea5c01e288d69b66e6a2_18"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "0f6e75bde356a184b0fa69f0568c29290fb8adf42b5409ab4d2e7e1c193295dd",
+      "gold_page_ids": [
+        "5d3df6d69fac3ef91e13ac835b43a35e9e434fbc7e72ea5c01e288d69b66e6a2_18"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "3dc92e33b028436ab27768b30c91d5c53f0527acb35f8378f55131fc77f628bf",
+      "gold_page_ids": [
+        "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "fbe661b99e48c27ade90fbce66ae359902f15f2351774dd29c00f41c62f72c80",
+      "gold_page_ids": [
+        "78ffe994cdc61ce6a2a6937c79fc52751bb5d2b4eaa4019f088fbccf70569c26_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "d9d27c9cace6eafd11dbb349244e0443e16c8cc0efdf516514cc945135e1a597",
+      "gold_page_ids": [
+        "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917_2"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "8f104743e21eef9d7218950d7a7a1eade455fafb809ba01a923c1d88f0493c8f",
+      "gold_page_ids": [
+        "897ab23ed5a70034d3d708d871ad1da8bc7b6608d94b1ca46b5d578d985d3c13_2"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "d4157e6a3b7b321d042a7d5db7cf2e829317d818e4f2d56ea2399c5547f95b42",
+      "gold_page_ids": [
+        "5d3df6d69fac3ef91e13ac835b43a35e9e434fbc7e72ea5c01e288d69b66e6a2_18"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "46927f372acef1888a11ef8de5f7a1dff5588a85efc12eaafe7c7f59c5fbf14f",
+      "gold_page_ids": [
+        "69ecacbd263a1e75765e4f12caaf73a08012b1c2e11e5c14bff43bf6331f3003_6",
+        "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_67"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "b249b41b7ff44ce4d5686bb8b9e0533e4874f5482a2594f49d60edf11b04f1ac",
+      "gold_page_ids": [
+        "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_1",
+        "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "4ced374a0c805f11161598ee003019f841de3c03da4f478c1b7cea81d58bc4bc",
+      "gold_page_ids": [
+        "0ee112f26f9b33c272a4fad301c52e7309c98236d627ad2451202ca6f5f0cdc7_1",
+        "e822a7554e725938959c53b53e5e3680c9db959151292423277bd48f6b404cd1_1"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "9c07044aaf43ecb41e350a77749e6a6963c37dfd39420117e0b928f436098925",
+      "gold_page_ids": [
+        "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54_5",
+        "3ce5e93d520a3651d156fc6d88ce767b0ee8816da205feb9b720c2c02c195017_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "f378457dc4e9f78aa2ce25dde7449a5400b853217f8ebda07a8654a015b15021",
+      "gold_page_ids": [
+        "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_50"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "146567e3d096312584103b24983e3ff8e904e4ec5dea993d9774d24fef15fce7",
+      "gold_page_ids": [
+        "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "b52c749fc01ddd233879c576270e8367452f273227e8c5090f678ea37641f542",
+      "gold_page_ids": [
+        "6aa239fca4bc0ec592bbbc83f8e342684ffe4aff1b3da65429633fc35e478802_5",
+        "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_6"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "322674cd65809bde505d9f50edb1bf7e1674f7e118a8179617732a3942b52d74",
+      "gold_page_ids": [
+        "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_6"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "6976d6d247c5a260ebe90eb4ebf418998d7642f5e4e60845d6d49cb8fb145dec",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "47cb314acde5887a03dc25c4f36992ad801e5fa7565d8288af88491f60c53fd5",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "75bf397c92fcaee5bf25f9e869454c21c77972e8280c746e33635612ecddda33",
+      "gold_page_ids": [
+        "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_8",
+        "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_8"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "3ab3489605bc64891f36d9f3c7cf9c8608d08163b8673db41aa359097786b4bc",
+      "gold_page_ids": [
+        "607d58415d7bd7eb893678ef2bbbda6b4793c665efa5e3fd42ec206cf64a746a_7"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "e0798bd394af022603f1ed7a09641de2bb414bd14a9d6a2c494980c86095ccff",
+      "gold_page_ids": [
+        "fbdd7f9dd299d83b1f398778da2e6765dfaaed62005667264734a1f76ec09071_13"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "613217268c14e7aa3f190f7d8b43610f2ffdae2cf15a4f8d7a3acfa52cefeedb",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "230b6411c31b25717cb6271824274dd9ebc1cb2575c3ec622ffee06c2aea51e1",
+      "gold_page_ids": [
+        "44526eeeb977304793a333fd1851448f5f6d2e75ac0979cc265b03d819be99c5_7"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "1e1238c6119ed749321cd0addedbaeb69e68eec861acb1d122a2730e8944bf23",
+      "gold_page_ids": [
+        "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_12"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "5b78eff477f6545504892d039a34a82fcba94b79584e925a1e231875f6892a5b",
+      "gold_page_ids": [
+        "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_12"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "b1d0245bb7c71b42f08a4cdbec612a56715295223472ac5a45af31811ada2f3b",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "7b31467fd9f391a836ecd316b258a6d5e849cb62a9a0c95573b084c1d1338ba0",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "33060f268efcac79c65cd3e0a39bc0f7d91d9bb1802bc2e08bfa43ec5a5cd355",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "ca8aebcc86f2b1ea064a28736c67b04357474bcf1128890991c73a237091638a",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "eeae1069cbbc9ef2fe66f063459ddac4c5ff5edef405593bb299aca715246b39",
+      "gold_page_ids": [
+        "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_4",
+        "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_18",
+        "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_11"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "b13500141f04c86f328b49c56ba01c7bc13bce5afee9646860912718291a5c1a",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "860c44c716f4243e1db203f5a0433813245daf336355b1523170cf1da2d428e3",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "f2ea23e9f861379a5c049830b57dcb499d4e6ce51013e64d49722b5845139e22",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "d6eb4a640e0ad690e92c1463e15f5394d36d8f5bb407f0fa4d7413c456c7a5bd",
+      "gold_page_ids": [
+        "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7",
+        "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_7"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "73510f45df2f1b3f268f4fabc89e1b98690777acb78579beabb20801b34e3fc4",
+      "gold_page_ids": [
+        "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_4",
+        "735fd64cb8caa16a5ebd7bb58631cd8b40080ffb13fc91c1598341de01c63cda_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "30ab0e56ee0c43b5bf94fd9657c7f7ac24f0e7be29ced2933437f7a234713cd7",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "b31a702f36e2c43e845e13f160ebc35d3d6ea27eb66a351561a94f0ce56b8667",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "e153746c20cc385a520728ac381151f424c9eee10e4c582904fee70afe9af243",
+      "gold_page_ids": [
+        "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917_4"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "be09fbfe4d36f6d9d97d997aa516b7ee5b4dc9ba988258d2310debcb1d2e320a",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "e59a0dc49c291402ead91342b065bc4e9ded0043d126f73dd00ba6045aae46b7",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "cd0c8f3606da668fbc82f446657caa9cf1018f395bb15fa64b059d4809f69c88",
+      "gold_page_ids": [],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "32bb32856c65215eddb17d2b5b938f58b4bec525af96f8637686e33b0d696e89",
+      "gold_page_ids": [
+        "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_14",
+        "6f7b339b6759620ad7d44a10ee5f4891c1b16fec4e56c1045c6b98cdb194c70d_15"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    },
+    {
+      "question_id": "8d481702ddfb40310a070ac44f4a2e9637043f453afa0319cd83d20fd8ec607e",
+      "gold_page_ids": [
+        "b486db089615010a9b45bc71411b5a238a0a0b9aaf074d875f98f5b934f75079_3",
+        "02ec30ff6c98fa3adccd3834d73d76a2ae11dab91f2b4ea3501ff24db27436cc_5",
+        "b486db089615010a9b45bc71411b5a238a0a0b9aaf074d875f98f5b934f75079_2"
+      ],
+      "gold_items": [],
+      "items": [],
+      "wrong_document_risk": false,
+      "trust_tier": "suspect",
+      "gold_origin": "seeded_eval",
+      "audit_note": "Inherited seed gold from accepted eval; review before using as hard gate."
+    }
+  ]
+}
