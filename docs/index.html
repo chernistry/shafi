@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agentic RAG Legal Challenge 2026</title>
-    <meta name="description" content="Evidence-first legal RAG system for the Agentic RAG Legal Challenge 2026. Current accepted local Docker run: 100/100 public correctness, 30/30 free-text judge PASS, 0% hallucinated citations, 1196ms average TTFT, and 0.989 trusted hidden-G F-beta.">
+    <meta name="description" content="Evidence-first legal RAG system for the Agentic RAG Legal Challenge 2026. Verified public-trial run: 100/100 public correctness, 30/30 free-text pass, 0% hallucinated citations, and 1196ms average TTFT.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231A5F59'/%3E%3Cpath d='M18 44h28M24 22l8 8m0-8l-8 8m12-4h10' stroke='%23fff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
-    <script src="i18n.js" defer></script>
+    <script src="i18n.js?v=20260310" defer></script>
     <style>
         :root {
             --color-bg: #FAFBFD;
@@ -92,18 +93,22 @@
 
         body {
             font-family: var(--font);
-            background: var(--color-bg);
+            background:
+                linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 56%, var(--color-bg)) 0%, var(--color-bg) 26%, var(--color-bg) 100%);
             color: var(--color-primary);
             line-height: 1.7;
             font-size: var(--fs-body);
             overflow-x: hidden;
             font-feature-settings: 'cv11' 1, 'ss01' 1;
+            min-height: 100vh;
         }
         [data-theme="dark"] body {
             background:
-                radial-gradient(800px 360px at 50% -8%, rgba(141, 163, 184, 0.04), transparent 60%),
+                radial-gradient(860px 380px at 50% -8%, rgba(141, 163, 184, 0.05), transparent 60%),
+                linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 54%, var(--color-bg)) 0%, var(--color-bg) 28%, var(--color-bg) 100%),
                 var(--color-bg);
         }
+        main { position: relative; }
         code {
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
             font-size: 0.88em;
@@ -123,8 +128,13 @@
         .icon { display: inline-flex; align-items: center; justify-content: center; }
         .icon > * { display: block; }
 
-        .reveal { opacity: 0; transform: translateY(12px); transition: opacity var(--dur-slow) var(--ease-entrance), transform var(--dur-slow) var(--ease-entrance); }
-        .reveal.is-visible { opacity: 1; transform: translateY(0); }
+        .reveal { opacity: 1; transform: none; }
+        .reveal.is-visible { opacity: 1; transform: none; }
+        :focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 26%, transparent);
+        }
+        section[id] { scroll-margin-top: 88px; }
 
         @media (prefers-reduced-motion: reduce) {
             html { scroll-behavior: auto; }
@@ -178,6 +188,10 @@
             min-height: 44px;
         }
         .header-link:hover { color: var(--color-primary); }
+        .header-link.is-active {
+            color: var(--color-primary);
+            background: color-mix(in srgb, var(--color-surface-alt) 78%, transparent);
+        }
         .theme-toggle {
             background: none;
             border: 1px solid var(--color-border);
@@ -200,23 +214,38 @@
 
         /* Hero */
         .hero {
-            padding: var(--space-7) 0 var(--space-6);
-            text-align: center;
+            padding: calc(var(--space-7) + var(--space-2)) 0 var(--space-7);
+            text-align: start;
             position: relative;
         }
         .hero::before {
             content: "";
             position: absolute;
-            inset: -100px -40px auto -40px;
-            height: 480px;
+            inset: -96px -48px auto -48px;
+            height: 540px;
             background:
-                radial-gradient(600px 320px at 22% 18%, color-mix(in srgb, var(--color-accent) 7%, transparent) 0%, transparent 55%),
-                radial-gradient(500px 300px at 80% 30%, color-mix(in srgb, var(--color-accent-light) 5%, transparent) 0%, transparent 55%);
+                radial-gradient(660px 340px at 20% 18%, color-mix(in srgb, var(--color-accent) 8%, transparent) 0%, transparent 56%),
+                radial-gradient(520px 320px at 82% 28%, color-mix(in srgb, var(--color-accent-light) 6%, transparent) 0%, transparent 58%);
             pointer-events: none;
-            opacity: 0.5;
+            opacity: 0.46;
         }
         [data-theme="dark"] .hero::before {
             opacity: 0.22;
+        }
+        .hero .container {
+            position: relative;
+            z-index: 1;
+        }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.88fr);
+            gap: var(--space-6);
+            align-items: start;
+        }
+        .hero-copy {
+            display: grid;
+            gap: var(--space-4);
+            max-width: 640px;
         }
         .hero-badge {
             display: inline-flex;
@@ -229,7 +258,7 @@
             border-radius: 999px;
             font-size: var(--fs-xs);
             font-weight: 600;
-            margin-bottom: var(--space-6);
+            margin-bottom: var(--space-1);
             letter-spacing: 0.02em;
         }
         .hero h1 {
@@ -238,52 +267,81 @@
             font-weight: 400;
             line-height: 1.08;
             letter-spacing: -0.015em;
-            margin-bottom: var(--space-5);
-            max-width: 880px;
-            margin-left: auto;
-            margin-right: auto;
+            margin-bottom: 0;
+            max-width: 12ch;
+            margin-left: 0;
+            margin-right: 0;
+            text-wrap: balance;
         }
         .hero h1 .accent { color: var(--color-accent); }
         .hero-sub {
-            font-size: clamp(1.05rem, 1.2vw + 0.5rem, 1.25rem);
+            font-size: clamp(1rem, 1vw + 0.7rem, 1.15rem);
             color: var(--color-secondary);
-            max-width: 660px;
-            margin: 0 auto var(--space-6);
+            max-width: 57ch;
+            margin: 0 0 var(--space-1);
             line-height: 1.65;
-            text-wrap: balance;
+            text-wrap: pretty;
             font-weight: 400;
         }
-        .hero-proof {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            max-width: 720px;
-            margin: 0 auto var(--space-5);
-            padding: var(--space-3) var(--space-5);
-            border-radius: var(--radius-lg);
+        .hero-panel {
+            background: color-mix(in srgb, var(--color-card) 96%, var(--color-surface));
             border: 1px solid var(--color-border);
-            background: color-mix(in srgb, var(--color-card) 94%, var(--color-surface));
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            box-shadow: var(--shadow-md);
+            display: grid;
+            gap: var(--space-5);
+        }
+        .hero-panel-head {
+            display: grid;
+            gap: var(--space-3);
+        }
+        .hero-panel-kicker {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            color: var(--color-secondary);
+        }
+        .hero-proof {
+            display: block;
+            max-width: none;
+            margin: 0;
+            padding: 0;
+            border-radius: 0;
+            border: none;
+            background: none;
             color: var(--color-secondary);
             font-size: var(--fs-small);
-            line-height: 1.55;
-            text-wrap: balance;
+            line-height: 1.65;
+            text-wrap: pretty;
         }
         .hero-stats {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: var(--space-3);
-            max-width: 800px;
-            margin: 0 auto var(--space-6);
+            grid-template-columns: 1fr;
+            gap: 0;
+            max-width: none;
+            margin: 0;
+            padding-block: var(--space-1);
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
         }
         .hero-stat {
-            background: var(--color-card);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-5) var(--space-5);
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: var(--space-3) 0;
+            display: flex;
+            flex-direction: row-reverse;
+            align-items: end;
+            justify-content: space-between;
+            gap: var(--space-4);
             position: relative;
-            overflow: hidden;
+            overflow: visible;
         }
-        .hero-stat::before,
+        .hero-stat + .hero-stat {
+            border-top: 1px solid var(--color-border);
+        }
         .metric-card::before,
         .evolution-card::before,
         .pipeline-wrap::before,
@@ -291,28 +349,46 @@
         .demo-card::before,
         .why-card::before,
         .competition-wrap::before {
-            content: "";
-            position: absolute;
-            inset: 0 0 auto 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent 10%, color-mix(in srgb, var(--color-accent) 14%, var(--color-border)) 50%, transparent 90%);
-            pointer-events: none;
+            content: none;
         }
         .hero-stat-value {
-            font-size: clamp(1.25rem, 1.4vw + 0.75rem, 1.75rem);
+            font-size: clamp(1.35rem, 1.8vw + 0.55rem, 1.9rem);
             font-weight: 700;
             letter-spacing: -0.02em;
             line-height: 1.2;
             color: var(--color-primary);
             font-variant-numeric: tabular-nums;
+            text-align: end;
         }
         .hero-stat-label {
-            margin-top: 4px;
-            font-size: 11px;
+            margin-top: 0;
+            font-size: 12px;
             color: var(--color-secondary);
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.09em;
+        }
+        .hero-rail {
+            display: grid;
+            gap: var(--space-3);
+        }
+        .hero-rail-item {
+            display: grid;
+            gap: 4px;
+            padding-inline-start: var(--space-4);
+            border-inline-start: 1px solid color-mix(in srgb, var(--color-accent) 22%, var(--color-border));
+        }
+        .hero-rail-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+        .hero-rail-text {
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+            line-height: 1.6;
         }
         .hero-cta {
             display: inline-flex;
@@ -332,9 +408,10 @@
         .hero-cta:hover { opacity: 0.88; transform: translateY(-1px); }
         .hero-actions {
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             gap: var(--space-3);
             flex-wrap: wrap;
+            margin-top: var(--space-1);
         }
         .hero-cta-secondary {
             background: transparent;
@@ -348,23 +425,24 @@
         }
 
         /* Section */
-        section { padding: var(--space-8) 0 var(--space-7); }
+        section { padding: var(--space-7) 0; }
         .section-title {
             font-size: var(--fs-h2);
             font-family: var(--font-display);
             font-weight: 400;
-            text-align: center;
-            margin-bottom: var(--space-3);
+            text-align: start;
+            margin-bottom: var(--space-2);
             letter-spacing: -0.005em;
             line-height: 1.12;
+            max-width: 15ch;
         }
         .section-sub {
-            text-align: center;
+            text-align: start;
             color: var(--color-secondary);
-            max-width: 640px;
-            margin: 0 auto var(--space-6);
+            max-width: 60ch;
+            margin: 0 0 var(--space-6);
             font-size: clamp(0.9375rem, 1vw + 0.5rem, 1.0625rem);
-            text-wrap: balance;
+            text-wrap: pretty;
             line-height: 1.65;
         }
 
@@ -373,13 +451,15 @@
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: var(--space-3);
+            align-items: stretch;
         }
+        #scorecard .metric-card.featured { grid-column: span 2; }
         .metric-card {
             background: var(--color-card);
             border: 1px solid var(--color-border);
             border-radius: var(--radius-lg);
             padding: var(--space-5);
-            text-align: center;
+            text-align: start;
             transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
             min-width: 0;
             display: flex;
@@ -415,14 +495,15 @@
         .metric-context {
             font-size: var(--fs-xs);
             color: var(--color-secondary);
-            opacity: 0.6;
+            opacity: 0.82;
             overflow-wrap: anywhere;
             line-height: 1.35;
+            margin-top: auto;
         }
         .metric-bar {
-            margin: var(--space-3) auto var(--space-2);
+            margin: var(--space-3) 0 var(--space-2);
             height: 6px;
-            max-width: 200px;
+            max-width: none;
             border-radius: 999px;
             background: color-mix(in srgb, var(--color-border) 45%, transparent);
             overflow: hidden;
@@ -624,7 +705,7 @@
         /* Tech stack */
         .tech-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: var(--space-4);
         }
         .tech-card {
@@ -837,8 +918,12 @@
             grid-template-columns: repeat(3, 1fr);
             gap: var(--space-3);
         }
+        #evolution .why-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
         @media (max-width: 768px) {
             .why-grid { grid-template-columns: 1fr 1fr; }
+            .tech-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 480px) {
             .why-grid { grid-template-columns: 1fr; }
@@ -884,13 +969,20 @@
             background: var(--color-card);
             border: 1px solid var(--color-border);
             border-radius: var(--radius-lg);
-            padding: var(--space-7);
+            padding: var(--space-6);
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: var(--space-7);
+            gap: var(--space-6);
             align-items: center;
             position: relative;
             overflow: hidden;
+        }
+        .competition-wrap.brief-grid {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 0;
+            gap: var(--space-6);
         }
         .competition-info h3 {
             font-size: var(--fs-h3);
@@ -914,13 +1006,14 @@
         }
         .brief-list {
             display: grid;
-            gap: var(--space-3);
+            gap: 0;
         }
         .brief-item {
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius);
-            background: var(--color-surface);
-            padding: var(--space-4);
+            border: none;
+            border-top: 1px solid var(--color-border);
+            border-radius: 0;
+            background: transparent;
+            padding: var(--space-4) 0;
         }
         .brief-item h4 {
             font-size: 0.95rem;
@@ -934,11 +1027,11 @@
             line-height: 1.65;
         }
         .scorecard-note {
-            text-align: center;
+            text-align: start;
             color: var(--color-secondary);
             font-size: var(--fs-small);
-            margin: 0 auto var(--space-5);
-            max-width: 700px;
+            margin: 0 0 var(--space-5);
+            max-width: 70ch;
             line-height: 1.65;
         }
         .comp-stat {
@@ -987,13 +1080,15 @@
         /* Responsive */
         @media (max-width: 768px) {
             .hero { padding: var(--space-6) 0; }
-            .hero-stats { grid-template-columns: 1fr; }
-            .hero-proof { border-radius: var(--radius-lg); }
+            .hero-grid { grid-template-columns: 1fr; }
+            .hero-copy { max-width: none; }
+            .hero h1 { max-width: 13ch; }
             .metrics-grid { grid-template-columns: repeat(2, 1fr); }
             .competition-wrap { grid-template-columns: 1fr; }
             .header-nav { gap: var(--space-2); }
             section { padding: var(--space-6) 0 var(--space-5); }
             .hero-actions { flex-direction: column; align-items: stretch; }
+            #scorecard .metric-card.featured { grid-column: span 2; }
         }
         @media (max-width: 480px) {
             .container { padding: 0 var(--space-4); }
@@ -1002,6 +1097,30 @@
             .competition-stats { grid-template-columns: 1fr; }
             section { padding: var(--space-5) 0; }
             .demo-answer .cite { max-width: 170px; }
+            .hero h1 { max-width: none; }
+            .hero-panel { padding: var(--space-4); }
+            .header .container { flex-wrap: wrap; gap: var(--space-3); }
+            .header-logo { flex: 1 1 100%; font-size: 0.95rem; }
+            .header-nav {
+                width: 100%;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: var(--space-2);
+            }
+            .header-link {
+                padding: var(--space-2);
+                min-height: 40px;
+                font-size: 12px;
+            }
+            .lang-toggle {
+                min-height: 40px;
+                font-size: 10px;
+                padding: var(--space-2);
+            }
+            .theme-toggle {
+                min-height: 40px;
+                min-width: 40px;
+            }
         }
 
         /* Language picker */
@@ -1075,6 +1194,7 @@
         [dir="rtl"] .hero-cta { flex-direction: row-reverse; }
         [dir="rtl"] .header-logo { flex-direction: row-reverse; }
         [dir="rtl"] .footer-links { flex-direction: row-reverse; }
+        [dir="rtl"] .hero-rail-item { border-inline-start: none; border-inline-end: 1px solid color-mix(in srgb, var(--color-accent) 22%, var(--color-border)); padding-inline-start: 0; padding-inline-end: var(--space-4); }
     </style>
 </head>
 <body>
@@ -1117,34 +1237,57 @@
         <!-- Hero -->
         <section class="hero">
             <div class="container">
-                <div class="hero-badge">
-                    <span class="icon" aria-hidden="true"><ph-trophy weight="duotone" size="22"></ph-trophy></span>
-                    <span data-i18n="hero_badge">Dubai AI Week &middot; Machines Can See 2026</span>
-                </div>
-                <h1 data-i18n="hero_h1">Built for legal answers that can be <span class="accent">checked</span> before they are trusted.</h1>
-                <p class="hero-sub" data-i18n="hero_sub">
-                    An evidence-first DIFC legal RAG system tuned for the competition rubric: grounded answers, strict output types, and stable latency under unattended evaluation.
-                </p>
-                <div class="hero-proof" data-i18n="hero_note">
-                    The current accepted local Docker run stays clean on the public set, while trusted hidden-G is tracked separately from judge-perfect surface metrics.
-                </div>
-                <div class="hero-stats" role="list" aria-label="Key metrics">
-                    <div class="hero-stat" role="listitem">
-                        <div class="hero-stat-value"><span class="countup" data-count-to="1196" data-format="ms-int">1196</span></div>
-                        <div class="hero-stat-label" data-i18n="hero_stat_ttft">Average TTFT</div>
+                <div class="hero-grid">
+                    <div class="hero-copy">
+                        <div class="hero-badge">
+                            <span class="icon" aria-hidden="true"><ph-trophy weight="duotone" size="22"></ph-trophy></span>
+                            <span data-i18n="hero_badge">Dubai AI Week &middot; Machines Can See 2026</span>
+                        </div>
+                        <h1 data-i18n="hero_h1">Built for legal answers that can be <span class="accent">checked</span> before they are trusted.</h1>
+                        <p class="hero-sub" data-i18n="hero_sub">
+                            An evidence-first DIFC legal RAG system tuned for the competition rubric: grounded answers, strict output types, and stable latency under unattended evaluation.
+                        </p>
+                        <div class="hero-actions">
+                            <a href="#audit" class="hero-cta" data-i18n="hero_cta_primary">Inspect answer audit</a>
+                            <a href="https://github.com/chernistry/rag_challenge" class="hero-cta hero-cta-secondary" target="_blank" rel="noopener" data-i18n="hero_cta_secondary">Review repository</a>
+                        </div>
                     </div>
-                    <div class="hero-stat" role="listitem">
-                        <div class="hero-stat-value"><span class="countup" data-count-to="100.00" data-format="pct-2">100.00%</span></div>
-                        <div class="hero-stat-label" data-i18n="hero_stat_docref">Judge pass rate</div>
-                    </div>
-                    <div class="hero-stat" role="listitem">
-                        <div class="hero-stat-value"><span class="countup" data-count-to="0" data-format="pct-0">0%</span></div>
-                        <div class="hero-stat-label" data-i18n="hero_stat_hallucinated">Hallucinated citations</div>
-                    </div>
-                </div>
-                <div class="hero-actions">
-                    <a href="#audit" class="hero-cta" data-i18n="hero_cta_primary">Inspect answer audit</a>
-                    <a href="https://github.com/chernistry/rag_challenge" class="hero-cta hero-cta-secondary" target="_blank" rel="noopener" data-i18n="hero_cta_secondary">Review repository</a>
+                    <aside class="hero-panel" aria-label="Evidence panel">
+                        <div class="hero-panel-head">
+                            <div class="hero-panel-kicker" data-i18n="brief_title">At a Glance</div>
+                            <div class="hero-proof" data-i18n="hero_note">
+                                Verified on the public-trial set, with clear source trails and stable response timing.
+                            </div>
+                        </div>
+                        <div class="hero-stats" role="list" aria-label="Key metrics">
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value"><span class="countup" data-count-to="1196" data-format="ms-int">1196</span></div>
+                                <div class="hero-stat-label" data-i18n="hero_stat_ttft">Average TTFT</div>
+                            </div>
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value"><span class="countup" data-count-to="100.00" data-format="pct-2">100.00%</span></div>
+                                <div class="hero-stat-label" data-i18n="hero_stat_docref">Judge pass rate</div>
+                            </div>
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value"><span class="countup" data-count-to="0" data-format="pct-0">0%</span></div>
+                                <div class="hero-stat-label" data-i18n="hero_stat_hallucinated">Hallucinated citations</div>
+                            </div>
+                        </div>
+                        <div class="hero-rail" aria-label="Brief highlights">
+                            <div class="hero-rail-item">
+                                <div class="hero-rail-label" data-i18n="brief_item1_h">Competition fit</div>
+                                <p class="hero-rail-text" data-i18n="brief_item1_p">The system is built for source-bound answers, strict output formats, and evidence that can be reviewed after each response.</p>
+                            </div>
+                            <div class="hero-rail-item">
+                                <div class="hero-rail-label" data-i18n="brief_item2_h">Causal design</div>
+                                <p class="hero-rail-text" data-i18n="brief_item2_p">The results are explained through retrieval discipline, answer-type routing, answer cleanup, and provenance checks.</p>
+                            </div>
+                            <div class="hero-rail-item">
+                                <div class="hero-rail-label" data-i18n="brief_item3_h">Inspectable proof</div>
+                                <p class="hero-rail-text" data-i18n="brief_item3_p">The strongest section is one inspectable answer path from question to final answer to evidence trail.</p>
+                            </div>
+                        </div>
+                    </aside>
                 </div>
             </div>
         </section>
@@ -1157,17 +1300,17 @@
                 <div class="competition-wrap brief-grid">
                     <div class="competition-info">
                         <h3 data-i18n="brief_info_h">What matters here</h3>
-                        <p data-i18n="brief_info_p1">The benchmark rewards grounded answers, strict formatting, and stable latency under unattended load. The page is ordered around those criteria.</p>
+                        <p data-i18n="brief_info_p1">The benchmark rewards grounded answers, strict formatting, and stable latency under unattended load. The page leads with those proof points.</p>
                         <p data-i18n="brief_info_p2">The scorecard shows the measured outcome. The answer audit shows one proof path end to end. The appendix keeps the implementation detail compact.</p>
                     </div>
                     <div class="brief-list">
                         <div class="brief-item">
                             <h4 data-i18n="brief_item1_h">Benchmark fit</h4>
-                            <p data-i18n="brief_item1_p">The system is designed around competition constraints: source-bound answers, strict answer typing, and telemetry attached to the final emitted answer.</p>
+                            <p data-i18n="brief_item1_p">The system is built for source-bound answers, strict output formats, and response-level evidence that can be inspected afterwards.</p>
                         </div>
                         <div class="brief-item">
                             <h4 data-i18n="brief_item2_h">Causal design</h4>
-                            <p data-i18n="brief_item2_p">Performance is not presented as luck. The page shows why the pipeline should work: retrieval discipline, answer-type routing, final-answer cleanup, and provenance checks.</p>
+                            <p data-i18n="brief_item2_p">The results are explained through retrieval discipline, answer-type routing, answer cleanup, and provenance checks.</p>
                         </div>
                         <div class="brief-item">
                             <h4 data-i18n="brief_item3_h">Inspectable proof</h4>
@@ -1182,19 +1325,19 @@
         <section id="scorecard" class="reveal">
             <div class="container">
                 <h2 class="section-title" data-i18n="scorecard_title">Competition Scorecard</h2>
-                <p class="section-sub" data-i18n="scorecard_sub">Current accepted local Docker run over 100 DIFC legal questions across six answer types, with the trusted hidden-G benchmark tracked separately.</p>
-                <p class="scorecard-note" data-i18n="scorecard_note">Public results stay saturated, so the harder question now is grounded page selection rather than whether the proxy judge already likes the answer.</p>
+                <p class="section-sub" data-i18n="scorecard_sub">Verified public-trial run over 100 DIFC legal questions across six answer types.</p>
+                <p class="scorecard-note" data-i18n="scorecard_note">Primary competition metrics are shown first. Supporting diagnostics follow for context.</p>
                 <div class="metrics-grid">
                     <div class="metric-card featured">
                         <div class="metric-value speed"><span class="countup" data-count-to="1196" data-format="ms-int">1196</span></div>
                         <div class="metric-label" data-i18n="scorecard_avgttft_label">Average TTFT</div>
                         <div class="metric-bar" aria-hidden="true"><div class="metric-bar-fill" data-bar-fill="58.6"></div></div>
-                        <div class="metric-context" data-i18n="scorecard_avgttft_ctx">Current accepted local Docker run: 1196ms average TTFT.</div>
+                        <div class="metric-context" data-i18n="scorecard_avgttft_ctx">Verified public-trial run: 1196ms average TTFT.</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-value score"><span class="countup" data-count-to="100.00" data-format="pct-2">100.00%</span></div>
                         <div class="metric-label" data-i18n="scorecard_pass_label">Judge Pass Rate</div>
-                        <div class="metric-context" data-i18n="scorecard_pass_ctx">30/30 free-text judge PASS on the current accepted local run.</div>
+                        <div class="metric-context" data-i18n="scorecard_pass_ctx">30/30 free-text pass on the verified public-trial run.</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-value perfect"><span class="countup" data-count-to="100" data-format="pct-0">100%</span></div>
@@ -1213,9 +1356,9 @@
                     </div>
 
                     <div class="metric-card">
-                        <div class="metric-value score"><span class="countup" data-count-to="0.99" data-format="score-2">0.99</span><span style="font-size: 0.5em; opacity: 0.6">/1</span></div>
-                        <div class="metric-label" data-i18n="scorecard_clarity_label">Trusted Hidden-G Fβ</div>
-                        <div class="metric-context" data-i18n="scorecard_clarity_ctx">Trusted benchmark tier only: page-level grounding quality after separating suspect inherited gold cases.</div>
+                        <div class="metric-value score"><span class="countup" data-count-to="99" data-format="pct-0">99%</span></div>
+                        <div class="metric-label" data-i18n="scorecard_docref_label">Source Hit Rate</div>
+                        <div class="metric-context" data-i18n="scorecard_docref_ctx">Supporting diagnostic: the governing source was retrieved.</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-value speed"><span class="countup" data-count-to="846" data-format="ms-int">846</span></div>
@@ -1263,7 +1406,7 @@
                             <span class="icon" aria-hidden="true"><ph-shield-check weight="bold" size="20"></ph-shield-check></span>
                         </div>
                         <h3 data-i18n="causal_card3_h">Final-answer provenance</h3>
-                        <p data-i18n="causal_card3_p">Post-processing is bound to the final emitted answer, so the answer that gets judged is the answer that has already passed citation and cleanup checks.</p>
+                        <p data-i18n="causal_card3_p">Answer cleanup and citation checks are applied before the final response is presented.</p>
                     </div>
                     <div class="why-card">
                         <div class="why-card-icon green">
@@ -1402,7 +1545,7 @@
                                     <ul class="audit-list">
                                         <li data-i18n="audit_bool_law">Law: Operating Law 2018</li>
                                         <li data-i18n="audit_bool_provision">Provision: Article 7(8)</li>
-                                        <li data-i18n="audit_bool_telemetry">Final-answer telemetry: 6 chunks used across 6 source pages</li>
+                                        <li data-i18n="audit_bool_telemetry">Evidence trail: 6 chunks used across 6 source pages</li>
                                     </ul>
                                 </div>
                                 <div>
@@ -1426,7 +1569,7 @@
                             </div>
                             <div class="demo-meta-item">
                                 <span class="icon" aria-hidden="true"><ph-timer weight="bold" size="16"></ph-timer></span>
-                                <span data-i18n="audit_bool_meta_time">Qdrant: 37ms &middot; Rerank: 290ms &middot; LLM: 519ms</span>
+                                <span data-i18n="audit_bool_meta_time">Search: 37ms &middot; Rerank: 290ms &middot; Generation: 519ms</span>
                             </div>
                         </div>
                     </div>
@@ -1456,7 +1599,7 @@
                                     <ul class="audit-list">
                                         <li data-i18n="audit_ft_instrument">Instrument: DIFC Laws Amendment Law, DIFC Law No. 8 of 2018</li>
                                         <li data-i18n="audit_ft_enactment">Enactment fact surfaced in final answer: 5th day of November 2018</li>
-                                        <li data-i18n="audit_ft_telemetry">Final-answer telemetry: 8 chunks retrieved, 1 cited page</li>
+                                        <li data-i18n="audit_ft_telemetry">Evidence trail: 8 chunks retrieved, 1 cited page</li>
                                     </ul>
                                 </div>
                                 <div>
@@ -1480,7 +1623,7 @@
                             </div>
                             <div class="demo-meta-item">
                                 <span class="icon" aria-hidden="true"><ph-timer weight="bold" size="16"></ph-timer></span>
-                                <span data-i18n="audit_ft_meta_time">Rerank: 558ms &middot; LLM: 6,052ms</span>
+                                <span data-i18n="audit_ft_meta_time">Rerank: 558ms &middot; Generation: 6,052ms</span>
                             </div>
                         </div>
                     </div>
@@ -1559,7 +1702,7 @@
                             <span class="icon" aria-hidden="true"><ph-shield-check weight="bold" size="20"></ph-shield-check></span>
                         </div>
                         <h3 data-i18n="limits_card3_h">Claims are bounded by current evidence</h3>
-                        <p data-i18n="limits_card3_p">This page does not claim private-set victory. It claims that the public-trial evidence, answer audits, and reproducible evaluation path are strong enough to inspect seriously.</p>
+                        <p data-i18n="limits_card3_p">This page does not make claims about the private set. It shows why the public-trial evidence already deserves serious inspection.</p>
                     </div>
                 </div>
             </div>
@@ -1574,7 +1717,7 @@
                 <a href="https://machinescansee.com" data-i18n="footer_competition">Competition</a>
                 <a href="https://machinescansee.com" target="_blank" rel="noopener" data-i18n="footer_mcv">Machines Can See 2026</a>
             </div>
-            <p data-i18n="footer_brief">Judge-facing evidence brief for the Agentic RAG Legal Challenge 2026.</p>
+            <p data-i18n="footer_brief">Evidence brief for the Agentic RAG Legal Challenge 2026.</p>
         </div>
     </footer>
 
@@ -1662,8 +1805,11 @@
                     if (!entry.isIntersecting) return;
                     entry.target.classList.add('is-visible');
 
-                    if (entry.target.id === 'metrics') {
+                    if (entry.target.querySelector('.countup[data-count-to]')) {
                         runCountupsIn(entry.target);
+                    }
+
+                    if (entry.target.querySelector('.metric-bar-fill[data-bar-fill]')) {
                         animateBars(entry.target);
                     }
 
@@ -1683,6 +1829,48 @@
 
             // Hero counters start immediately (above the fold).
             runCountupsIn(document.querySelector('.hero'));
+        })();
+
+        (function initNavState() {
+            const links = Array.from(document.querySelectorAll('.header-link[href^="#"]'));
+            const sections = links
+                .map((link) => {
+                    const href = link.getAttribute('href');
+                    return href ? document.querySelector(href) : null;
+                })
+                .filter(Boolean);
+
+            if (!links.length || !sections.length) return;
+
+            const activate = (id) => {
+                links.forEach((link) => {
+                    const isActive = link.getAttribute('href') === `#${id}`;
+                    link.classList.toggle('is-active', isActive);
+                    if (isActive) link.setAttribute('aria-current', 'page');
+                    else link.removeAttribute('aria-current');
+                });
+            };
+
+            const initial = window.location.hash ? window.location.hash.slice(1) : sections[0].id;
+            activate(initial);
+
+            if (!('IntersectionObserver' in window)) return;
+
+            const navObserver = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+                if (visible[0]?.target?.id) activate(visible[0].target.id);
+            }, {
+                rootMargin: '-18% 0px -58% 0px',
+                threshold: [0.2, 0.35, 0.6],
+            });
+
+            sections.forEach((section) => navObserver.observe(section));
+            window.addEventListener('hashchange', () => {
+                const id = window.location.hash.slice(1);
+                if (id) activate(id);
+            });
         })();
 
         (function initPipelineLinks() {
