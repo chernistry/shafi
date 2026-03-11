@@ -797,6 +797,91 @@ def test_build_structured_free_text_answer_handles_case_outcome_with_costs(mock_
     )
 
 
+def test_build_structured_free_text_answer_prefers_conclusion_cost_award_over_bill_noise(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="ca009:0",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:4",
+            text=(
+                "Permission to Appeal against the Order was granted by the Judge himself, on 10 July 2024.\n"
+                "The Appellant's total bill of costs amounts to USD 121,082.50 and the Respondents to USD 38,000."
+            ),
+            retrieval_score=0.90,
+            rerank_score=0.90,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ca009:1",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:14",
+            text=(
+                "Conclusion\n"
+                "44. For all of the foregoing reasons, we have allowed the Appeal to the extent shown in our order above.\n"
+                "49. Taking those reducing factors into account, the court considers that a fair, reasonable and "
+                "proportionate award of costs for the Appellant in this appeal, is 50% of the amount it has claimed, "
+                "namely the sum of USD 60,541.25."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to the Conclusion section of case CA 009/2024, how did the Court of Appeal rule, and what costs were awarded?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The Court of Appeal allowed the appeal in part (cite: ca009:1). "
+        "The Appellant was awarded costs in the sum of USD 60,541.25 (cite: ca009:1)."
+    )
+
+
+def test_build_structured_free_text_answer_ignores_costs_heading_only_clause(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="ca009:1",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:14",
+            text=(
+                "Conclusion\n"
+                "44. For all of the foregoing reasons, we have allowed the Appeal to the extent shown in our order above.\n"
+                "Costs.\n"
+                "49. Taking those reducing factors into account, the court considers that a fair, reasonable and "
+                "proportionate award of costs for the Appellant in this appeal, is 50% of the amount it has claimed, "
+                "namely the sum of USD 60,541.25."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to the Conclusion section of case CA 009/2024, how did the Court of Appeal rule, and what costs were awarded?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The Court of Appeal allowed the appeal in part (cite: ca009:1). "
+        "The Appellant was awarded costs in the sum of USD 60,541.25 (cite: ca009:1)."
+    )
+
+
 def test_build_structured_free_text_answer_handles_specific_order_without_falling_back_to_reasons(mock_settings) -> None:
     from rag_challenge.llm.generator import RAGGenerator
 
@@ -885,6 +970,52 @@ def test_build_structured_free_text_answer_prefers_last_page_conclusion_for_spec
     )
 
     assert answer == "The No Costs Application is rejected (cite: cfi016:1)."
+
+
+def test_build_structured_free_text_answer_prefers_first_page_final_ruling(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="cfi010:0",
+            doc_id="cfi010",
+            doc_title="CFI 010/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text=(
+                "IT IS HEREBY ORDERED THAT:\n"
+                "1. The Application is dismissed.\n"
+                "2. The Claimant shall bear its own costs of the Application."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="cfi010:1",
+            doc_id="cfi010",
+            doc_title="CFI 010/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:3",
+            text=(
+                "Accordingly, the Application must be dismissed, and the Claimant shall bear its own costs of the Application."
+            ),
+            retrieval_score=0.92,
+            rerank_score=0.92,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="Summarize the court's final ruling in case CFI 010/2024, as stated on the first page of the document.",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The Application is dismissed (cite: cfi010:0). "
+        "The Claimant shall bear its own costs of the Application (cite: cfi010:0)."
+    )
 
 
 def test_build_structured_free_text_answer_handles_set_aside_application_without_judge_name_noise(mock_settings) -> None:
@@ -2504,6 +2635,248 @@ def test_cleanup_named_administration_answer_handles_single_law_without_duplicat
     )
 
     assert cleaned == "DIFCA administers Employment Law 2019 and any Regulations made under it (cite: employment:0)"
+
+
+def test_cleanup_named_administration_answer_extracts_single_law_title_from_question() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="foundations:0",
+            doc_id="foundations",
+            doc_title="FOUNDATIONS LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text="This Law is administered by the Registrar.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Foundations Law 2018",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_administration_answer(
+        "",
+        question="Who administers the Foundations Law?",
+        chunks=chunks,
+        doc_refs=None,
+    )
+
+    assert cleaned == "Registrar administers Foundations Law 2018 and any Regulations made under it (cite: foundations:0)"
+
+
+def test_cleanup_named_administration_answer_falls_back_to_single_support_doc() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="noise:0",
+            doc_id="noise",
+            doc_title="GENERAL PRINCIPLES",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="This Law applies in the DIFC.",
+            retrieval_score=0.99,
+            rerank_score=0.99,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="foundations:0",
+            doc_id="foundations",
+            doc_title="FOUNDATIONS LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text="This Law is administered by the Registrar.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_administration_answer(
+        "",
+        question="Who administers the Foundations Law?",
+        chunks=chunks,
+        doc_refs=None,
+    )
+
+    assert cleaned == "Registrar administers Foundations Law and any Regulations made under it (cite: foundations:0)"
+
+
+def test_cleanup_named_administration_answer_prefers_extracted_title_over_garbage_ref() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="foundations:0",
+            doc_id="foundations",
+            doc_title="FOUNDATIONS LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text=(
+                "FOUNDATIONS LAW 2018. Administration of this Law. "
+                "This Law is administered by the Registrar."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Foundations Law 2018",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_administration_answer(
+        "",
+        question="Who administers the Foundations Law?",
+        chunks=chunks,
+        doc_refs=["administers the Foundations Law"],
+    )
+
+    assert cleaned == "Registrar administers Foundations Law 2018 and any Regulations made under it (cite: foundations:0)"
+
+
+def test_build_structured_free_text_answer_handles_consolidated_version_published_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="lawapp:0",
+            doc_id="lawapp",
+            doc_title="LAW ON THE APPLICATION OF CIVIL AND COMMERCIAL LAWS IN THE DIFC",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text=(
+                "LAW ON THE APPLICATION OF CIVIL AND COMMERCIAL LAWS IN THE DIFC\n"
+                "Consolidated Version (November 2024)"
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Law on the Application of Civil and Commercial Laws in the DIFC 2004",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="When was the consolidated version of the Law on the Application of Civil and Commercial Laws in the DIFC published?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The consolidated version of Law on the Application of Civil and Commercial Laws in the DIFC 2004 "
+        "was published in November 2024 (cite: lawapp:0)."
+    )
+
+
+def test_build_structured_free_text_answer_handles_consolidated_version_published_with_generic_ref_capture(
+    mock_settings,
+) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="noise:0",
+            doc_id="noise",
+            doc_title="OTHER LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="Consolidated Version (January 2020)",
+            retrieval_score=0.99,
+            rerank_score=0.99,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="lawapp:0",
+            doc_id="lawapp",
+            doc_title="LAW ON THE APPLICATION OF CIVIL AND COMMERCIAL LAWS IN THE DIFC",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text=(
+                "LAW ON THE APPLICATION OF CIVIL AND COMMERCIAL LAWS IN THE DIFC\n"
+                "Consolidated Version (November 2024)"
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="When was the consolidated version of the Law on the Application of Civil and Commercial Laws in the DIFC published?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The consolidated version of LAW ON THE APPLICATION OF CIVIL AND COMMERCIAL LAWS IN THE DIFC "
+        "was published in November 2024 (cite: lawapp:0)."
+    )
+
+
+def test_build_structured_free_text_answer_handles_consolidated_version_published_from_doc_summary(
+    mock_settings,
+) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="lawapp:toc",
+            doc_id="lawapp",
+            doc_title="LAW ON THE APPLICATION OF CIVIL",
+            doc_type=DocType.STATUTE,
+            section_path="page:2",
+            text="CONTENTS\n1. Title\n2. Legislative Authority",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary=(
+                "This statute, titled \"Law on the Application of Civil and Commercial Laws in the DIFC 2004\", "
+                "is provided as a Consolidated Version (November 2024)."
+            ),
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="When was the consolidated version of the Law on the Application of Civil and Commercial Laws in the DIFC published?",
+        chunks=chunks,
+        doc_refs=["version of the Law"],
+    )
+
+    assert answer == (
+        "The consolidated version of Law on the Application of Civil and Commercial Laws in the DIFC 2004 "
+        "was published in November 2024 (cite: lawapp:toc)."
+    )
+
+
+def test_build_structured_free_text_answer_handles_remuneration_recordkeeping_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="employment:16c",
+            doc_id="employment",
+            doc_title="EMPLOYMENT LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text=(
+                "Article 16(1)(c) requires an Employer to keep records of the Employee's Remuneration "
+                "(gross and net, where applicable), and the applicable Pay Period."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Employment Law 2019",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question=(
+            "What does Article 16(1)(c) of the Employment Law 2019 require an Employer to keep records of "
+            "regarding an Employee's remuneration?"
+        ),
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "An Employer must keep records of the Employee's remuneration, including gross and net, where applicable, "
+        "and the applicable pay period (cite: employment:16c)."
+    )
 
 
 def test_cleanup_interpretative_provisions_enumeration_items_recovers_law_titles() -> None:

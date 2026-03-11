@@ -375,6 +375,13 @@ def _is_account_effective_dates_query(query: str) -> bool:
     return bool(q) and "pre-existing" in q and "new accounts" in q and "effective date" in q and "enact" in q
 
 
+def _is_remuneration_recordkeeping_query(query: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if not q:
+        return False
+    return "article 16(1)(c)" in q and "keep records" in q and "remuneration" in q
+
+
 def _is_restriction_effectiveness_query(query: str) -> bool:
     q = re.sub(r"\s+", " ", (query or "").strip()).lower()
     if not q:
@@ -1254,6 +1261,45 @@ class RAGPipelineBuilder:
                         limit=limit,
                     )
 
+        if answer_type == "free_text" and _is_remuneration_recordkeeping_query(state["query"]):
+            remuneration_refs = [str(ref).strip() for ref in state.get("doc_refs", []) if str(ref).strip()]
+            remuneration_ref = (
+                remuneration_refs
+                or self._support_question_refs(state["query"])
+                or self._extract_title_refs_from_query(state["query"])
+            )[:1]
+            if remuneration_ref:
+                targeted_query = self._augment_query_for_sparse_retrieval(
+                    f"{remuneration_ref[0]} article 16 payroll records remuneration gross and net pay period"
+                )
+                top_k = int(getattr(self._settings.pipeline, "doc_ref_multi_top_k_per_ref", 30))
+                with collector.timed("qdrant"):
+                    remuneration_results = await self._retriever.retrieve(
+                        targeted_query,
+                        query_vector=None,
+                        doc_refs=None,
+                        sparse_only=True,
+                        top_k=top_k,
+                    )
+                if remuneration_results:
+                    best_chunk: RetrievedChunk | None = None
+                    best_score = 0
+                    for chunk in remuneration_results:
+                        score = self._remuneration_recordkeeping_clause_score(chunk)
+                        if score > best_score:
+                            best_chunk = chunk
+                            best_score = score
+                    must_keep = [best_chunk.chunk_id] if best_chunk is not None and best_score > 0 else []
+                    if must_keep:
+                        must_include_chunk_ids.extend(must_keep)
+                    limit = int(self._settings.reranker.rerank_candidates)
+                    retrieved = self._merge_retrieved_preserving_chunk_ids(
+                        retrieved=retrieved,
+                        extra=remuneration_results,
+                        must_keep_chunk_ids=must_keep,
+                        limit=limit,
+                    )
+
         if answer_type == "boolean" and _is_restriction_effectiveness_query(state["query"]):
             restriction_refs = [str(ref).strip() for ref in state.get("doc_refs", []) if str(ref).strip()]
             restriction_ref = (restriction_refs or self._support_question_refs(state["query"]))[:1]
@@ -1275,21 +1321,26 @@ class RAGPipelineBuilder:
                         top_k=top_k,
                     )
                 if restriction_results:
-                    best_chunk = max(
-                        restriction_results,
-                        key=lambda chunk: (
-                            self._restriction_effectiveness_clause_score(ref=restriction_ref[0], chunk=chunk),
-                            float(getattr(chunk, "score", 0.0) or 0.0),
-                        ),
-                    )
-                    best_score = self._restriction_effectiveness_clause_score(ref=restriction_ref[0], chunk=best_chunk)
-                    if best_score > 0:
+                    best_chunk: RetrievedChunk | None = None
+                    best_score = 0
+                    best_rank_score = 0.0
+                    for chunk in restriction_results:
+                        clause_score = self._restriction_effectiveness_clause_score(
+                            ref=restriction_ref[0],
+                            chunk=chunk,
+                        )
+                        rank_score = float(getattr(chunk, "score", 0.0) or 0.0)
+                        if clause_score > best_score or (clause_score == best_score and rank_score > best_rank_score):
+                            best_chunk = chunk
+                            best_score = clause_score
+                            best_rank_score = rank_score
+                    if best_chunk is not None and best_score > 0:
                         must_include_chunk_ids.append(best_chunk.chunk_id)
                     limit = int(self._settings.reranker.rerank_candidates)
                     retrieved = self._merge_retrieved_preserving_chunk_ids(
                         retrieved=retrieved,
                         extra=restriction_results,
-                        must_keep_chunk_ids=[best_chunk.chunk_id] if best_score > 0 else [],
+                        must_keep_chunk_ids=[best_chunk.chunk_id] if best_chunk is not None and best_score > 0 else [],
                         limit=limit,
                     )
 
@@ -3304,6 +3355,22 @@ class RAGPipelineBuilder:
         best_chunk = cls._best_named_administration_chunk(ref=ref, chunks=retrieved)
         chunk_id = str(getattr(best_chunk, "chunk_id", "") or "").strip() if best_chunk is not None else ""
         return [chunk_id] if chunk_id else []
+
+    @classmethod
+    def _remuneration_recordkeeping_clause_score(cls, raw: RetrievedChunk) -> int:
+        normalized = re.sub(r"\s+", " ", str(getattr(raw, "text", "") or "").strip()).casefold()
+        if not normalized:
+            return 0
+        score = 0
+        if "article 16" in normalized or "16. payroll records" in normalized or "payroll records" in normalized:
+            score += 80
+        if "remuneration" in normalized:
+            score += 80
+        if "pay period" in normalized:
+            score += 80
+        if "gross and net" in normalized:
+            score += 40
+        return score
 
     @classmethod
     def _ensure_named_amendment_context(

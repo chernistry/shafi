@@ -3261,6 +3261,41 @@ def test_targeted_named_ref_query_boosts_admin_title_clause_terms(mock_settings)
     assert "shall administer this law" in targeted
 
 
+def test_is_remuneration_recordkeeping_query_detects_article_16_recordkeeping_phrase() -> None:
+    from rag_challenge.core.pipeline import _is_remuneration_recordkeeping_query
+
+    assert _is_remuneration_recordkeeping_query(
+        "What does Article 16(1)(c) of the Employment Law 2019 require an Employer to keep records of regarding an Employee's remuneration?"
+    )
+
+
+def test_remuneration_recordkeeping_clause_score_prefers_pay_period_clause(pipeline_builder) -> None:
+    best = _make_retrieved_chunk(
+        chunk_id="employment:records",
+        doc_id="employment",
+        doc_title="EMPLOYMENT LAW",
+        section_path="page:8",
+        text=(
+            "16. Payroll records. An Employer shall keep records of the Employee's Remuneration "
+            "(gross and net, where applicable), and the applicable Pay Period."
+        ),
+        score=0.42,
+    )
+    weak = _make_retrieved_chunk(
+        chunk_id="employment:other",
+        doc_id="employment",
+        doc_title="EMPLOYMENT LAW",
+        section_path="page:4",
+        text="An Employer must keep records in accordance with this Law.",
+        score=0.99,
+    )
+
+    assert (
+        pipeline_builder._remuneration_recordkeeping_clause_score(best)
+        > pipeline_builder._remuneration_recordkeeping_clause_score(weak)
+    )
+
+
 def test_select_targeted_title_seed_chunk_id_prefers_title_year_page_for_same_year_boolean(pipeline_builder) -> None:
     row = [
         _make_retrieved_chunk(
