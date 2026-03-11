@@ -90,3 +90,219 @@ def test_answer_name_returns_case_ref_for_higher_monetary_claim() -> None:
     assert result is not None
     assert result.answer == "SCT 169/2025"
     assert result.cited_chunk_ids == ["sct169:0", "sct295:0"]
+
+
+def test_answer_boolean_detects_common_judge_across_multiple_case_documents() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        _case_chunk(
+            chunk_id="ca005:orders",
+            doc_id="ca005-orders",
+            doc_title="CA 005/2025 LXT Real Estate Broker L.L.C v SIR Real Estate LLC",
+            page=1,
+            text=(
+                "Claim No: CA 005/2025\n"
+                "hearing held before H.E. Chief Justice Wayne Martin, "
+                "H.E. Justice Rene Le Miere and H.E. Justice Sir Peter Gross."
+            ),
+        ),
+        _case_chunk(
+            chunk_id="tcd001:first-instance",
+            doc_id="tcd001-first",
+            doc_title="TCD 001/2024 Architeriors Interior Design v Emirates National Investment Co",
+            page=1,
+            text=(
+                "Claim No: TCD 001/2024\n"
+                "ORDER WITH REASONS OF H.E. JUSTICE ROGER STEWART."
+            ),
+        ),
+        _case_chunk(
+            chunk_id="tcd001:appeal",
+            doc_id="tcd001-appeal",
+            doc_title="TCD 001/2024 Architeriors Interior Design v Emirates National Investment Co",
+            page=1,
+            text=(
+                "Claim No: TCD 001/2024\n"
+                "ORDER WITH REASONS OF H.E. CHIEF JUSTICE WAYNE MARTIN."
+            ),
+        ),
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query="Considering all documents across case CA 005/2025 and case TCD 001/2024, was there any judge who participated in both cases?",
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "Yes"
+    assert result.cited_chunk_ids == ["ca005:orders", "tcd001:appeal"]
+
+
+def test_answer_boolean_detects_party_overlap_phrase_variant() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        _case_chunk(
+            chunk_id="cfi057:title",
+            doc_id="cfi057",
+            doc_title="CFI 057/2025 Clyde & Co LLP v Union Properties PJSC",
+            page=1,
+            text="Claim No: CFI 057/2025",
+        ),
+        _case_chunk(
+            chunk_id="sct295:title",
+            doc_id="sct295",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            page=1,
+            text="Claim No: SCT 295/2025",
+        ),
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query="Is there any main party that appeared in both cases CFI 057/2025 and SCT 295/2025?",
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["cfi057:title", "sct295:title"]
+
+
+def test_answer_boolean_handles_operating_law_article_8_1() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="operating:8-1",
+            doc_id="operating",
+            doc_title="OPERATING LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text=(
+                "Article 8. Conducting Business in the DIFC. "
+                "No person shall operate or conduct business in or from the DIFC unless incorporated, "
+                "registered or continued under a Prescribed Law."
+            ),
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        )
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query=(
+            "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct "
+            "business in or from the DIFC without being incorporated, registered, or continued under a "
+            "Prescribed Law or other Legislation administered by the Registrar?"
+        ),
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["operating:8-1"]
+
+
+def test_answer_boolean_handles_general_partnership_article_11_body_corporate() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="gp:11",
+            doc_id="gp",
+            doc_title="GENERAL PARTNERSHIP LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:5",
+            text=(
+                "An unincorporated body of persons carrying on a business for profit is deemed to be a "
+                "General Partnership unless the agreement otherwise provides, including that it is a body corporate."
+            ),
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        )
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query=(
+            "Under Article 11 of the General Partnership Law 2004, is an unincorporated body of persons "
+            "carrying on business for profit automatically deemed a partnership if there is an agreement "
+            "specifying it as a body corporate?"
+        ),
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["gp:11"]
+
+
+def test_answer_boolean_handles_employment_article_11_2_b() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="employment:11-2b",
+            doc_id="employment",
+            doc_title="EMPLOYMENT LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text=(
+                "Nothing in this Article shall prevent an Employee from waiving any right under this Law in a "
+                "written agreement with the Employer to terminate the Employee's employment or to resolve a dispute, "
+                "provided the Employee is given the opportunity to receive independent legal advice or otherwise "
+                "takes part in mediation proceedings."
+            ),
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        )
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query=(
+            "Under Article 11(2)(b) of the Employment Law 2019, can an Employee waive any right under "
+            "this Law by entering into a written agreement with their Employer to terminate employment, "
+            "provided they were given an opportunity to receive independent legal advice or took part in mediation?"
+        ),
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "Yes"
+    assert result.cited_chunk_ids == ["employment:11-2b"]
+
+
+def test_answer_boolean_handles_crs_article_17_b() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="crs:17b",
+            doc_id="crs",
+            doc_title="COMMON REPORTING STANDARD LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:8",
+            text=(
+                "A person commits an offence if the person obstructs an Inspector in the performance of the "
+                "Inspector's powers and functions, including a failure to give or produce information or documents "
+                "specified by an Inspector."
+            ),
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        )
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query=(
+            "If a Reporting Financial Institution fails to provide specified information during an investigation, "
+            "does this constitute obstruction of Inspectors under Article 17(b) of the Common Reporting Standard Law 2018?"
+        ),
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "Yes"
+    assert result.cited_chunk_ids == ["crs:17b"]

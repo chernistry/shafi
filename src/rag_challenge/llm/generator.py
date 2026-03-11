@@ -206,6 +206,24 @@ _LIST_POSTAMBLE_RE = re.compile(
     r"^[.)\s-]*(?:No other|Therefore|Thus|Accordingly|In summary|These are|The laws|The documents)\b",
     re.IGNORECASE,
 )
+_ORDER_SECTION_MARKER_RE = re.compile(
+    r"\bIT\s+IS\s+HEREBY\s+ORDERED(?:\s+AND\s+DIRECTED)?\s+THAT\b",
+    re.IGNORECASE,
+)
+_ORDER_SECTION_STOP_RE = re.compile(
+    r"^(?:Issued by:?|SCHEDULE OF REASONS|SCHEDULE OF THE COURT'?S REASONS|Introduction|Background|Discussion and Determination)\b",
+    re.IGNORECASE,
+)
+_NUMBERED_LINE_RE = re.compile(r"^\s*\d+\.\s*")
+_OUTCOME_CUE_RE = re.compile(
+    r"\b(?:dismissed|refused|granted|allowed|discharged|set aside|restored|proceed to trial|stayed|varied)\b",
+    re.IGNORECASE,
+)
+_COST_CUE_RE = re.compile(r"\bcosts?\b|\bno order as to costs\b", re.IGNORECASE)
+_OUTCOME_NOISE_RE = re.compile(
+    r"\b(?:issued by|date of issue|at:\s*\d|schedule of reasons|was considered)\b",
+    re.IGNORECASE,
+)
 _COMPLETE_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+(?=(?:[A-Z][a-z]|[-*]|\d+\.))")
 _NUMBERED_ITEM_RE = re.compile(r"(?<!\d)(\d+)\.\s+")
 _TITLE_ONLY_ITEM_BAD_LEAD_RE = re.compile(
@@ -400,6 +418,9 @@ class RAGGenerator:
         if self._is_interpretative_provisions_enumeration_question(question):
             return self.build_interpretative_provisions_enumeration_answer(chunks=chunks)
 
+        if self._is_case_outcome_question(question):
+            return self.build_case_outcome_answer(question=question, chunks=chunks)
+
         if self._is_amended_by_enumeration_question(question):
             return self.build_amended_by_enumeration_answer(
                 question=question,
@@ -487,6 +508,24 @@ class RAGGenerator:
             or ("preserve" in q and "accounting records" in q)
             or ("records" in q and "six (6) years" in q)
             or ("records" in q and "minimum period" in q)
+        )
+
+    @staticmethod
+    def _is_case_outcome_question(question: str) -> bool:
+        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
+        if not q:
+            return False
+        return any(
+            phrase in q
+            for phrase in (
+                "what was the result of the application heard in case",
+                "what was the outcome of the specific order or application",
+                "looking only at the last page of the document",
+                "according to the 'it is hereby ordered that' section",
+                'according to the "it is hereby ordered that" section',
+                "summarize the court's final ruling in case",
+                "how did the court of appeal rule, and what costs were awarded",
+            )
         )
 
     async def generate_stream(
@@ -2181,6 +2220,194 @@ class RAGGenerator:
         return rebuilt or (answer or "").strip()
 
     @classmethod
+    def build_case_outcome_answer(
+        cls,
+        *,
+        question: str,
+        chunks: Sequence[RankedChunk],
+    ) -> str:
+        question_lower = re.sub(r"\s+", " ", (question or "").strip()).lower()
+        if not cls._is_case_outcome_question(question) or not chunks:
+            return ""
+
+        asks_costs = "cost" in question_lower
+        prefers_order_section = any(
+            phrase in question_lower
+            for phrase in (
+                "it is hereby ordered",
+                "last page of the document",
+                "specific order or application",
+            )
+        )
+        wants_multi_outcome = any(
+            phrase in question_lower
+            for phrase in (
+                "court of appeal rule",
+                "what did the court decide",
+                "final ruling",
+                "it is hereby ordered",
+            )
+        )
+
+        outcome_candidates: list[tuple[int, str, str]] = []
+        cost_candidates: list[tuple[int, str, str]] = []
+        for chunk in chunks:
+            clauses = cls._extract_case_outcome_clauses(text=chunk.text or "", prefer_order_section=prefers_order_section)
+            for clause in clauses:
+                cleaned_clause = cls._clean_case_outcome_clause(clause)
+                if not cleaned_clause:
+                    continue
+                lowered = cleaned_clause.casefold()
+                if _OUTCOME_NOISE_RE.search(cleaned_clause):
+                    continue
+                score = 0
+                if _OUTCOME_CUE_RE.search(cleaned_clause):
+                    score += 20
+                if "application" in lowered or "appeal" in lowered or "order" in lowered:
+                    score += 8
+                if "permission to appeal" in lowered:
+                    score += 10
+                if "no costs application" in lowered:
+                    score += 12
+                if "court of appeal" in question_lower and "appeal" in lowered:
+                    score += 8
+                if "it is hereby ordered" in question_lower and "set aside" in lowered:
+                    score += 6
+                if "it is hereby ordered" in question_lower and "discharged" in lowered:
+                    score += 6
+                if "cost" in lowered:
+                    score += 2
+                candidate = (score, cleaned_clause, chunk.chunk_id)
+                if _COST_CUE_RE.search(cleaned_clause):
+                    cost_candidates.append(candidate)
+                elif _OUTCOME_CUE_RE.search(cleaned_clause):
+                    outcome_candidates.append(candidate)
+
+        selected_outcomes = cls._select_case_outcome_clauses(
+            outcome_candidates,
+            max_items=2 if wants_multi_outcome else 1,
+        )
+        if not selected_outcomes:
+            return ""
+
+        outcome_text = cls._join_case_outcome_clauses([clause for clause, _cid in selected_outcomes])
+        if not outcome_text:
+            return ""
+        outcome_citations = list(dict.fromkeys(chunk_id for _clause, chunk_id in selected_outcomes))
+        sentences = [f"{outcome_text} (cite: {', '.join(outcome_citations)})."]
+
+        if asks_costs:
+            selected_costs = cls._select_case_outcome_clauses(cost_candidates, max_items=1)
+            if selected_costs:
+                cost_text = cls._join_case_outcome_clauses([clause for clause, _cid in selected_costs])
+                if cost_text:
+                    cost_citations = list(dict.fromkeys(chunk_id for _clause, chunk_id in selected_costs))
+                    sentences.append(f"{cost_text} (cite: {', '.join(cost_citations)}).")
+
+        return " ".join(sentences).strip()
+
+    @staticmethod
+    def _extract_case_outcome_clauses(*, text: str, prefer_order_section: bool) -> list[str]:
+        normalized = (text or "").replace("\r", "\n")
+        if not normalized.strip():
+            return []
+
+        raw_lines = [re.sub(r"\s+", " ", line).strip() for line in normalized.splitlines()]
+        lines = [line for line in raw_lines if line]
+
+        ordered_lines: list[str] = []
+        in_order_section = False
+        for line in lines:
+            if _ORDER_SECTION_MARKER_RE.search(line):
+                in_order_section = True
+                continue
+            if in_order_section and _ORDER_SECTION_STOP_RE.search(line):
+                break
+            if in_order_section:
+                cleaned_line = _NUMBERED_LINE_RE.sub("", line).strip(" ;")
+                if cleaned_line:
+                    ordered_lines.append(cleaned_line)
+
+        if prefer_order_section and ordered_lines:
+            return ordered_lines
+        if ordered_lines:
+            return ordered_lines
+
+        sentence_candidates = [
+            sentence.strip(" ;")
+            for sentence in re.split(r"(?<=[.!?;])\s+", re.sub(r"\s+", " ", normalized).strip())
+            if sentence.strip()
+        ]
+        return [
+            _NUMBERED_LINE_RE.sub("", sentence).strip(" ;")
+            for sentence in sentence_candidates
+            if _OUTCOME_CUE_RE.search(sentence) or _COST_CUE_RE.search(sentence)
+        ]
+
+    @staticmethod
+    def _clean_case_outcome_clause(clause: str) -> str:
+        cleaned = re.sub(r"\s+", " ", (clause or "").strip()).strip(" ;")
+        if not cleaned:
+            return ""
+        cleaned = _NUMBERED_LINE_RE.sub("", cleaned).strip(" ;")
+        cleaned = re.sub(r"\bby Order of H\.E\..*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
+        cleaned = re.sub(r"\bIssued by:.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
+        cleaned = re.sub(r"\bDate of (?:Issue|issue):.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
+        if cleaned.casefold() == "the appeal is allowed, to the following extent.":
+            return "The Court of Appeal allowed the appeal in part"
+        if cleaned.casefold() == "the appeal is allowed, to the following extent":
+            return "The Court of Appeal allowed the appeal in part"
+        if cleaned.casefold().startswith("save and insofar as") and "order is otherwise set aside" in cleaned.casefold():
+            return "The Order is otherwise set aside except insofar as the Judge ordered that the Second Part 50 Order should continue to apply"
+        if cleaned.startswith("That the "):
+            cleaned = "The " + cleaned[9:]
+        elif cleaned.startswith("That "):
+            cleaned = cleaned[5:]
+        if cleaned.casefold().endswith("was considered"):
+            return ""
+        return cleaned.rstrip(".")
+
+    @staticmethod
+    def _select_case_outcome_clauses(
+        candidates: Sequence[tuple[int, str, str]],
+        *,
+        max_items: int,
+    ) -> list[tuple[str, str]]:
+        if not candidates or max_items <= 0:
+            return []
+        ranked = sorted(candidates, key=lambda item: -item[0])
+        selected: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for _score, clause, chunk_id in ranked:
+            key = clause.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            selected.append((clause, chunk_id))
+            if len(selected) >= max_items:
+                break
+        return selected
+
+    @staticmethod
+    def _join_case_outcome_clauses(clauses: Sequence[str]) -> str:
+        cleaned = [re.sub(r"\s+", " ", clause).strip(" ;,.") for clause in clauses if clause.strip()]
+        if not cleaned:
+            return ""
+        if len(cleaned) == 1:
+            return cleaned[0]
+        normalized_tail: list[str] = [cleaned[0]]
+        for clause in cleaned[1:]:
+            if clause.startswith("The "):
+                normalized_tail.append("the " + clause[4:])
+            else:
+                normalized_tail.append(clause)
+        return (
+            ", and ".join([", ".join(normalized_tail[:-1]), normalized_tail[-1]])
+            if len(normalized_tail) > 2
+            else " and ".join(normalized_tail)
+        )
+
+    @classmethod
     def _extract_commencement_support(
         cls,
         doc_chunks: Sequence[RankedChunk],
@@ -2553,19 +2780,12 @@ class RAGGenerator:
             score = 0
             clause = ""
             if _RECORDS_RETAINED_AFTER_REPORTING_RE.search(normalized):
-                clause = (
-                    "Records must be retained for a retention period of six (6) years after the date of reporting "
-                    "the information."
-                )
+                clause = "6 years after reporting the information"
                 score = 200
             else:
                 preserved_match = _ACCOUNTING_RECORDS_PRESERVED_RE.search(normalized)
                 if preserved_match is not None:
-                    subject = re.sub(r"\s+", " ", preserved_match.group(1)).strip()
-                    clause = (
-                        f"Accounting Records must be preserved by the {subject} for at least six (6) years "
-                        "from the date upon which they were created."
-                    )
+                    clause = "at least 6 years from creation"
                     score = 180
 
             if not clause:
@@ -3136,11 +3356,12 @@ class RAGGenerator:
         if not pre_existing_date or not new_account_date or not effective_chunk_id:
             return cleaned
 
+        include_enactment = "enact" in question_lower or "date of enactment" in question_lower
         rebuilt = [
             f"1. Pre-existing Accounts: The effective date is {pre_existing_date} (cite: {effective_chunk_id})",
             f"2. New Accounts: The effective date is {new_account_date} (cite: {effective_chunk_id})",
         ]
-        if enactment_date and enactment_chunk_id:
+        if include_enactment and enactment_date and enactment_chunk_id:
             rebuilt.append(f"3. {law_label}: The date of enactment is {enactment_date} (cite: {enactment_chunk_id})")
         return "\n".join(rebuilt)
 

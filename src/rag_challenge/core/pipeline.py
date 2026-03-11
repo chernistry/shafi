@@ -1578,23 +1578,40 @@ class RAGPipelineBuilder:
 
         score = 0
         page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
-        if page_num <= 2:
-            score += 180
-        if "order with reasons" in text or "judgment of" in text or "reasons of" in text:
-            score += 220
+        if page_num == 1:
+            score += 320
+        elif page_num == 2:
+            score += 160
+        elif page_num > 2:
+            score -= min(180, (page_num - 2) * 28)
+        if (
+            "order with reasons" in text
+            or "judgment of" in text
+            or "reasons of" in text
+            or "hearing held before" in text
+            or "before h.e." in text
+            or "judgment of the court of appeal" in text
+        ):
+            score += 260
         if any(marker in text for marker in ("chief justice", "justice ", "assistant registrar", "registrar", "sct judge")):
             score += 260
         if "claim no." in text or "case no:" in text:
             score += 40
+        if any(marker in text for marker in ("issued by:", "introduction", "background", "discussion and determination")):
+            score -= 40
         return score
 
     def _select_case_judge_seed_chunk_id(self, chunks: Sequence[RetrievedChunk]) -> str | None:
         best_chunk_id = ""
-        best_score = 0
+        best_key: tuple[int, int, float] | None = None
         for chunk in chunks:
             score = self._case_judge_seed_chunk_score(chunk=chunk)
-            if score > best_score:
-                best_score = score
+            if score <= 0:
+                continue
+            page_num = self._page_num(str(getattr(chunk, "section_path", "") or ""))
+            candidate = (score, -max(page_num, 0), float(chunk.score))
+            if best_key is None or candidate > best_key:
+                best_key = candidate
                 best_chunk_id = chunk.chunk_id
         return best_chunk_id or None
 

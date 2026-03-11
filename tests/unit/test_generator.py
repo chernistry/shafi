@@ -673,6 +673,121 @@ def test_build_structured_free_text_answer_handles_amended_by_enumeration_query(
     )
 
 
+def test_build_structured_free_text_answer_handles_case_outcome_result_query(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="cfi067:0",
+            doc_id="cfi067",
+            doc_title="CFI 067/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text=(
+                "IT IS HEREBY ORDERED THAT:\n"
+                "1. The Defendant's Application for immediate judgment and/or strike out is dismissed.\n"
+                "2. The Applicant shall pay the Respondent 80% of the Respondent's costs of the Application."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="cfi067:1",
+            doc_id="cfi067",
+            doc_title="CFI 067/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="This Order concerns the Defendant's Application for immediate judgment and/or strike out, which was dismissed by Order of H.E. Justice Shamlan Al Sawalehi.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="What was the result of the application heard in case CFI 067/2025?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The Defendant's Application for immediate judgment and/or strike out is dismissed "
+        "(cite: cfi067:0)."
+    )
+
+
+def test_build_structured_free_text_answer_handles_case_outcome_with_costs(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="ca009:0",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:13",
+            text=(
+                "IT IS HEREBY ORDERED AND DIRECTED THAT:\n"
+                "1. The Appeal is allowed, to the following extent.\n"
+                "2. Save and insofar as the Judge ordered that the Second Part 50 Order should continue to apply, "
+                "the Order is otherwise set aside.\n"
+                "3. The Second Part 50 Order is restored and shall take effect as amended below.\n"
+                "4. That the Respondents shall pay the Appellant's costs of the Appeal assessed in the amount USD 60,541.25."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to the Conclusion section of case CA 009/2024, how did the Court of Appeal rule, and what costs were awarded?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The Court of Appeal allowed the appeal in part and the Order is otherwise set aside except insofar as the Judge ordered that the Second Part 50 Order should continue to apply "
+        "(cite: ca009:0). The Respondents shall pay the Appellant's costs of the Appeal assessed in the amount USD 60,541.25 "
+        "(cite: ca009:0)."
+    )
+
+
+def test_build_structured_free_text_answer_handles_it_is_hereby_ordered_query(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="arb034:0",
+            doc_id="arb034",
+            doc_title="ARB 034/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text=(
+                "IT IS HEREBY ORDERED THAT:\n"
+                "1. The ASI Order is discharged with immediate effect.\n"
+                "2. The Defendant's Set Aside Application is granted.\n"
+                "3. The Claimant shall pay the Defendant its costs of the Set Aside Application on the standard basis."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to the 'IT IS HEREBY ORDERED THAT' section of arbitration case ARB 034/2025, what did the court decide?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The ASI Order is discharged with immediate effect and the Defendant's Set Aside Application is granted "
+        "(cite: arb034:0)."
+    )
+
+
 def test_strip_negative_subclaims_removes_explicit_mention_disclaimer() -> None:
     from rag_challenge.llm.generator import RAGGenerator
 
@@ -1975,6 +2090,57 @@ def test_cleanup_account_effective_dates_answer_handles_effective_dates_without_
     )
 
 
+def test_cleanup_account_effective_dates_answer_ignores_enactment_when_not_requested() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="crs:0",
+            doc_id="crs",
+            doc_title="COMMON REPORTING",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                "This Law comes into force on the date specified in the Enactment Notice in respect of this Law, except "
+                "in respect of Pre-existing Accounts that are subject to due diligence requirements under this Law, "
+                "the effective date is 31 December, 2016; and in respect of New Accounts that are subject to due "
+                "diligence requirements under this Law, the effective date is 1 January, 2017."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Common Reporting Standard Law 2018",
+        ),
+        RankedChunk(
+            chunk_id="crs:notice",
+            doc_id="crs-notice",
+            doc_title="ENACTMENT NOTICE",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text=(
+                "We hereby enact on this 14th day of March 2018 the Common Reporting Standard Law DIFC Law No. 2 of 2018."
+            ),
+            retrieval_score=0.40,
+            rerank_score=0.40,
+            doc_summary="",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_account_effective_dates_answer(
+        "",
+        question=(
+            "What is the effective date for due diligence requirements for Pre-existing Accounts and "
+            "New Accounts under the Common Reporting Standard Law 2018?"
+        ),
+        chunks=chunks,
+        doc_refs=["Common Reporting Standard Law 2018"],
+    )
+
+    assert cleaned == (
+        "1. Pre-existing Accounts: The effective date is 31 December, 2016 (cite: crs:0)\n"
+        "2. New Accounts: The effective date is 1 January, 2017 (cite: crs:0)"
+    )
+
+
 def test_cleanup_named_retention_period_answer_rebuilds_crs_and_general_partnership() -> None:
     from rag_challenge.llm.generator import RAGGenerator
 
@@ -2022,10 +2188,8 @@ def test_cleanup_named_retention_period_answer_rebuilds_crs_and_general_partners
     )
 
     assert cleaned == (
-        "1. Common Reporting Standard Law 2018: Records must be retained for a retention period of six (6) years "
-        "after the date of reporting the information. (cite: crs:0)\n"
-        "2. General Partnership Law 2004: Accounting Records must be preserved by the General Partnership for at "
-        "least six (6) years from the date upon which they were created. (cite: gp:0)"
+        "1. Common Reporting Standard Law 2018: 6 years after reporting the information (cite: crs:0)\n"
+        "2. General Partnership Law 2004: at least 6 years from creation (cite: gp:0)"
     )
 
 
@@ -2075,10 +2239,8 @@ def test_cleanup_named_retention_period_answer_rebuilds_general_partnership_and_
     )
 
     assert cleaned == (
-        "1. General Partnership Law 2004: Accounting Records must be preserved by the General Partnership for at "
-        "least six (6) years from the date upon which they were created. (cite: gp:0)\n"
-        "2. Limited Liability Partnership Law 2018: Accounting Records must be preserved by the Limited Liability "
-        "Partnership for at least six (6) years from the date upon which they were created. (cite: llp:0)"
+        "1. General Partnership Law 2004: at least 6 years from creation (cite: gp:0)\n"
+        "2. Limited Liability Partnership Law 2018: at least 6 years from creation (cite: llp:0)"
     )
 
 

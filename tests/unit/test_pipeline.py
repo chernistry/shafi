@@ -2400,6 +2400,79 @@ async def test_retrieve_multi_ref_boolean_presided_over_both_keeps_judge_title_p
 
 
 @pytest.mark.asyncio
+async def test_retrieve_multi_ref_boolean_participated_in_both_prefers_page_one_judge_pages(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retriever = MagicMock()
+    retriever.retrieve = AsyncMock(
+        side_effect=[
+            [
+                _make_retrieved_chunk(
+                    chunk_id="ca:page8",
+                    doc_id="ca-005",
+                    doc_title="CA 005/2025 Example v Example",
+                    section_path="page:8",
+                    text="Later procedural page referring to Justice Wayne Martin in the body text only.",
+                    score=0.98,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="ca:page1",
+                    doc_id="ca-005",
+                    doc_title="CA 005/2025 Example v Example",
+                    section_path="page:1",
+                    text=(
+                        "Claim No: CA 005/2025\n"
+                        "hearing held before H.E. Chief Justice Wayne Martin, "
+                        "H.E. Justice Rene Le Miere and H.E. Justice Sir Peter Gross."
+                    ),
+                    score=0.82,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="tcd:page3",
+                    doc_id="tcd-001-appeal",
+                    doc_title="TCD 001/2024 Example v Example",
+                    section_path="page:3",
+                    text="Later page summarising that Chief Justice Wayne Martin heard the matter.",
+                    score=0.97,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="tcd:page1",
+                    doc_id="tcd-001-appeal",
+                    doc_title="TCD 001/2024 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. CHIEF JUSTICE WAYNE MARTIN.",
+                    score=0.81,
+                ),
+            ],
+        ]
+    )
+
+    builder = RAGPipelineBuilder(
+        retriever=retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="judges-participated-both")
+
+    result = await builder._retrieve(
+        {
+            "query": "Considering all documents across case CA 005/2025 and case TCD 001/2024, was there any judge who participated in both cases?",
+            "collector": collector,
+            "answer_type": "boolean",
+            "doc_refs": ["CA 005/2025", "TCD 001/2024"],
+        }
+    )
+
+    assert retriever.retrieve.await_count == 2
+    assert "ca:page1" in result["must_include_chunk_ids"]
+    assert "tcd:page1" in result["must_include_chunk_ids"]
+    assert {"ca:page1", "tcd:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
+
+
+@pytest.mark.asyncio
 async def test_retrieve_multi_ref_name_issue_date_keeps_issue_pages(mock_settings):
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
