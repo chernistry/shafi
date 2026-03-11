@@ -655,13 +655,15 @@ def _build_preflight_summary(
     return summary
 
 
-async def _download_phase_assets(client: PlatformEvaluationClient, paths: PlatformPaths, *, refresh: bool) -> None:
-    if refresh or not paths.questions_path.exists():
-        await client.download_questions(paths.questions_path)
-
+async def _download_phase_documents(client: PlatformEvaluationClient, paths: PlatformPaths, *, refresh: bool) -> None:
     has_pdf = any(path.suffix.lower() == ".pdf" for path in paths.docs_dir.rglob("*.pdf")) if paths.docs_dir.exists() else False
     if refresh or not has_pdf:
         await client.download_documents(paths.docs_dir)
+
+
+async def _download_phase_questions(client: PlatformEvaluationClient, paths: PlatformPaths, *, refresh: bool) -> None:
+    if refresh or not paths.questions_path.exists():
+        await client.download_questions(paths.questions_path)
 
 
 def _write_archive_artifacts(root: Path, paths: PlatformPaths, allowlist: ArchiveAllowlist) -> None:
@@ -782,7 +784,7 @@ async def _async_main(args: argparse.Namespace) -> int:
             return 0
 
         try:
-            await _download_phase_assets(client, paths, refresh=bool(args.refresh_downloads))
+            await _download_phase_documents(client, paths, refresh=bool(args.refresh_downloads))
         except httpx.HTTPStatusError as exc:
             if _is_resources_not_published_error(exc):
                 logger.error(
@@ -796,6 +798,18 @@ async def _async_main(args: argparse.Namespace) -> int:
         with _phase_collection_override(collection_name):
             if not bool(args.skip_ingest):
                 await _ingest_phase_documents(paths.docs_dir)
+
+            try:
+                await _download_phase_questions(client, paths, refresh=bool(args.refresh_downloads))
+            except httpx.HTTPStatusError as exc:
+                if _is_resources_not_published_error(exc):
+                    logger.error(
+                        "Platform questions for phase '%s' are not published yet. "
+                        "Documents may already be available and ingested; retry question download after publication.",
+                        settings.platform.phase,
+                    )
+                    return 2
+                raise
 
             cases = load_cases(paths.questions_path)
             runtime = await _build_pipeline_runtime()

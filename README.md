@@ -136,9 +136,10 @@ docker compose --profile tools run --rm eval \
 
 What this flow does:
 
-- downloads phase-specific `questions` and `documents` from the platform API
+- downloads phase-specific `documents` from the platform API
 - stores them under `platform_runs/<phase>/`
 - ingests them into a phase-specific Qdrant collection
+- only then downloads phase-specific `questions`
 - runs the same RAG pipeline directly against those questions
 - emits a platform-shaped `submission.json`
 - emits a local `preflight_summary.json` for first-run triage
@@ -150,6 +151,7 @@ Important:
 - `EVAL_API_KEY` is required locally, but stays out of `.env.example` and out of the code archive
 - `platform_runs/` is a generated workspace and is not part of the shipped archive
 - local regression data in `dataset/` remains separate from platform phase corpora
+- platform flow ingests documents before fetching questions, to stay aligned with the "no question-aware indexing" rule
 - `--submit-existing` is the preferred submit path because it uploads the exact artifact you already inspected
 - if the platform responds `403 Questions and documents are not published yet`, the client is working; the phase corpus is simply not open yet. Use `--archive-only` until publication.
 
