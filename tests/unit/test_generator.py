@@ -754,6 +754,92 @@ def test_build_structured_free_text_answer_handles_case_outcome_with_costs(mock_
     )
 
 
+def test_build_structured_free_text_answer_handles_specific_order_without_falling_back_to_reasons(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="sct295:0",
+            doc_id="sct295",
+            doc_title="SCT 295/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text=(
+                "IT IS HEREBY ORDERED THAT:\n"
+                "1. The Permission to Appeal Application is refused.\n"
+                "2. There shall be no order as to costs."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct295:1",
+            doc_id="sct295",
+            doc_title="SCT 295/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:12",
+            text=(
+                "The outcome of the specific order or application described in case SCT 295/2025 was that "
+                "the application for permission to appeal the Judgment was considered, but the court "
+                "declined to make an award of costs in favor of the Defendant."
+            ),
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="What was the outcome of the specific order or application described in case SCT 295/2025?",
+        chunks=chunks,
+    )
+
+    assert answer == "The Permission to Appeal Application is refused (cite: sct295:0)."
+
+
+def test_build_structured_free_text_answer_handles_set_aside_application_without_judge_name_noise(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="cfi092:0",
+            doc_id="cfi092",
+            doc_title="CFI 092/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text=(
+                "IT IS HEREBY ORDERED THAT:\n"
+                "1. The Application is dismissed. The Claim is to proceed to trial.\n"
+                "2. Costs are awarded on the standard basis to be assessed by way of parties' submissions."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="cfi092:1",
+            doc_id="cfi092",
+            doc_title="CFI 092/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:3",
+            text="On 22 April 2025, by way of the Order of H.E. Justice Nassir Al Nasser, the set aside application was granted.",
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to the 'IT IS HEREBY ORDERED THAT' section of case CFI 092/2024, what was the outcome of the Defendants' application?",
+        chunks=chunks,
+    )
+
+    assert answer == "The Application is dismissed (cite: cfi092:0)."
+
+
 def test_build_structured_free_text_answer_handles_it_is_hereby_ordered_query(mock_settings) -> None:
     from rag_challenge.llm.generator import RAGGenerator
 

@@ -276,6 +276,21 @@ def _is_common_judge_compare_query(query: str) -> bool:
     )
 
 
+def _is_case_outcome_query(query: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if not q:
+        return False
+    if "result of the application" in q or "outcome of the specific order or application" in q:
+        return True
+    if "it is hereby ordered that" in q or "it is hereby ordered" in q:
+        return True
+    if "final ruling" in q or "court of appeal rule" in q:
+        return True
+    return ("outcome" in q or "result" in q) and (
+        "application" in q or "appeal" in q or "order" in q
+    )
+
+
 def _is_case_issue_date_name_compare_query(query: str, *, answer_type: str) -> bool:
     q = re.sub(r"\s+", " ", (query or "").strip()).lower()
     if answer_type.strip().lower() != "name":
@@ -773,6 +788,25 @@ class RAGPipelineBuilder:
                                 for ref in doc_refs
                             ]
                         )
+                        if _is_common_judge_compare_query(state["query"]):
+                            judge_results = await asyncio.gather(
+                                *[
+                                    self._retriever.retrieve(
+                                        self._augment_query_for_sparse_retrieval(
+                                            f"{ref} chief justice justice judge order with reasons before h.e."
+                                        ),
+                                        query_vector=None,
+                                        doc_refs=[ref],
+                                        sparse_only=True,
+                                        top_k=min(per_ref_top_k, 8),
+                                    )
+                                    for ref in doc_refs
+                                ]
+                            )
+                            merged_rows: list[list[RetrievedChunk]] = []
+                            for base_row, judge_row in zip(results, judge_results, strict=True):
+                                merged_rows.append([*base_row, *judge_row])
+                            results = merged_rows
                         merged: dict[str, RetrievedChunk] = {}
                         for row in results:
                             if row:
@@ -1601,6 +1635,50 @@ class RAGPipelineBuilder:
             score -= 40
         return score
 
+    @classmethod
+    def _case_ref_identity_score(cls, *, ref: str, chunk: RetrievedChunk | RankedChunk) -> int:
+        normalized_ref = cls._normalize_support_text(ref).casefold()
+        if not normalized_ref:
+            return 0
+
+        haystack = cls._normalize_support_text(
+            " ".join(
+                part
+                for part in (
+                    str(getattr(chunk, "doc_title", "") or ""),
+                    str(getattr(chunk, "doc_summary", "") or ""),
+                    str(getattr(chunk, "text", "") or "")[:900],
+                )
+                if part
+            )
+        ).casefold()
+        if not haystack:
+            return 0
+
+        if normalized_ref in haystack:
+            return 1000 - min(haystack.find(normalized_ref), 600)
+
+        ordered_ref_tokens = [
+            token.casefold()
+            for token in _SUPPORT_TOKEN_RE.findall(normalized_ref)
+            if token.casefold() not in _SUPPORT_STOPWORDS and len(token) > 2
+        ]
+        if not ordered_ref_tokens:
+            return 0
+
+        overlap = 0
+        cursor = 0
+        for token in ordered_ref_tokens:
+            idx = haystack.find(token, cursor)
+            if idx >= 0:
+                overlap += 1
+                cursor = idx + len(token)
+            elif token in haystack:
+                overlap += 1
+        if overlap < min(2, len(ordered_ref_tokens)):
+            return 0
+        return overlap * 120
+
     def _select_case_judge_seed_chunk_id(self, chunks: Sequence[RetrievedChunk]) -> str | None:
         best_chunk_id = ""
         best_key: tuple[int, int, float] | None = None
@@ -2175,6 +2253,15 @@ class RAGPipelineBuilder:
                     retrieved=retrieved,
                     top_n=max(int(top_n), min(4, len(refs_for_year_compare))),
                 )
+        if is_boolean and _is_common_judge_compare_query(normalized_query):
+            refs_for_judge_compare = self._support_question_refs(str(state.get("query") or ""))
+            if len(refs_for_judge_compare) >= 2:
+                reranked = self._ensure_boolean_judge_compare_context(
+                    query=str(state.get("query") or ""),
+                    reranked=reranked,
+                    retrieved=retrieved_all,
+                    top_n=max(int(top_n), min(4, len(refs_for_judge_compare) * 2)),
+                )
         if is_boolean and "administ" in normalized_query:
             refs_for_admin_compare = self._support_question_refs(str(state.get("query") or ""))
             if len(refs_for_admin_compare) >= 2:
@@ -2200,6 +2287,15 @@ class RAGPipelineBuilder:
                 reranked=reranked,
                 retrieved=retrieved,
                 top_n=max(int(top_n), 4),
+            )
+        if (
+            str(state.get("answer_type") or "").strip().lower() == "free_text"
+            and _is_case_outcome_query(str(state.get("query") or ""))
+        ):
+            reranked = self._ensure_page_one_context(
+                reranked=reranked,
+                retrieved=retrieved,
+                top_n=max(int(top_n), 3),
             )
 
         collector.set_context_ids([chunk.chunk_id for chunk in reranked])
@@ -2900,6 +2996,63 @@ class RAGPipelineBuilder:
                 chunks=retrieved,
                 excluded_doc_ids=tuple(matched_doc_ids),
             )
+            if best_raw is None:
+                continue
+            doc_id = str(best_raw.doc_id or "").strip()
+            if doc_id:
+                matched_doc_ids.add(doc_id)
+            if best_raw.chunk_id in seen_chunk_ids:
+                continue
+            selected.append(reranked_by_id.get(best_raw.chunk_id) or cls._raw_to_ranked(best_raw))
+            seen_chunk_ids.add(best_raw.chunk_id)
+            if len(selected) >= top_n:
+                return selected[:top_n]
+
+        for chunk in reranked:
+            if chunk.chunk_id in seen_chunk_ids:
+                continue
+            selected.append(chunk)
+            seen_chunk_ids.add(chunk.chunk_id)
+            if len(selected) >= top_n:
+                break
+
+        return selected[:top_n] if selected else reranked[: max(0, int(top_n))]
+
+    @classmethod
+    def _ensure_boolean_judge_compare_context(
+        cls,
+        *,
+        query: str,
+        reranked: list[RankedChunk],
+        retrieved: list[RetrievedChunk],
+        top_n: int,
+    ) -> list[RankedChunk]:
+        if top_n <= 0 or not retrieved:
+            return reranked[: max(0, int(top_n))]
+
+        refs = cls._paired_support_question_refs(query)
+        if len(refs) < 2:
+            return reranked[: max(0, int(top_n))]
+
+        reranked_by_id = {chunk.chunk_id: chunk for chunk in reranked}
+        selected: list[RankedChunk] = []
+        seen_chunk_ids: set[str] = set()
+        matched_doc_ids: set[str] = set()
+
+        for ref in refs:
+            best_raw: RetrievedChunk | None = None
+            best_score = 0
+            for raw in retrieved:
+                doc_id = str(raw.doc_id or "").strip()
+                if doc_id in matched_doc_ids:
+                    continue
+                identity_score = cls._case_ref_identity_score(ref=ref, chunk=raw)
+                if identity_score <= 0:
+                    continue
+                score = identity_score + cls._case_judge_seed_chunk_score(chunk=raw)
+                if score > best_score:
+                    best_raw = raw
+                    best_score = score
             if best_raw is None:
                 continue
             doc_id = str(best_raw.doc_id or "").strip()

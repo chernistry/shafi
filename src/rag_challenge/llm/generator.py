@@ -221,7 +221,7 @@ _OUTCOME_CUE_RE = re.compile(
 )
 _COST_CUE_RE = re.compile(r"\bcosts?\b|\bno order as to costs\b", re.IGNORECASE)
 _OUTCOME_NOISE_RE = re.compile(
-    r"\b(?:issued by|date of issue|at:\s*\d|schedule of reasons|was considered)\b",
+    r"\b(?:issued by|date of issue|at:\s*\d|schedule of reasons|was considered|by\s+rdc\s+\d+)\b",
     re.IGNORECASE,
 )
 _COMPLETE_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+(?=(?:[A-Z][a-z]|[-*]|\d+\.))")
@@ -2245,13 +2245,16 @@ class RAGGenerator:
                 "court of appeal rule",
                 "what did the court decide",
                 "final ruling",
-                "it is hereby ordered",
             )
         )
 
         outcome_candidates: list[tuple[int, str, str]] = []
         cost_candidates: list[tuple[int, str, str]] = []
         for chunk in chunks:
+            chunk_text = str(chunk.text or "")
+            chunk_lower = chunk_text.casefold()
+            page_match = re.search(r"page:(\d+)", str(chunk.section_path or ""), flags=re.IGNORECASE)
+            page_num = int(page_match.group(1)) if page_match is not None else 0
             clauses = cls._extract_case_outcome_clauses(text=chunk.text or "", prefer_order_section=prefers_order_section)
             for clause in clauses:
                 cleaned_clause = cls._clean_case_outcome_clause(clause)
@@ -2261,6 +2264,12 @@ class RAGGenerator:
                 if _OUTCOME_NOISE_RE.search(cleaned_clause):
                     continue
                 score = 0
+                if page_num == 1:
+                    score += 24
+                elif page_num == 2:
+                    score += 12
+                if _ORDER_SECTION_MARKER_RE.search(chunk_text):
+                    score += 28
                 if _OUTCOME_CUE_RE.search(cleaned_clause):
                     score += 20
                 if "application" in lowered or "appeal" in lowered or "order" in lowered:
@@ -2277,6 +2286,10 @@ class RAGGenerator:
                     score += 6
                 if "cost" in lowered:
                     score += 2
+                if "by way of the order of" in chunk_lower or "justice " in chunk_lower:
+                    score -= 10
+                if "was considered" in lowered:
+                    score -= 40
                 candidate = (score, cleaned_clause, chunk.chunk_id)
                 if _COST_CUE_RE.search(cleaned_clause):
                     cost_candidates.append(candidate)
@@ -2350,20 +2363,38 @@ class RAGGenerator:
         if not cleaned:
             return ""
         cleaned = _NUMBERED_LINE_RE.sub("", cleaned).strip(" ;")
-        cleaned = re.sub(r"\bby Order of H\.E\..*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
+        cleaned = re.sub(r"\bby\s+Order\s+of\s+H\.?\s*E\.?.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
+        cleaned = re.sub(
+            r"^On\s+\d{1,2}\s+[A-Za-z]+\s+\d{4},\s+by\s+way\s+of\s+the\s+Order\s+of\s+H\.?\s*E\.?.*?,\s*",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip(" ;,")
+        cleaned = re.sub(
+            r"^Justice\s+[A-Z][A-Za-z .'-]+,\s+the\s+",
+            "The ",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip(" ;,")
+        cleaned = re.sub(r"\s+and\s+By\s+RDC\b.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
+        cleaned = re.sub(r"\bBy\s+RDC\b.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
         cleaned = re.sub(r"\bIssued by:.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
         cleaned = re.sub(r"\bDate of (?:Issue|issue):.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
         if cleaned.casefold() == "the appeal is allowed, to the following extent.":
             return "The Court of Appeal allowed the appeal in part"
         if cleaned.casefold() == "the appeal is allowed, to the following extent":
             return "The Court of Appeal allowed the appeal in part"
+        if cleaned.casefold().startswith("the defendant's application for immediate judgment and/or strike out was dismissed"):
+            return "The Defendant's Application for immediate judgment and/or strike out was dismissed"
         if cleaned.casefold().startswith("save and insofar as") and "order is otherwise set aside" in cleaned.casefold():
             return "The Order is otherwise set aside except insofar as the Judge ordered that the Second Part 50 Order should continue to apply"
         if cleaned.startswith("That the "):
             cleaned = "The " + cleaned[9:]
         elif cleaned.startswith("That "):
             cleaned = cleaned[5:]
-        if cleaned.casefold().endswith("was considered"):
+        if cleaned.casefold().startswith("by rdc "):
+            return ""
+        if "was considered" in cleaned.casefold():
             return ""
         return cleaned.rstrip(".")
 

@@ -2296,6 +2296,16 @@ async def test_retrieve_multi_ref_boolean_judge_compare_keeps_judge_title_pages(
             ],
             [
                 _make_retrieved_chunk(
+                    chunk_id="ca:page1",
+                    doc_id="ca-004",
+                    doc_title="CA 004/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. CHIEF JUSTICE WAYNE MARTIN",
+                    score=0.83,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
                     chunk_id="arb:page2",
                     doc_id="arb-034",
                     doc_title="ARB 034/2025 Example v Example",
@@ -2310,6 +2320,16 @@ async def test_retrieve_multi_ref_boolean_judge_compare_keeps_judge_title_pages(
                     section_path="page:1",
                     text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
                     score=0.81,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="arb:page1",
+                    doc_id="arb-034",
+                    doc_title="ARB 034/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
+                    score=0.82,
                 ),
             ],
         ]
@@ -2332,7 +2352,7 @@ async def test_retrieve_multi_ref_boolean_judge_compare_keeps_judge_title_pages(
         }
     )
 
-    assert retriever.retrieve.await_count == 2
+    assert retriever.retrieve.await_count == 4
     assert "ca:page1" in result["must_include_chunk_ids"]
     assert "arb:page1" in result["must_include_chunk_ids"]
     assert {"ca:page1", "arb:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
@@ -2365,6 +2385,26 @@ async def test_retrieve_multi_ref_boolean_presided_over_both_keeps_judge_title_p
             ],
             [
                 _make_retrieved_chunk(
+                    chunk_id="arb:page1",
+                    doc_id="arb-034",
+                    doc_title="ARB 034/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
+                    score=0.83,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="cfi:page1",
+                    doc_id="cfi-067",
+                    doc_title="CFI 067/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. JUSTICE MICHAEL BLACK KC",
+                    score=0.81,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
                     chunk_id="cfi:page1",
                     doc_id="cfi-067",
                     doc_title="CFI 067/2025 Example v Example",
@@ -2393,7 +2433,7 @@ async def test_retrieve_multi_ref_boolean_presided_over_both_keeps_judge_title_p
         }
     )
 
-    assert retriever.retrieve.await_count == 2
+    assert retriever.retrieve.await_count == 4
     assert "arb:page1" in result["must_include_chunk_ids"]
     assert "cfi:page1" in result["must_include_chunk_ids"]
     assert {"arb:page1", "cfi:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
@@ -2415,6 +2455,18 @@ async def test_retrieve_multi_ref_boolean_participated_in_both_prefers_page_one_
                     text="Later procedural page referring to Justice Wayne Martin in the body text only.",
                     score=0.98,
                 ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="tcd:page3",
+                    doc_id="tcd-001-appeal",
+                    doc_title="TCD 001/2024 Example v Example",
+                    section_path="page:3",
+                    text="Later page summarising that Chief Justice Wayne Martin heard the matter.",
+                    score=0.97,
+                ),
+            ],
+            [
                 _make_retrieved_chunk(
                     chunk_id="ca:page1",
                     doc_id="ca-005",
@@ -2429,14 +2481,6 @@ async def test_retrieve_multi_ref_boolean_participated_in_both_prefers_page_one_
                 ),
             ],
             [
-                _make_retrieved_chunk(
-                    chunk_id="tcd:page3",
-                    doc_id="tcd-001-appeal",
-                    doc_title="TCD 001/2024 Example v Example",
-                    section_path="page:3",
-                    text="Later page summarising that Chief Justice Wayne Martin heard the matter.",
-                    score=0.97,
-                ),
                 _make_retrieved_chunk(
                     chunk_id="tcd:page1",
                     doc_id="tcd-001-appeal",
@@ -2466,7 +2510,7 @@ async def test_retrieve_multi_ref_boolean_participated_in_both_prefers_page_one_
         }
     )
 
-    assert retriever.retrieve.await_count == 2
+    assert retriever.retrieve.await_count == 4
     assert "ca:page1" in result["must_include_chunk_ids"]
     assert "tcd:page1" in result["must_include_chunk_ids"]
     assert {"ca:page1", "tcd:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
