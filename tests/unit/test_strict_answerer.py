@@ -139,6 +139,123 @@ def test_answer_boolean_detects_common_judge_across_multiple_case_documents() ->
     assert result.cited_chunk_ids == ["ca005:orders", "tcd001:appeal"]
 
 
+def test_answer_boolean_detects_party_overlap_from_first_page_caption_text() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        _case_chunk(
+            chunk_id="ca004:0",
+            doc_id="ca004",
+            doc_title="CA 004/2025",
+            page=1,
+            text=(
+                "Claim No: CA 004/2025\n"
+                "BETWEEN\n"
+                "ALPHA HOLDINGS LTD\n"
+                "Claimant/Appellant\n"
+                "and\n"
+                "BETA LLC\n"
+                "Defendant/Respondent\n"
+            ),
+        ),
+        _case_chunk(
+            chunk_id="sct295:0",
+            doc_id="sct295",
+            doc_title="SCT 295/2025",
+            page=1,
+            text=(
+                "Claim No: SCT 295/2025\n"
+                "BETWEEN\n"
+                "OLEXA\n"
+                "Claimant/Applicant\n"
+                "and\n"
+                "ALPHA HOLDINGS LTD\n"
+                "Defendant/Respondent\n"
+            ),
+        ),
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query="Do cases CA 004/2025 and SCT 295/2025 involve any of the same legal entities or individuals as parties?",
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "Yes"
+    assert result.cited_chunk_ids == ["ca004:0", "sct295:0"]
+
+
+def test_answer_boolean_handles_operating_law_bad_faith_carve_out_across_chunks() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="op:1",
+            doc_id="op",
+            doc_title="OPERATING LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text=(
+                "Subject to Article 7(8), neither the Registrar nor any delegate or agent of the Registrar can be held liable "
+                "for anything done or omitted to be done in the performance of the functions of the Registrar."
+            ),
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="op:2",
+            doc_id="op",
+            doc_title="OPERATING LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text="Article 7(7) does not apply if the act or omission is shown to have been in bad faith.",
+            retrieval_score=0.89,
+            rerank_score=0.89,
+            doc_summary="",
+        ),
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query="Under the Operating Law 2018, can the Registrar be held liable for acts or omissions in performing their functions if the act or omission is shown to have been in bad faith, according to Article 7(8)?",
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "Yes"
+    assert result.cited_chunk_ids == ["op:1", "op:2"]
+
+
+def test_answer_boolean_handles_trust_law_governing_law_validity_clause() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="trust:1",
+            doc_id="trust",
+            doc_title="TRUST LAW 2018",
+            doc_type=DocType.STATUTE,
+            section_path="page:6",
+            text=(
+                "A term of the trust expressly declaring that the laws of the DIFC shall govern the trust "
+                "is valid, effective and conclusive regardless of any other circumstance."
+            ),
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        )
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query="Under Article 11(5) of the DIFC Trust Law 2018, is a term of the trust expressly declaring that the laws of the DIFC shall govern the trust valid, effective, and conclusive regardless of any other circumstance?",
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "Yes"
+    assert result.cited_chunk_ids == ["trust:1"]
+
+
 def test_answer_boolean_detects_party_overlap_phrase_variant() -> None:
     answerer = StrictAnswerer()
     chunks = [

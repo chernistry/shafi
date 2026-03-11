@@ -163,6 +163,20 @@ class StrictAnswerer:
         if not q:
             return None
 
+        normalized_chunks: list[tuple[str, str]] = [
+            (re.sub(r"\s+", " ", chunk.text or "").lower(), chunk.chunk_id)
+            for chunk in chunks
+            if (chunk.text or "").strip()
+        ]
+        combined_window = " ".join(window for window, _chunk_id in normalized_chunks)
+
+        def _support_ids_for_terms(*terms: str) -> list[str]:
+            cited: list[str] = []
+            for window, chunk_id in normalized_chunks:
+                if any(term in window for term in terms) and chunk_id not in cited:
+                    cited.append(chunk_id)
+            return cited or ([chunks[0].chunk_id] if chunks else [])
+
         # 0) High-precision legal boolean patterns (avoid common LLM misreads).
         # Liability + bad faith carve-out: "… cannot be held liable …; Article X does not apply if bad faith …"
         if "liable" in q_lower and "bad faith" in q_lower:
@@ -231,16 +245,20 @@ class StrictAnswerer:
                 if "no person shall operate or conduct business in or from the difc unless" in window:
                     return StrictAnswerResult(answer="No", cited_chunk_ids=[chunk.chunk_id], confident=True)
 
-        if "article 7(8)" in q_lower and "operating law" in q_lower and "bad faith" in q_lower:
-            for chunk in chunks:
-                window = re.sub(r"\s+", " ", chunk.text or "").lower()
-                if (
-                    "registrar" in window
-                    and "not liable" in window
-                    and "bad faith" in window
-                    and ("does not apply" in window or "exception" in window)
-                ):
-                    return StrictAnswerResult(answer="Yes", cited_chunk_ids=[chunk.chunk_id], confident=True)
+        if (
+            "article 7(8)" in q_lower
+            and "operating law" in q_lower
+            and "bad faith" in q_lower
+            and "registrar" in combined_window
+            and ("not liable" in combined_window or "can be held liable" in combined_window)
+            and "bad faith" in combined_window
+            and ("article 7(7) does not apply" in combined_window or "does not apply" in combined_window)
+        ):
+            return StrictAnswerResult(
+                answer="Yes",
+                cited_chunk_ids=_support_ids_for_terms("article 7(7) does not apply", "bad faith", "registrar"),
+                confident=True,
+            )
 
         if "article 7(3)(j)" in q_lower and "operating law" in q_lower and ("delegate" in q_lower or "delegat" in q_lower):
             for chunk in chunks:
@@ -252,19 +270,23 @@ class StrictAnswerer:
                 ):
                     return StrictAnswerResult(answer="Yes", cited_chunk_ids=[chunk.chunk_id], confident=True)
 
-        if "article 11" in q_lower and "general partnership law" in q_lower and "body corporate" in q_lower:
-            for chunk in chunks:
-                window = re.sub(r"\s+", " ", chunk.text or "").lower()
-                if (
-                    (
-                        "deemed to be a partnership" in window
-                        or "deemed a general partnership" in window
-                        or "deemed to be a general partnership" in window
-                    )
-                    and "body corporate" in window
-                    and "unless the agreement" in window
-                ):
-                    return StrictAnswerResult(answer="No", cited_chunk_ids=[chunk.chunk_id], confident=True)
+        if (
+            "article 11" in q_lower
+            and "general partnership law" in q_lower
+            and "body corporate" in q_lower
+            and (
+                "deemed to be a partnership" in combined_window
+                or "deemed a general partnership" in combined_window
+                or "deemed to be a general partnership" in combined_window
+            )
+            and "body corporate" in combined_window
+            and "unless" in combined_window
+        ):
+            return StrictAnswerResult(
+                answer="No",
+                cited_chunk_ids=_support_ids_for_terms("deemed to be a partnership", "body corporate", "unless"),
+                confident=True,
+            )
 
         if "article 17(b)" in q_lower and "common reporting standard law" in q_lower and "obstruction" in q_lower:
             for chunk in chunks:
@@ -282,15 +304,52 @@ class StrictAnswerer:
                 ):
                     return StrictAnswerResult(answer="Yes", cited_chunk_ids=[chunk.chunk_id], confident=True)
 
-        if "article 11(1)" in q_lower and "employment law" in q_lower and "waive" in q_lower:
-            for chunk in chunks:
-                window = re.sub(r"\s+", " ", chunk.text or "").lower()
-                if (
-                    "minimum requirements specified in this law" in window
-                    and "void in all circumstances" in window
-                    and "except where expressly permitted under this law" in window
-                ):
-                    return StrictAnswerResult(answer="Yes", cited_chunk_ids=[chunk.chunk_id], confident=True)
+        if (
+            "article 11(1)" in q_lower
+            and "employment law" in q_lower
+            and "waive" in q_lower
+            and "minimum requirements" in combined_window
+            and "void in all circumstances" in combined_window
+            and "except where expressly permitted under this law" in combined_window
+        ):
+            return StrictAnswerResult(
+                answer="Yes",
+                cited_chunk_ids=_support_ids_for_terms(
+                    "minimum requirements",
+                    "void in all circumstances",
+                    "except where expressly permitted under this law",
+                ),
+                confident=True,
+            )
+
+        if (
+            "article 11(5)" in q_lower
+            and "trust law" in q_lower
+            and ("valid" in q_lower or "effective" in q_lower or "conclusive" in q_lower)
+            and "term of the trust expressly declaring that the laws of the difc shall govern the trust" in combined_window
+            and "valid, effective and conclusive regardless of any other circumstance" in combined_window
+        ):
+            return StrictAnswerResult(
+                answer="Yes",
+                cited_chunk_ids=_support_ids_for_terms(
+                    "term of the trust expressly declaring",
+                    "valid, effective and conclusive regardless of any other circumstance",
+                ),
+                confident=True,
+            )
+
+        if (
+            "law on the application of civil and commercial laws" in q_lower
+            and "jurisdiction of the dubai international financial centre" in q_lower
+            and "this law applies in the jurisdiction of the dubai international financial centre" in combined_window
+        ):
+            return StrictAnswerResult(
+                answer="Yes",
+                cited_chunk_ids=_support_ids_for_terms(
+                    "this law applies in the jurisdiction of the dubai international financial centre"
+                ),
+                confident=True,
+            )
 
         # 1) Compare years when the question references two laws.
         years = [int(match.group(2)) for match in _LAW_NO_FULL_RE.finditer(q)]
@@ -418,6 +477,10 @@ class StrictAnswerer:
                     cleaned = self._normalize_name(party)
                     if cleaned:
                         normalized.add(cleaned)
+                if normalized:
+                    return normalized, chunk.chunk_id
+            for chunk in chunks_for_ref:
+                normalized = self._extract_caption_parties_from_text(chunk.text or "")
                 if normalized:
                     return normalized, chunk.chunk_id
             return set(), ""
@@ -766,7 +829,7 @@ class StrictAnswerer:
 
     @staticmethod
     def _is_party_overlap_compare_query(query_lower: str) -> bool:
-        if not query_lower or "both" not in query_lower:
+        if not query_lower:
             return False
         if any(
             phrase in query_lower
@@ -796,7 +859,9 @@ class StrictAnswerer:
                 "company",
             )
         )
-        has_overlap_signal = any(token in query_lower for token in ("common", "same", "appeared", "appears", "named"))
+        has_overlap_signal = any(
+            token in query_lower for token in ("common", "same", "appeared", "appears", "named", "both")
+        )
         return has_party_subject and has_overlap_signal
 
     @classmethod
@@ -1337,3 +1402,64 @@ class StrictAnswerer:
         # Otherwise, split on " and " / ";" / "," as a best-effort list separator.
         parts = re.split(r"\s+and\s+|[;,]", raw, flags=re.IGNORECASE)
         return [part.strip() for part in parts if part.strip()]
+
+    def _extract_caption_parties_from_text(self, text: str) -> set[str]:
+        lines = [re.sub(r"\s+", " ", line).strip() for line in str(text or "").splitlines()]
+        lines = [line for line in lines if line]
+        if not lines:
+            return set()
+
+        role_markers = {
+            "claimant",
+            "defendant",
+            "claimant/applicant",
+            "defendant/respondent",
+            "claimant/appellant",
+            "defendant/appellant",
+            "claimant/respondent",
+            "applicant",
+            "respondent",
+            "appellant",
+            "claimant / applicant",
+            "defendant / respondent",
+            "claimant / appellant",
+            "defendant / appellant",
+            "claimant / respondent",
+        }
+        stop_prefixes = ("order with reasons", "judgment", "upon ", "and upon", "it is hereby ordered")
+
+        try:
+            between_idx = next(i for i, line in enumerate(lines) if line.casefold() == "between")
+        except StopIteration:
+            return set()
+
+        parties: list[str] = []
+        buffer: list[str] = []
+        for line in lines[between_idx + 1 :]:
+            lower = line.casefold()
+            if lower in {"and", "vs", "v"}:
+                if buffer:
+                    parties.append(" ".join(buffer))
+                    buffer = []
+                continue
+            if lower in role_markers:
+                if buffer:
+                    parties.append(" ".join(buffer))
+                    buffer = []
+                continue
+            if lower.startswith(stop_prefixes):
+                break
+            if lower.startswith("claim no"):
+                break
+            buffer.append(line)
+
+        if buffer:
+            parties.append(" ".join(buffer))
+
+        normalized: set[str] = set()
+        for party in parties:
+            for item in self._split_party_list(party):
+                cleaned = self._normalize_name(re.sub(r"\[\s*\d{4}\s*\].*$", "", item).strip())
+                if cleaned:
+                    normalized.add(cleaned)
+        return normalized

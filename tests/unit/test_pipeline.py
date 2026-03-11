@@ -2296,16 +2296,6 @@ async def test_retrieve_multi_ref_boolean_judge_compare_keeps_judge_title_pages(
             ],
             [
                 _make_retrieved_chunk(
-                    chunk_id="ca:page1",
-                    doc_id="ca-004",
-                    doc_title="CA 004/2025 Example v Example",
-                    section_path="page:1",
-                    text="ORDER WITH REASONS OF H.E. CHIEF JUSTICE WAYNE MARTIN",
-                    score=0.83,
-                ),
-            ],
-            [
-                _make_retrieved_chunk(
                     chunk_id="arb:page2",
                     doc_id="arb-034",
                     doc_title="ARB 034/2025 Example v Example",
@@ -2320,6 +2310,16 @@ async def test_retrieve_multi_ref_boolean_judge_compare_keeps_judge_title_pages(
                     section_path="page:1",
                     text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
                     score=0.81,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="ca:page1",
+                    doc_id="ca-004",
+                    doc_title="CA 004/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. CHIEF JUSTICE WAYNE MARTIN",
+                    score=0.83,
                 ),
             ],
             [
@@ -2385,22 +2385,22 @@ async def test_retrieve_multi_ref_boolean_presided_over_both_keeps_judge_title_p
             ],
             [
                 _make_retrieved_chunk(
-                    chunk_id="arb:page1",
-                    doc_id="arb-034",
-                    doc_title="ARB 034/2025 Example v Example",
-                    section_path="page:1",
-                    text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
-                    score=0.83,
-                ),
-            ],
-            [
-                _make_retrieved_chunk(
                     chunk_id="cfi:page1",
                     doc_id="cfi-067",
                     doc_title="CFI 067/2025 Example v Example",
                     section_path="page:1",
                     text="ORDER WITH REASONS OF H.E. JUSTICE MICHAEL BLACK KC",
                     score=0.81,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="arb:page1",
+                    doc_id="arb-034",
+                    doc_title="ARB 034/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
+                    score=0.83,
                 ),
             ],
             [
@@ -2514,6 +2514,62 @@ async def test_retrieve_multi_ref_boolean_participated_in_both_prefers_page_one_
     assert "ca:page1" in result["must_include_chunk_ids"]
     assert "tcd:page1" in result["must_include_chunk_ids"]
     assert {"ca:page1", "tcd:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
+
+
+@pytest.mark.asyncio
+async def test_retrieve_single_ref_case_outcome_query_keeps_page_one_order_seed(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retriever = MagicMock()
+    retriever.retrieve = AsyncMock(
+        side_effect=[
+            [
+                _make_retrieved_chunk(
+                    chunk_id="cfi067:page2",
+                    doc_id="cfi067",
+                    doc_title="CFI 067/2025 Example v Example",
+                    section_path="page:2",
+                    text="This Order concerns the Defendant's Application for immediate judgment and/or strike out, which was dismissed by Order of H.E. Justice Shamlan Al Sawalehi.",
+                    score=0.93,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="cfi067:page1",
+                    doc_id="cfi067",
+                    doc_title="CFI 067/2025 Example v Example",
+                    section_path="page:1",
+                    text=(
+                        "ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI\n"
+                        "IT IS HEREBY ORDERED THAT:\n"
+                        "1. The Defendant's Application for immediate judgment and/or strike out is dismissed."
+                    ),
+                    score=0.82,
+                ),
+            ],
+        ]
+    )
+
+    builder = RAGPipelineBuilder(
+        retriever=retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="case-outcome-page-one")
+
+    result = await builder._retrieve(
+        {
+            "query": "What was the result of the application heard in case CFI 067/2025?",
+            "collector": collector,
+            "answer_type": "free_text",
+            "doc_refs": ["CFI 067/2025"],
+        }
+    )
+
+    assert retriever.retrieve.await_count == 2
+    assert "cfi067:page1" in result["must_include_chunk_ids"]
+    assert {"cfi067:page1", "cfi067:page2"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
 
 
 @pytest.mark.asyncio

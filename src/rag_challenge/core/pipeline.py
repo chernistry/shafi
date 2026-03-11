@@ -873,6 +873,44 @@ class RAGPipelineBuilder:
                                 )
                             ),
                         )
+                        if doc_refs and _is_case_outcome_query(state["query"]):
+                            outcome_results = await asyncio.gather(
+                                *[
+                                    self._retriever.retrieve(
+                                        self._augment_query_for_sparse_retrieval(
+                                            f"{ref} order with reasons it is hereby ordered that application appeal costs"
+                                        ),
+                                        query_vector=None,
+                                        doc_refs=[ref],
+                                        sparse_only=True,
+                                        top_k=8,
+                                    )
+                                    for ref in doc_refs
+                                ]
+                            )
+                            merged: dict[str, RetrievedChunk] = {chunk.chunk_id: chunk for chunk in retrieved}
+                            for row in outcome_results:
+                                if row:
+                                    seed = self._select_case_outcome_seed_chunk_id(row) or row[0].chunk_id
+                                    if seed not in must_include_chunk_ids:
+                                        must_include_chunk_ids.append(seed)
+                                for chunk in row:
+                                    existing = merged.get(chunk.chunk_id)
+                                    if existing is None or chunk.score > existing.score:
+                                        merged[chunk.chunk_id] = chunk
+                            ranked = sorted(merged.values(), key=lambda chunk: chunk.score, reverse=True)
+                            seed_set = set(must_include_chunk_ids)
+                            ordered: list[RetrievedChunk] = []
+                            for chunk_id in must_include_chunk_ids:
+                                seed_chunk = merged.get(chunk_id)
+                                if seed_chunk is not None:
+                                    ordered.append(seed_chunk)
+                            for chunk in ranked:
+                                if chunk.chunk_id in seed_set:
+                                    continue
+                                ordered.append(chunk)
+                            limit = int(self._settings.reranker.rerank_candidates)
+                            retrieved = ordered[:limit]
                         if retrieved and seed_terms:
                             seed = self._select_seed_chunk_id(retrieved, seed_terms)
                             if seed:
@@ -1718,6 +1756,38 @@ class RAGPipelineBuilder:
         best_score = 0
         for chunk in chunks:
             score = self._case_issue_date_seed_chunk_score(chunk=chunk)
+            if score > best_score:
+                best_score = score
+                best_chunk_id = chunk.chunk_id
+        return best_chunk_id or None
+
+    @classmethod
+    def _case_outcome_seed_chunk_score(cls, *, chunk: RetrievedChunk | RankedChunk) -> int:
+        text = re.sub(r"\s+", " ", str(getattr(chunk, "text", "") or "")).strip().casefold()
+        if not text:
+            return 0
+
+        score = 0
+        page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+        if page_num == 1:
+            score += 260
+        elif page_num == 2:
+            score += 120
+        if "it is hereby ordered that" in text:
+            score += 320
+        if "order with reasons" in text:
+            score += 180
+        if "application is refused" in text or "application was dismissed" in text:
+            score += 220
+        if "no order as to costs" in text or "costs" in text:
+            score += 40
+        return score
+
+    def _select_case_outcome_seed_chunk_id(self, chunks: Sequence[RetrievedChunk]) -> str | None:
+        best_chunk_id = ""
+        best_score = 0
+        for chunk in chunks:
+            score = self._case_outcome_seed_chunk_score(chunk=chunk)
             if score > best_score:
                 best_score = score
                 best_chunk_id = chunk.chunk_id

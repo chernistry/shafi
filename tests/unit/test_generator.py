@@ -717,6 +717,49 @@ def test_build_structured_free_text_answer_handles_case_outcome_result_query(moc
     )
 
 
+def test_build_structured_free_text_answer_prefers_pre_order_dismissal_over_costs_only_order(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="cfi067:0",
+            doc_id="cfi067",
+            doc_title="CFI 067/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text=(
+                "ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI\n"
+                "Application was dismissed and the Applicant was ordered to pay the Respondent's costs of the Application.\n"
+                "IT IS HEREBY ORDERED THAT:\n"
+                "1. The Applicant shall pay the Respondent 80% of the Respondent's costs of the Application.\n"
+                "2. The Applicant shall pay the Costs Award within 14 days."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="cfi067:1",
+            doc_id="cfi067",
+            doc_title="CFI 067/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="This Order concerns the costs of the Defendant's Application for immediate judgment and/or strike out, which was dismissed by Order of H.E. Justice Shamlan Al Sawalehi.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="What was the result of the application heard in case CFI 067/2025?",
+        chunks=chunks,
+    )
+
+    assert answer == "The Application was dismissed (cite: cfi067:0)."
+
+
 def test_build_structured_free_text_answer_handles_case_outcome_with_costs(mock_settings) -> None:
     from rag_challenge.llm.generator import RAGGenerator
 
@@ -748,7 +791,7 @@ def test_build_structured_free_text_answer_handles_case_outcome_with_costs(mock_
     )
 
     assert answer == (
-        "The Court of Appeal allowed the appeal in part and the Order is otherwise set aside except insofar as the Judge ordered that the Second Part 50 Order should continue to apply "
+        "The Court of Appeal allowed the appeal in part "
         "(cite: ca009:0). The Respondents shall pay the Appellant's costs of the Appeal assessed in the amount USD 60,541.25 "
         "(cite: ca009:0)."
     )
@@ -797,6 +840,51 @@ def test_build_structured_free_text_answer_handles_specific_order_without_fallin
     )
 
     assert answer == "The Permission to Appeal Application is refused (cite: sct295:0)."
+
+
+def test_build_structured_free_text_answer_prefers_last_page_conclusion_for_specific_outcome(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="cfi016:0",
+            doc_id="cfi016",
+            doc_title="CFI 016/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text=(
+                "The No Costs Application seeks a stay of enforcement of the costs order.\n"
+                "Three of the claims were struck out, and the fourth was dismissed subject to immediate judgment. "
+                "At paragraphs 4 and 5 of the summary order, the parties were directed to file their costs submissions."
+            ),
+            retrieval_score=0.90,
+            rerank_score=0.90,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="cfi016:1",
+            doc_id="cfi016",
+            doc_title="CFI 016/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:6",
+            text=(
+                "Conclusion\n"
+                "45. The No Costs Application is rejected.\n"
+                "46. There shall be no costs ordered in relation to the No Costs Application."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="What was the outcome of the specific order or application described in case CFI 016/2025, based on the last page of the document?",
+        chunks=chunks,
+    )
+
+    assert answer == "The No Costs Application is rejected (cite: cfi016:1)."
 
 
 def test_build_structured_free_text_answer_handles_set_aside_application_without_judge_name_noise(mock_settings) -> None:
@@ -871,6 +959,67 @@ def test_build_structured_free_text_answer_handles_it_is_hereby_ordered_query(mo
     assert answer == (
         "The ASI Order is discharged with immediate effect and the Defendant's Set Aside Application is granted "
         "(cite: arb034:0)."
+    )
+
+
+def test_build_structured_free_text_answer_prefers_conclusion_and_costs_over_permission_noise(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="ca009:0",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:4",
+            text=(
+                "IT IS HEREBY ORDERED AND DIRECTED THAT:\n"
+                "1. The Appeal is allowed, to the following extent.\n"
+                "2. Save and insofar as the Judge ordered that the Second Part 50 Order should continue to apply, the Order is otherwise set aside.\n"
+                "4. That the Respondents shall pay the Appellant's costs of the Appeal assessed in the amount USD\n"
+                "60,541.25."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ca009:1",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:5",
+            text="January 2024. Permission to Appeal against the Order was granted by the Judge himself, on 10 July 2024.",
+            retrieval_score=0.9,
+            rerank_score=0.9,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ca009:2",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:14",
+            text=(
+                "Conclusion\n"
+                "44. For all of the foregoing reasons, we have allowed the Appeal to the extent shown in our order above.\n"
+                "46. A fair and proportionate award of costs for the Appellant in this appeal is 50% of the amount it has claimed."
+            ),
+            retrieval_score=0.92,
+            rerank_score=0.92,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to the Conclusion section of case CA 009/2024, how did the Court of Appeal rule, and what costs were awarded?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The Court of Appeal allowed the appeal in part (cite: ca009:2). "
+        "The Respondents shall pay the Appellant's costs of the Appeal assessed in the amount USD 60,541.25 (cite: ca009:0)."
     )
 
 
