@@ -182,6 +182,32 @@ class StrictAnswerer:
                 if "ineffective against any person other than a person who had actual knowledge" in window:
                     return StrictAnswerResult(answer="Yes", cited_chunk_ids=[chunk.chunk_id], confident=True)
 
+        # Article 28(4) Trust Law pattern: consequential orders must not prejudice a purchaser in good faith.
+        if (
+            "purchaser in good faith" in q_lower
+            and "without notice" in q_lower
+            and "prejudice" in q_lower
+            and ("article 28(4)" in q_lower or "articles 24 to 27" in q_lower)
+        ):
+            for chunk in chunks:
+                window = re.sub(r"\s+", " ", chunk.text or "").lower()
+                if (
+                    "no order may be made under article 28(3)" in window
+                    and "prejudice any purchaser in good faith" in window
+                    and "without notice" in window
+                ):
+                    return StrictAnswerResult(answer="No", cited_chunk_ids=[chunk.chunk_id], confident=True)
+
+        # Hiring-children pattern: Article 13 style prohibition on employing a child under sixteen.
+        if "child" in q_lower and "under sixteen" in q_lower and "employ" in q_lower:
+            for chunk in chunks:
+                window = re.sub(r"\s+", " ", chunk.text or "").lower()
+                if (
+                    "shall not employ a child who is under sixteen" in window
+                    or "employing a child under sixteen" in window
+                ):
+                    return StrictAnswerResult(answer="No", cited_chunk_ids=[chunk.chunk_id], confident=True)
+
         # Delegation without board approval for officers/employees: approval only applies to "any such other person".
         if (
             ("delegate" in q_lower or "delegat" in q_lower)

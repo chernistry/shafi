@@ -259,6 +259,13 @@ def _is_common_elements_query(query: str) -> bool:
     return "common elements" in q or "elements in common" in q or " in common" in q
 
 
+def _is_common_judge_compare_query(query: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if not q:
+        return False
+    return "judge" in q and ("in common" in q or "same judge" in q or "judges in common" in q)
+
+
 def _is_interpretation_sections_common_elements_query(query: str) -> bool:
     q = re.sub(r"\s+", " ", (query or "").strip()).lower()
     return _is_common_elements_query(query) and "interpretation section" in q
@@ -743,7 +750,14 @@ class RAGPipelineBuilder:
                         merged: dict[str, RetrievedChunk] = {}
                         for row in results:
                             if row:
-                                seed = self._select_seed_chunk_id(row, seed_terms) or row[0].chunk_id
+                                if _is_common_judge_compare_query(state["query"]):
+                                    seed = (
+                                        self._select_case_judge_seed_chunk_id(row)
+                                        or self._select_seed_chunk_id(row, seed_terms)
+                                        or row[0].chunk_id
+                                    )
+                                else:
+                                    seed = self._select_seed_chunk_id(row, seed_terms) or row[0].chunk_id
                                 must_include_chunk_ids.append(seed)
                             for chunk in row:
                                 existing = merged.get(chunk.chunk_id)
@@ -1173,6 +1187,58 @@ class RAGPipelineBuilder:
                         limit=limit,
                     )
 
+        if (
+            is_strict
+            and doc_refs
+            and self._extract_provision_refs(state["query"])
+            and not _is_restriction_effectiveness_query(state["query"])
+        ):
+            per_ref_top_k = (
+                int(getattr(self._settings.pipeline, "boolean_rerank_candidates_cap", 12))
+                if is_boolean
+                else int(getattr(self._settings.pipeline, "strict_doc_ref_top_k", 16))
+            )
+            with collector.timed("qdrant"):
+                targeted_results = await asyncio.gather(
+                    *[
+                        self._retriever.retrieve(
+                            self._augment_query_for_sparse_retrieval(
+                                self._targeted_provision_ref_query(
+                                    query=state["query"],
+                                    ref=ref,
+                                    refs=doc_refs,
+                                )
+                            ),
+                            query_vector=None,
+                            doc_refs=None,
+                            sparse_only=True,
+                            top_k=per_ref_top_k,
+                        )
+                        for ref in doc_refs[:3]
+                    ]
+                )
+
+            merged: dict[str, RetrievedChunk] = {chunk.chunk_id: chunk for chunk in retrieved}
+            extra_seeds: list[str] = []
+            for row in targeted_results:
+                if row:
+                    seed = self._select_seed_chunk_id(row, seed_terms) or row[0].chunk_id
+                    extra_seeds.append(seed)
+                for chunk in row:
+                    existing = merged.get(chunk.chunk_id)
+                    if existing is None or chunk.score > existing.score:
+                        merged[chunk.chunk_id] = chunk
+
+            if extra_seeds:
+                must_include_chunk_ids.extend(extra_seeds)
+                limit = int(self._settings.reranker.rerank_candidates)
+                retrieved = self._merge_retrieved_preserving_chunk_ids(
+                    retrieved=retrieved,
+                    extra=list(merged.values()),
+                    must_keep_chunk_ids=extra_seeds,
+                    limit=limit,
+                )
+
         if _is_registrar_enumeration_query(state["query"]):
             candidate_titles: list[str] = []
             seen_titles: set[str] = set()
@@ -1262,6 +1328,62 @@ class RAGPipelineBuilder:
             # Common PDF renderings.
             out += f" {num}({sub}) {num} ({sub}) {num}. ({sub})"
         return re.sub(r"\s+", " ", out).strip()
+
+    @staticmethod
+    def _extract_provision_refs(query: str) -> list[str]:
+        raw = (query or "").strip()
+        if not raw:
+            return []
+        refs: list[str] = []
+        seen: set[str] = set()
+        pattern = re.compile(
+            r"\b(?:Article|Section|Schedule|Part|Chapter)\s+\d+(?:\s*\(\s*[^)]+\s*\))?",
+            re.IGNORECASE,
+        )
+        for match in pattern.finditer(raw):
+            normalized = re.sub(r"\s+", " ", match.group(0)).strip()
+            normalized = re.sub(
+                r"\b(article|section|schedule|part|chapter)\b",
+                lambda m: m.group(1).title(),
+                normalized,
+                count=1,
+            )
+            normalized = re.sub(r"\s*\(\s*", "(", normalized)
+            normalized = re.sub(r"\s*\)\s*", ")", normalized)
+            key = normalized.casefold()
+            if not normalized or key in seen:
+                continue
+            seen.add(key)
+            refs.append(normalized)
+        return refs
+
+    @classmethod
+    def _targeted_provision_ref_query(
+        cls,
+        *,
+        query: str,
+        ref: str,
+        refs: Sequence[str],
+    ) -> str:
+        base_query = query or ""
+        for other_ref in refs:
+            other_clean = str(other_ref).strip()
+            if not other_clean or other_clean.casefold() == ref.casefold():
+                continue
+            base_query = re.sub(re.escape(other_clean), " ", base_query, flags=re.IGNORECASE)
+        base_query = re.sub(r"\s+", " ", base_query).strip()
+
+        provision_terms: list[str] = []
+        for provision_ref in cls._extract_provision_refs(query)[:3]:
+            provision_terms.append(provision_ref)
+            if provision_ref.lower().startswith("article "):
+                short = provision_ref[8:].strip()
+                if short:
+                    provision_terms.append(short)
+                    provision_terms.append(re.sub(r"\(\s*", " (", short))
+
+        targeted = " ".join([ref, *provision_terms, base_query]).strip()
+        return re.sub(r"\s+", " ", targeted).strip()
 
     @staticmethod
     def _seed_terms_for_query(query: str) -> list[str]:
@@ -1413,6 +1535,34 @@ class RAGPipelineBuilder:
         if "may be cited as" in text or "title" in text:
             score += 40
         return score
+
+    @classmethod
+    def _case_judge_seed_chunk_score(cls, *, chunk: RetrievedChunk | RankedChunk) -> int:
+        text = re.sub(r"\s+", " ", str(getattr(chunk, "text", "") or "")).strip().casefold()
+        if not text:
+            return 0
+
+        score = 0
+        page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+        if page_num <= 2:
+            score += 180
+        if "order with reasons" in text or "judgment of" in text or "reasons of" in text:
+            score += 220
+        if any(marker in text for marker in ("chief justice", "justice ", "assistant registrar", "registrar", "sct judge")):
+            score += 260
+        if "claim no." in text or "case no:" in text:
+            score += 40
+        return score
+
+    def _select_case_judge_seed_chunk_id(self, chunks: Sequence[RetrievedChunk]) -> str | None:
+        best_chunk_id = ""
+        best_score = 0
+        for chunk in chunks:
+            score = self._case_judge_seed_chunk_score(chunk=chunk)
+            if score > best_score:
+                best_score = score
+                best_chunk_id = chunk.chunk_id
+        return best_chunk_id or None
 
     @classmethod
     def _ref_doc_family_consistency_adjustment(cls, *, ref: str, chunk: RetrievedChunk | RankedChunk) -> int:

@@ -2203,6 +2203,141 @@ async def test_retrieve_targets_restriction_effectiveness_boolean_clause(mock_se
     assert "pp:article23" in result["must_include_chunk_ids"]
 
 
+@pytest.mark.asyncio
+async def test_retrieve_targets_article_anchored_strict_doc_ref_clause(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retriever = MagicMock()
+    retriever.retrieve = AsyncMock(
+        side_effect=[
+            [
+                _make_retrieved_chunk(
+                    chunk_id="employment:title",
+                    doc_id="employment",
+                    doc_title="EMPLOYMENT LAW",
+                    section_path="page:4",
+                    text='This Employment Law 2019 may be cited as the "Employment Law 2019".',
+                    score=0.96,
+                    doc_summary="Employment Law 2019, DIFC Law No. 2 of 2019.",
+                )
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="employment:article14",
+                    doc_id="employment",
+                    doc_title="EMPLOYMENT LAW",
+                    section_path="page:7",
+                    text=(
+                        "Article 14. Written Employment Contract. "
+                        "An Employer shall provide an Employee with a written Employment Contract "
+                        "within seven (7) days of the commencement of the Employee's employment."
+                    ),
+                    score=0.88,
+                    doc_summary="Employment Law 2019, DIFC Law No. 2 of 2019.",
+                )
+            ],
+        ]
+    )
+
+    builder = RAGPipelineBuilder(
+        retriever=retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="article-anchored-strict")
+
+    result = await builder._retrieve(
+        {
+            "query": (
+                "Under Article 14(1) of the Employment Law 2019, how many days does an Employer have to "
+                "provide an Employee with a written Employment Contract after the commencement of employment?"
+            ),
+            "collector": collector,
+            "answer_type": "number",
+            "doc_refs": ["Employment Law 2019"],
+        }
+    )
+
+    assert retriever.retrieve.await_count == 2
+    targeted_call = retriever.retrieve.await_args_list[-1]
+    assert "Employment Law 2019" in targeted_call.args[0]
+    assert "Article 14(1)" in targeted_call.args[0]
+    assert targeted_call.kwargs["doc_refs"] is None
+    assert targeted_call.kwargs["sparse_only"] is True
+    assert "employment:article14" in {chunk.chunk_id for chunk in result["retrieved"]}
+    assert "employment:article14" in result["must_include_chunk_ids"]
+
+
+@pytest.mark.asyncio
+async def test_retrieve_multi_ref_boolean_judge_compare_keeps_judge_title_pages(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retriever = MagicMock()
+    retriever.retrieve = AsyncMock(
+        side_effect=[
+            [
+                _make_retrieved_chunk(
+                    chunk_id="ca:page4",
+                    doc_id="ca-004",
+                    doc_title="CA 004/2025 Example v Example",
+                    section_path="page:4",
+                    text="Reasons about jurisdiction without any judge title markers.",
+                    score=0.97,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="ca:page1",
+                    doc_id="ca-004",
+                    doc_title="CA 004/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. CHIEF JUSTICE WAYNE MARTIN",
+                    score=0.82,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="arb:page2",
+                    doc_id="arb-034",
+                    doc_title="ARB 034/2025 Example v Example",
+                    section_path="page:2",
+                    text="Return Date hearing details.",
+                    score=0.95,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="arb:page1",
+                    doc_id="arb-034",
+                    doc_title="ARB 034/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
+                    score=0.81,
+                ),
+            ],
+        ]
+    )
+
+    builder = RAGPipelineBuilder(
+        retriever=retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="judges-in-common")
+
+    result = await builder._retrieve(
+        {
+            "query": "Did cases CA 004/2025 and ARB 034/2025 have any judges in common?",
+            "collector": collector,
+            "answer_type": "boolean",
+            "doc_refs": ["CA 004/2025", "ARB 034/2025"],
+        }
+    )
+
+    assert retriever.retrieve.await_count == 2
+    assert "ca:page1" in result["must_include_chunk_ids"]
+    assert "arb:page1" in result["must_include_chunk_ids"]
+    assert {"ca:page1", "arb:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
+
+
 def test_ensure_named_commencement_context_keeps_title_and_commencement_chunks(mock_settings):
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 

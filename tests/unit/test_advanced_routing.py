@@ -211,3 +211,68 @@ def test_strict_answerer_restriction_effectiveness_ignores_same_doc_distractor()
     assert result is not None
     assert result.answer == "Yes"
     assert result.cited_chunk_ids == ["pp:article23"]
+
+
+def test_strict_answerer_answers_no_for_trust_article_28_good_faith_purchaser_clause() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="trust:article28",
+            doc_id="trust-law",
+            doc_title="TRUST LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:15",
+            text=(
+                "Applications and orders under Articles 24 to 27. "
+                "No order may be made under Article 28(3) which would prejudice any purchaser in good faith "
+                "for value of any trust property without notice of the matters which render the transfer voidable."
+            ),
+            retrieval_score=0.93,
+            rerank_score=0.93,
+        )
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query=(
+            "According to Article 28(4) of the DIFC Trust Law 2018, can an order made consequential to a "
+            "declaration under Articles 24 to 27 prejudice a purchaser in good faith for value of trust property "
+            "without notice of the voidable matters?"
+        ),
+        context_chunks=chunks,
+        max_chunks=4,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["trust:article28"]
+
+
+def test_strict_answerer_answers_no_for_employing_child_under_sixteen() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="employment:article13",
+            doc_id="employment-law",
+            doc_title="EMPLOYMENT LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text=(
+                "Article 13. Hiring children. "
+                "An Employer shall not employ a child who is under sixteen (16) years of age."
+            ),
+            retrieval_score=0.91,
+            rerank_score=0.91,
+        )
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query="According to Article 13 of the Employment Law 2019, can an Employer employ a child who is under sixteen years of age?",
+        context_chunks=chunks,
+        max_chunks=4,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["employment:article13"]
