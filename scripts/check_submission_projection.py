@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from statistics import median
 from typing import cast
 
 from rag_challenge.submission.common import count_submission_sentences
@@ -20,6 +21,51 @@ class ProjectionIssue:
     answer_type: str
     issue: str
     detail: str
+
+
+def _percentile_int(values: list[int], q: float) -> int:
+    if not values:
+        return 0
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, max(0, int((len(ordered) - 1) * q)))
+    return int(ordered[idx])
+
+
+def _classify_projection_change(raw_answer: object, projected_answer: object, answer_type: str) -> str:
+    kind = answer_type.strip().lower()
+    if json.dumps(raw_answer, ensure_ascii=False, sort_keys=True) == json.dumps(
+        projected_answer,
+        ensure_ascii=False,
+        sort_keys=True,
+    ):
+        return "unchanged"
+
+    if kind == "boolean" and isinstance(projected_answer, bool):
+        return "boolean_coercion"
+    if kind == "date" and isinstance(projected_answer, str):
+        return "date_normalization"
+    if kind == "number" and isinstance(projected_answer, int | float):
+        return "number_coercion"
+    if kind == "free_text":
+        raw_text = "" if raw_answer is None else str(raw_answer)
+        projected_text = projected_answer if isinstance(projected_answer, str) else ""
+        raw_stripped = raw_text.strip()
+        projected_stripped = projected_text.strip()
+        if projected_stripped.lower().startswith("there is no information on this question"):
+            return "free_text_unanswerable_text"
+        if "(cite:" in raw_stripped.lower() and "(cite:" not in projected_stripped.lower():
+            if len(projected_stripped) == len(strip_inline_citations(raw_stripped).strip()):
+                return "citation_stripping"
+            return "citation_stripping_plus_trim"
+        if count_submission_sentences(projected_stripped) < count_submission_sentences(raw_stripped):
+            return "free_text_sentence_trimming"
+        if len(projected_stripped) < len(raw_stripped):
+            return "free_text_length_trimming"
+    return "other"
+
+
+def strip_inline_citations(text: str) -> str:
+    return re.sub(r"\s*\(cite:[^)]+\)", "", text)
 
 
 def _coerce_cases(eval_obj: object) -> list[dict[str, object]]:
@@ -110,6 +156,14 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
     changed_answers = 0
     changed_page_sets = 0
     by_type: dict[str, int] = {}
+    answer_changes_by_type: dict[str, int] = {}
+    change_classes: dict[str, int] = {}
+    null_flip_count = 0
+    char_deltas: list[int] = []
+    sentence_deltas: list[int] = []
+    free_text_sentence_loss_cases = 0
+    free_text_hit_limit_cases = 0
+    free_text_unanswerable_projection_cases = 0
 
     for case in cases:
         answer_type = str(case.get("answer_type") or "free_text").strip().lower() or "free_text"
@@ -124,6 +178,26 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
             sort_keys=True,
         ):
             changed_answers += 1
+            answer_changes_by_type[answer_type] = answer_changes_by_type.get(answer_type, 0) + 1
+            change_class = _classify_projection_change(raw_answer, projected_answer, answer_type)
+            change_classes[change_class] = change_classes.get(change_class, 0) + 1
+            if (raw_answer is None) != (projected_answer is None):
+                null_flip_count += 1
+            if answer_type == "free_text":
+                raw_text = "" if raw_answer is None else str(raw_answer)
+                projected_text = projected_answer if isinstance(projected_answer, str) else ""
+                char_deltas.append(len(projected_text) - len(raw_text))
+                sentence_deltas.append(
+                    count_submission_sentences(projected_text) - count_submission_sentences(raw_text)
+                )
+                if count_submission_sentences(projected_text) < count_submission_sentences(raw_text):
+                    free_text_sentence_loss_cases += 1
+                if isinstance(projected_answer, str) and len(projected_answer) >= 280:
+                    free_text_hit_limit_cases += 1
+                if isinstance(projected_answer, str) and projected_answer.lower().startswith(
+                    "there is no information on this question"
+                ):
+                    free_text_unanswerable_projection_cases += 1
 
         telemetry_obj = case.get("telemetry")
         telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
@@ -175,6 +249,7 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
         f"- Submission-compliant cases: `{total - len(issues)}/{total}`",
         f"- Cases with projected answer changes vs eval artifact: `{changed_answers}`",
         f"- Cases with projected retrieved pages changes vs eval telemetry: `{changed_page_sets}`",
+        f"- Null flips during projection: `{null_flip_count}`",
         f"- Free-text projected max length: `{max_free_text_len}`",
         f"- Free-text projected max sentences: `{max_free_text_sentences}`",
         f"- Boolean JSON-safe after projection: `{boolean_json_safe}/{bool_cases}`",
@@ -184,6 +259,38 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
     ]
     for answer_type in sorted(by_type):
         lines.append(f"- `{answer_type}`: `{by_type[answer_type]}`")
+
+    lines.extend(["", "## Projection Change Severity", ""])
+    if not change_classes:
+        lines.append("- No answer changes")
+    else:
+        for label in sorted(change_classes):
+            lines.append(f"- `{label}`: `{change_classes[label]}`")
+        lines.extend(
+            [
+                "",
+                "## Changed Answers By Type",
+                "",
+            ]
+        )
+        for answer_type in sorted(answer_changes_by_type):
+            lines.append(f"- `{answer_type}`: `{answer_changes_by_type[answer_type]}`")
+        lines.extend(
+            [
+                "",
+                "## Free-Text Change Deltas",
+                "",
+                f"- Projected char delta p50: `{int(median(char_deltas)) if char_deltas else 0}`",
+                f"- Projected char delta p95: `{_percentile_int(char_deltas, 0.95)}`",
+                f"- Projected char delta max: `{max(char_deltas, default=0)}`",
+                f"- Projected sentence delta p50: `{int(median(sentence_deltas)) if sentence_deltas else 0}`",
+                f"- Projected sentence delta p95: `{_percentile_int(sentence_deltas, 0.95)}`",
+                f"- Projected sentence delta max: `{max(sentence_deltas, default=0)}`",
+                f"- Free-text cases losing 1+ sentence: `{free_text_sentence_loss_cases}`",
+                f"- Free-text cases clipped at 280 chars: `{free_text_hit_limit_cases}`",
+                f"- Free-text cases projected to unanswerable text: `{free_text_unanswerable_projection_cases}`",
+            ]
+        )
 
     lines.extend(["", "## Issues", ""])
     if not issues:

@@ -119,9 +119,19 @@ docker compose --profile tools run --rm eval \
 docker compose --profile tools run --rm eval \
   python -m rag_challenge.submission.platform
 
-# 4. Smoke-submit to the platform and poll status
+# 4. Inspect the generated artifacts
+#   - platform_runs/<phase>/submission.json
+#   - platform_runs/<phase>/preflight_summary.json
+#   - platform_runs/<phase>/code_archive.zip
+#   - platform_runs/<phase>/code_archive_audit.json
+
+# 5. Submit the exact inspected artifact and poll status
 docker compose --profile tools run --rm eval \
-  python -m rag_challenge.submission.platform --submit --poll
+  python -m rag_challenge.submission.platform \
+    --submit-existing \
+    --submission-path platform_runs/warmup/submission.json \
+    --code-archive-path platform_runs/warmup/code_archive.zip \
+    --poll
 ```
 
 What this flow does:
@@ -131,6 +141,7 @@ What this flow does:
 - ingests them into a phase-specific Qdrant collection
 - runs the same RAG pipeline directly against those questions
 - emits a platform-shaped `submission.json`
+- emits a local `preflight_summary.json` for first-run triage
 - builds a curated `code_archive.zip` from an allowlist
 - audits the archive for forbidden paths, secrets, and size before upload
 
@@ -139,6 +150,7 @@ Important:
 - `EVAL_API_KEY` is required locally, but stays out of `.env.example` and out of the code archive
 - `platform_runs/` is a generated workspace and is not part of the shipped archive
 - local regression data in `dataset/` remains separate from platform phase corpora
+- `--submit-existing` is the preferred submit path because it uploads the exact artifact you already inspected
 - if the platform responds `403 Questions and documents are not published yet`, the client is working; the phase corpus is simply not open yet. Use `--archive-only` until publication.
 
 ---

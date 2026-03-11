@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -89,6 +90,7 @@ class PlatformPaths:
     code_archive_path: Path
     audit_report_path: Path
     status_path: Path
+    preflight_summary_path: Path
 
 
 @dataclass(frozen=True)
@@ -217,6 +219,7 @@ def _resolve_phase_paths() -> PlatformPaths:
         code_archive_path=phase_dir / settings.code_archive_filename,
         audit_report_path=phase_dir / "code_archive_audit.json",
         status_path=phase_dir / "submission_status.json",
+        preflight_summary_path=phase_dir / "preflight_summary.json",
     )
 
 
@@ -529,6 +532,129 @@ def _create_code_archive(root: Path, archive_path: Path, allowlist: ArchiveAllow
     return report
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _percentile_int(values: list[int], q: float) -> int:
+    if not values:
+        return 0
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, max(0, int((len(ordered) - 1) * q)))
+    return int(ordered[idx])
+
+
+async def _qdrant_collection_point_count(collection_name: str) -> int | None:
+    client = QdrantStore()
+    try:
+        response = await client.client.count(
+            collection_name=collection_name,
+            count_filter=None,
+            exact=True,
+        )
+        return int(response.count)
+    except Exception:
+        logger.warning("Failed to fetch Qdrant point count for %s", collection_name, exc_info=True)
+        return None
+    finally:
+        await client.close()
+
+
+def _build_preflight_summary(
+    *,
+    paths: PlatformPaths,
+    collection_name: str,
+    payload: dict[str, object],
+    results: list[PlatformCaseResult],
+    point_count: int | None,
+) -> dict[str, object]:
+    answers_obj = payload.get("answers")
+    answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
+    answer_type_counts: dict[str, int] = {}
+    null_answer_counts_by_type: dict[str, int] = {}
+    empty_pages_counts_by_type: dict[str, int] = {}
+    page_counts: list[int] = []
+    free_text_char_counts: list[int] = []
+    free_text_sentence_counts: list[int] = []
+    model_name_empty_count = 0
+
+    for result, answer_payload in zip(results, answers, strict=False):
+        answer_type = result.case.answer_type.strip().lower() or "free_text"
+        answer_type_counts[answer_type] = answer_type_counts.get(answer_type, 0) + 1
+
+        answer_value = answer_payload.get("answer")
+        if answer_value is None:
+            null_answer_counts_by_type[answer_type] = null_answer_counts_by_type.get(answer_type, 0) + 1
+
+        telemetry_obj = answer_payload.get("telemetry")
+        telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
+        retrieval_obj = telemetry.get("retrieval")
+        retrieval = cast("dict[str, object]", retrieval_obj) if isinstance(retrieval_obj, dict) else {}
+        refs_obj = retrieval.get("retrieved_chunk_pages")
+        refs = cast("list[dict[str, object]]", refs_obj) if isinstance(refs_obj, list) else []
+        page_count = 0
+        for ref in refs:
+            page_numbers_obj = ref.get("page_numbers")
+            if isinstance(page_numbers_obj, list):
+                page_numbers = cast("list[object]", page_numbers_obj)
+                page_count += len([item for item in page_numbers if isinstance(item, int | float)])
+        page_counts.append(page_count)
+        if page_count == 0:
+            empty_pages_counts_by_type[answer_type] = empty_pages_counts_by_type.get(answer_type, 0) + 1
+
+        usage_model_name = str(telemetry.get("model_name") or "").strip()
+        if not usage_model_name:
+            model_name_empty_count += 1
+
+        if answer_type == "free_text" and isinstance(answer_value, str):
+            free_text_char_counts.append(len(answer_value))
+            free_text_sentence_counts.append(count_submission_sentences(answer_value))
+
+    documents_zip = paths.docs_dir / "documents.zip"
+    pdf_count = sum(1 for _ in paths.docs_dir.rglob("*.pdf")) if paths.docs_dir.exists() else 0
+    summary: dict[str, object] = {
+        "phase": get_settings().platform.phase,
+        "questions_count": len(results),
+        "answer_type_counts": answer_type_counts,
+        "null_answer_counts_by_type": null_answer_counts_by_type,
+        "empty_retrieved_chunk_pages_counts_by_type": empty_pages_counts_by_type,
+        "page_count_distribution": {
+            "min": min(page_counts, default=0),
+            "p50": _percentile_int(page_counts, 0.50),
+            "p95": _percentile_int(page_counts, 0.95),
+            "max": max(page_counts, default=0),
+        },
+        "free_text_char_distribution": {
+            "min": min(free_text_char_counts, default=0),
+            "p50": _percentile_int(free_text_char_counts, 0.50),
+            "p95": _percentile_int(free_text_char_counts, 0.95),
+            "max": max(free_text_char_counts, default=0),
+        },
+        "free_text_sentence_distribution": {
+            "min": min(free_text_sentence_counts, default=0),
+            "p50": _percentile_int(free_text_sentence_counts, 0.50),
+            "p95": _percentile_int(free_text_sentence_counts, 0.95),
+            "max": max(free_text_sentence_counts, default=0),
+        },
+        "model_name_empty_count": model_name_empty_count,
+        "submission_sha256": _sha256_file(paths.submission_path) if paths.submission_path.exists() else "",
+        "code_archive_sha256": _sha256_file(paths.code_archive_path) if paths.code_archive_path.exists() else "",
+        "questions_sha256": _sha256_file(paths.questions_path) if paths.questions_path.exists() else "",
+        "documents_zip_sha256": _sha256_file(documents_zip) if documents_zip.exists() else "",
+        "pdf_count": pdf_count,
+        "phase_collection_name": collection_name,
+        "qdrant_point_count": point_count,
+    }
+    return summary
+
+
 async def _download_phase_assets(client: PlatformEvaluationClient, paths: PlatformPaths, *, refresh: bool) -> None:
     if refresh or not paths.questions_path.exists():
         await client.download_questions(paths.questions_path)
@@ -591,6 +717,33 @@ async def _poll_submission_status(
         await asyncio.sleep(max(1.0, poll_interval_s))
 
 
+async def _submit_existing_artifacts(
+    client: PlatformEvaluationClient,
+    *,
+    submission_path: Path,
+    code_archive_path: Path,
+    poll: bool,
+    poll_interval_s: float,
+    poll_timeout_s: float,
+) -> dict[str, object]:
+    if not submission_path.exists():
+        raise FileNotFoundError(f"Submission JSON not found: {submission_path}")
+    if not code_archive_path.exists():
+        raise FileNotFoundError(f"Code archive not found: {code_archive_path}")
+    submit_response = await client.submit_submission(submission_path, code_archive_path)
+    if not poll:
+        return submit_response
+    submission_uuid = str(submit_response.get("uuid") or "").strip()
+    if not submission_uuid:
+        return submit_response
+    return await _poll_submission_status(
+        client,
+        submission_uuid,
+        poll_interval_s=poll_interval_s,
+        poll_timeout_s=poll_timeout_s,
+    )
+
+
 async def _async_main(args: argparse.Namespace) -> int:
     settings = get_settings()
     setup_logging(settings.app.log_level, settings.app.log_format)
@@ -609,6 +762,25 @@ async def _async_main(args: argparse.Namespace) -> int:
 
     client = PlatformEvaluationClient.from_settings()
     try:
+        if bool(args.submit_existing):
+            submission_path = Path(args.submission_path) if args.submission_path else paths.submission_path
+            code_archive_path = Path(args.code_archive_path) if args.code_archive_path else paths.code_archive_path
+            final_status = await _submit_existing_artifacts(
+                client,
+                submission_path=submission_path,
+                code_archive_path=code_archive_path,
+                poll=bool(args.poll),
+                poll_interval_s=float(settings.platform.poll_interval_s),
+                poll_timeout_s=float(settings.platform.poll_timeout_s),
+            )
+            paths.phase_dir.mkdir(parents=True, exist_ok=True)
+            paths.status_path.write_text(
+                json.dumps(final_status, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.info("status_path=%s", paths.status_path)
+            return 0
+
         try:
             await _download_phase_assets(client, paths, refresh=bool(args.refresh_downloads))
         except httpx.HTTPStatusError as exc:
@@ -644,12 +816,25 @@ async def _async_main(args: argparse.Namespace) -> int:
             encoding="utf-8",
         )
         _write_archive_artifacts(Path.cwd(), paths, archive_allowlist)
+        point_count = await _qdrant_collection_point_count(collection_name)
+        preflight_summary = _build_preflight_summary(
+            paths=paths,
+            collection_name=collection_name,
+            payload=payload,
+            results=results,
+            point_count=point_count,
+        )
+        paths.preflight_summary_path.write_text(
+            json.dumps(preflight_summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
         if not bool(args.submit):
             logger.info("Prepared platform submission artifacts without uploading")
             logger.info("submission_json=%s", paths.submission_path)
             logger.info("code_archive=%s", paths.code_archive_path)
             logger.info("audit_report=%s", paths.audit_report_path)
+            logger.info("preflight_summary=%s", paths.preflight_summary_path)
             return 0
 
         submit_response = await client.submit_submission(paths.submission_path, paths.code_archive_path)
@@ -681,6 +866,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--refresh-downloads", action="store_true", help="Redownload questions/documents for the active phase.")
     parser.add_argument("--skip-ingest", action="store_true", help="Reuse the existing phase-specific Qdrant collection.")
     parser.add_argument("--submit", action="store_true", help="Upload submission.json and code_archive.zip to the platform.")
+    parser.add_argument("--submit-existing", action="store_true", help="Upload an existing submission.json and code archive without downloading, ingesting, or querying.")
+    parser.add_argument("--submission-path", help="Path to an existing submission.json for --submit-existing.")
+    parser.add_argument("--code-archive-path", help="Path to an existing code archive for --submit-existing.")
     parser.add_argument("--poll", action="store_true", help="Poll submission status until completion or timeout.")
     parser.add_argument("--fail-fast", action="store_true", help="Stop on the first question execution failure.")
     args = parser.parse_args(argv)

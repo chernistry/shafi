@@ -439,6 +439,14 @@ def test_cleanup_named_multi_title_lookup_answer_strips_historical_year_from_ame
     assert "General Partnership Law Amendment Law, DIFC Law No. 3 of 2013" in cleaned
     assert "Arbitration Law of 2008 Amendment Law" not in cleaned
     assert "General Partnership Law 2004 Amendment Law" not in cleaned
+    assert (
+        RAGGenerator._clean_amendment_title_historical_year("Arbitration Law of 2008 Amendment Law")
+        == "Arbitration Law Amendment Law"
+    )
+    assert (
+        RAGGenerator._clean_amendment_title_historical_year("General Partnership Law 2004 Amendment Law")
+        == "General Partnership Law Amendment Law"
+    )
 
 
 def test_recover_doc_title_from_chunks_prefers_legal_title_over_body_clause() -> None:

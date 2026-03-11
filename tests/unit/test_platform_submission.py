@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import zipfile
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -11,11 +12,14 @@ from rag_challenge.submission.common import SubmissionCase
 from rag_challenge.submission.platform import (
     ArchiveAllowlist,
     PlatformCaseResult,
+    PlatformPaths,
+    _build_preflight_summary,
     _create_code_archive,
     _extract_http_error_message,
     _is_resources_not_published_error,
     _project_platform_answer,
     _scan_text_for_secrets,
+    _submit_existing_artifacts,
 )
 
 if TYPE_CHECKING:
@@ -173,3 +177,130 @@ def test_scan_text_for_secrets_detects_real_assigned_key() -> None:
     content = 'EVAL_API_KEY="mcs_VcPLTnn4XOca3HYbu8KPVBHsZxiThHnlC6Nl5z9SG10"\n'
 
     assert _scan_text_for_secrets(content) is True
+
+
+@pytest.mark.asyncio
+async def test_submit_existing_artifacts_submits_without_polling(tmp_path: Path) -> None:
+    submission_path = tmp_path / "submission.json"
+    archive_path = tmp_path / "code_archive.zip"
+    submission_path.write_text("{}", encoding="utf-8")
+    archive_path.write_bytes(b"PK\x03\x04")
+
+    client = AsyncMock()
+    client.submit_submission.return_value = {"uuid": "sub-1", "status": "queued"}
+
+    result = await _submit_existing_artifacts(
+        client,
+        submission_path=submission_path,
+        code_archive_path=archive_path,
+        poll=False,
+        poll_interval_s=1.0,
+        poll_timeout_s=30.0,
+    )
+
+    assert result == {"uuid": "sub-1", "status": "queued"}
+    client.submit_submission.assert_awaited_once_with(submission_path, archive_path)
+    client.get_submission_status.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_submit_existing_artifacts_raises_for_missing_files(tmp_path: Path) -> None:
+    client = AsyncMock()
+
+    with pytest.raises(FileNotFoundError, match="Submission JSON not found"):
+        await _submit_existing_artifacts(
+            client,
+            submission_path=tmp_path / "missing-submission.json",
+            code_archive_path=tmp_path / "missing-archive.zip",
+            poll=False,
+            poll_interval_s=1.0,
+            poll_timeout_s=30.0,
+        )
+
+
+def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> None:
+    phase_dir = tmp_path / "platform_runs" / "warmup"
+    docs_dir = phase_dir / "documents"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "documents.zip").write_bytes(b"zip-bytes")
+    (docs_dir / "doc-1.pdf").write_bytes(b"%PDF-1.4")
+    (docs_dir / "doc-2.pdf").write_bytes(b"%PDF-1.4")
+
+    submission_path = phase_dir / "submission.json"
+    submission_path.write_text("{}", encoding="utf-8")
+    archive_path = phase_dir / "code_archive.zip"
+    archive_path.write_bytes(b"PK\x03\x04")
+    questions_path = phase_dir / "questions.json"
+    questions_path.write_text("[]", encoding="utf-8")
+
+    paths = PlatformPaths(
+        phase_dir=phase_dir,
+        docs_dir=docs_dir,
+        questions_path=questions_path,
+        submission_path=submission_path,
+        code_archive_path=archive_path,
+        audit_report_path=phase_dir / "audit.json",
+        status_path=phase_dir / "status.json",
+        preflight_summary_path=phase_dir / "preflight_summary.json",
+    )
+
+    results = [
+        PlatformCaseResult(
+            case=SubmissionCase(case_id="q-1", question="Q1?", answer_type="boolean"),
+            answer_text="Yes",
+            telemetry={"model_llm": "gpt-4.1-mini"},
+            total_ms=10,
+        ),
+        PlatformCaseResult(
+            case=SubmissionCase(case_id="q-2", question="Q2?", answer_type="free_text"),
+            answer_text="Alpha. Beta.",
+            telemetry={"model_llm": "gpt-4.1"},
+            total_ms=20,
+        ),
+    ]
+    payload = {
+        "architecture_summary": "summary",
+        "answers": [
+            {
+                "question_id": "q-1",
+                "answer": True,
+                "telemetry": {
+                    "retrieval": {"retrieved_chunk_pages": [{"doc_id": "doca", "page_numbers": [1, 2]}]},
+                    "model_name": "gpt-4.1-mini",
+                },
+            },
+            {
+                "question_id": "q-2",
+                "answer": "Alpha. Beta.",
+                "telemetry": {
+                    "retrieval": {"retrieved_chunk_pages": []},
+                    "model_name": "",
+                },
+            },
+        ],
+    }
+
+    summary = _build_preflight_summary(
+        paths=paths,
+        collection_name="legal_chunks_warmup",
+        payload=payload,
+        results=results,
+        point_count=42,
+    )
+
+    assert summary["phase"] == "warmup"
+    assert summary["questions_count"] == 2
+    assert summary["answer_type_counts"] == {"boolean": 1, "free_text": 1}
+    assert summary["null_answer_counts_by_type"] == {}
+    assert summary["empty_retrieved_chunk_pages_counts_by_type"] == {"free_text": 1}
+    assert summary["page_count_distribution"] == {"min": 0, "p50": 0, "p95": 0, "max": 2}
+    assert summary["free_text_char_distribution"] == {"min": 12, "p50": 12, "p95": 12, "max": 12}
+    assert summary["free_text_sentence_distribution"] == {"min": 2, "p50": 2, "p95": 2, "max": 2}
+    assert summary["model_name_empty_count"] == 1
+    assert summary["pdf_count"] == 2
+    assert summary["phase_collection_name"] == "legal_chunks_warmup"
+    assert summary["qdrant_point_count"] == 42
+    assert isinstance(summary["submission_sha256"], str) and summary["submission_sha256"]
+    assert isinstance(summary["code_archive_sha256"], str) and summary["code_archive_sha256"]
+    assert isinstance(summary["questions_sha256"], str) and summary["questions_sha256"]
+    assert isinstance(summary["documents_zip_sha256"], str) and summary["documents_zip_sha256"]

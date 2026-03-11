@@ -2310,7 +2310,7 @@ class RAGGenerator:
     @staticmethod
     def _clean_amendment_title_historical_year(label: str) -> str:
         cleaned = re.sub(r"\s+", " ", (label or "").strip()).strip(" ,.;:")
-        if "amendment law" not in cleaned.casefold() or "difc law no." not in cleaned.casefold():
+        if "amendment law" not in cleaned.casefold():
             return cleaned
         return re.sub(
             r"(?i)\b(Law)(?:\s+of)?\s+\d{4}\s+(Amendment Law)\b",

@@ -63,7 +63,20 @@ def test_check_submission_projection_script_reports_projection_summary(tmp_path:
     assert "Submission Projection Check" in report
     assert "Submission-compliant cases: `3/3`" in report
     assert "Cases with projected answer changes vs eval artifact: `3`" in report
+    assert "Null flips during projection: `0`" in report
     assert "Boolean JSON-safe after projection: `1/1`" in report
     assert "Free-text projected max sentences: `3`" in report
+    assert "## Projection Change Severity" in report
+    assert "- `boolean_coercion`: `1`" in report
+    assert "- `date_normalization`: `1`" in report
+    assert "- `free_text_sentence_trimming`: `1`" in report
+    assert "## Changed Answers By Type" in report
+    assert "- `boolean`: `1`" in report
+    assert "- `date`: `1`" in report
+    assert "- `free_text`: `1`" in report
+    assert "## Free-Text Change Deltas" in report
+    assert "Free-text cases losing 1+ sentence: `1`" in report
+    assert "Free-text cases clipped at 280 chars: `0`" in report
+    assert "Free-text cases projected to unanswerable text: `0`" in report
     assert "## Issues" in report
     assert "- None" in report
