@@ -44,7 +44,7 @@ from rag_challenge.telemetry import TelemetryCollector
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Awaitable, Callable, Iterable
 
 _DEFAULT_UNANSWERABLE_FREE_TEXT = "There is no information on this question in the provided documents."
 _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS = 4
@@ -102,6 +102,9 @@ class PlatformCaseResult:
     answer_text: str
     telemetry: dict[str, object]
     total_ms: int
+
+
+type PipelineRuntimeFactory = Callable[[], Awaitable[PipelineRuntime]]
 
 
 @dataclass
@@ -752,19 +755,36 @@ async def _ingest_phase_documents(doc_dir: Path) -> None:
 
 async def _run_questions(
     cases: list[SubmissionCase],
-    runtime: PipelineRuntime,
     *,
     concurrency: int,
     fail_fast: bool,
+    runtime_factory: PipelineRuntimeFactory = _build_pipeline_runtime,
 ) -> list[PlatformCaseResult]:
-    semaphore = asyncio.Semaphore(max(1, concurrency))
+    if not cases:
+        return []
+
+    worker_count = max(1, min(concurrency, len(cases)))
     results: list[PlatformCaseResult | None] = [None] * len(cases)
+    queue: asyncio.Queue[tuple[int, SubmissionCase] | None] = asyncio.Queue()
 
-    async def worker(index: int, case: SubmissionCase) -> None:
-        async with semaphore:
-            results[index] = await _run_case_direct(case, runtime, fail_fast=fail_fast)
+    for index, case in enumerate(cases):
+        queue.put_nowait((index, case))
+    for _ in range(worker_count):
+        queue.put_nowait(None)
 
-    await asyncio.gather(*[worker(index, case) for index, case in enumerate(cases)])
+    async def worker() -> None:
+        runtime = await runtime_factory()
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    return
+                index, case = item
+                results[index] = await _run_case_direct(case, runtime, fail_fast=fail_fast)
+        finally:
+            await runtime.close()
+
+    await asyncio.gather(*[worker() for _ in range(worker_count)])
     return [cast("PlatformCaseResult", result) for result in results]
 
 
@@ -879,16 +899,11 @@ async def _async_main(args: argparse.Namespace) -> int:
                 raise
 
             cases = load_cases(paths.questions_path)
-            runtime = await _build_pipeline_runtime()
-            try:
-                results = await _run_questions(
-                    cases,
-                    runtime,
-                    concurrency=int(settings.platform.query_concurrency),
-                    fail_fast=bool(args.fail_fast),
-                )
-            finally:
-                await runtime.close()
+            results = await _run_questions(
+                cases,
+                concurrency=int(settings.platform.query_concurrency),
+                fail_fast=bool(args.fail_fast),
+            )
 
         payload = _build_platform_submission_payload(results)
         paths.phase_dir.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import zipfile
 from typing import TYPE_CHECKING
@@ -19,6 +20,7 @@ from rag_challenge.submission.platform import (
     _extract_http_error_message,
     _is_resources_not_published_error,
     _project_platform_answer,
+    _run_questions,
     _scan_text_for_secrets,
     _submit_existing_artifacts,
 )
@@ -217,6 +219,63 @@ async def test_submit_existing_artifacts_raises_for_missing_files(tmp_path: Path
             poll_interval_s=1.0,
             poll_timeout_s=30.0,
         )
+
+
+@pytest.mark.asyncio
+async def test_run_questions_uses_isolated_runtime_per_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtimes = []
+
+    class DummyRuntime:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.close = AsyncMock()
+
+    runtime_names = ["worker-a", "worker-b"]
+
+    async def fake_runtime_factory() -> DummyRuntime:
+        runtime = DummyRuntime(runtime_names[len(runtimes)])
+        runtimes.append(runtime)
+        return runtime
+
+    seen: list[tuple[str, str]] = []
+
+    async def fake_run_case_direct(
+        case: SubmissionCase,
+        runtime: DummyRuntime,
+        *,
+        fail_fast: bool,
+    ) -> PlatformCaseResult:
+        seen.append((case.case_id, runtime.name))
+        await asyncio.sleep(0)
+        return PlatformCaseResult(
+            case=case,
+            answer_text="True",
+            telemetry={},
+            total_ms=1,
+        )
+
+    monkeypatch.setattr("rag_challenge.submission.platform._run_case_direct", fake_run_case_direct)
+
+    cases = [
+        SubmissionCase(case_id="q-1", question="Q1?", answer_type="boolean"),
+        SubmissionCase(case_id="q-2", question="Q2?", answer_type="boolean"),
+        SubmissionCase(case_id="q-3", question="Q3?", answer_type="boolean"),
+    ]
+
+    results = await _run_questions(
+        cases,
+        concurrency=2,
+        fail_fast=False,
+        runtime_factory=fake_runtime_factory,
+    )
+
+    assert [result.case.case_id for result in results] == ["q-1", "q-2", "q-3"]
+    assert len(runtimes) == 2
+    for runtime in runtimes:
+        runtime.close.assert_awaited_once()
+    assert {runtime_name for _, runtime_name in seen} == {"worker-a", "worker-b"}
 
 
 def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> None:
