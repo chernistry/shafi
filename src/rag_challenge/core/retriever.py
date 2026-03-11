@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 _DIFC_CASE_RE = re.compile(r"^(CFI|CA|SCT|ENF|DEC|TCD|ARB)\s+0*(\d{1,4})/(\d{4})$", re.IGNORECASE)
 _LAW_NO_RE = re.compile(r"^Law\s+No\.?\s*(\d+)\s+of\s+(\d{4})$", re.IGNORECASE)
+_TITLE_WITH_YEAR_RE = re.compile(r"^(?P<title>.+?)\s+(?P<year>19\d{2}|20\d{2})$", re.IGNORECASE)
 
 
 class RetrieverError(RuntimeError):
@@ -426,12 +427,24 @@ class HybridRetriever:
                 )
             )
         refs = [ref.strip() for ref in (list(doc_refs) if doc_refs is not None else []) if str(ref).strip()]
+        title_refs = HybridRetriever._doc_title_filter_variants(refs)
         if refs:
-            conditions.append(
+            ref_conditions: list[models.Condition] = [
                 models.FieldCondition(
                     key="citations",
                     match=models.MatchAny(any=refs),
                 )
+            ]
+            if title_refs:
+                ref_conditions.append(
+                    models.FieldCondition(
+                        key="doc_title",
+                        match=models.MatchAny(any=title_refs),
+                    )
+                )
+            return models.Filter(
+                must=cast("list[models.Condition]", conditions),
+                should=ref_conditions,
             )
         return models.Filter(must=cast("list[models.Condition]", conditions)) if conditions else None
 
@@ -461,6 +474,14 @@ class HybridRetriever:
                 variants.append(f"Law No. {num} of {year}")
                 variants.append(f"Law No {num} of {year}")
                 variants.append(f"DIFC Law No. {num} of {year}")
+                continue
+
+            title_with_year_match = _TITLE_WITH_YEAR_RE.match(ref)
+            if title_with_year_match is not None:
+                title_only = re.sub(r"\s+", " ", title_with_year_match.group("title")).strip(" ,.;:")
+                if title_only:
+                    variants.append(title_only)
+                    variants.append(title_only.upper())
 
         seen: set[str] = set()
         out: list[str] = []
@@ -470,6 +491,31 @@ class HybridRetriever:
                 continue
             seen.add(key.lower())
             out.append(key)
+        return out
+
+    @staticmethod
+    def _doc_title_filter_variants(refs: list[str] | tuple[str, ...]) -> list[str]:
+        variants: list[str] = []
+        for raw in refs:
+            ref = re.sub(r"\s+", " ", str(raw).strip())
+            if not ref or _LAW_NO_RE.match(ref) is not None or _DIFC_CASE_RE.match(ref) is not None:
+                continue
+            variants.append(ref)
+            title_with_year_match = _TITLE_WITH_YEAR_RE.match(ref)
+            if title_with_year_match is not None:
+                title_only = re.sub(r"\s+", " ", title_with_year_match.group("title")).strip(" ,.;:")
+                if title_only:
+                    variants.append(title_only)
+                    variants.append(title_only.upper())
+
+        seen: set[str] = set()
+        out: list[str] = []
+        for candidate in variants:
+            normalized = candidate.strip()
+            if not normalized or normalized.casefold() in seen:
+                continue
+            seen.add(normalized.casefold())
+            out.append(normalized)
         return out
 
     @classmethod

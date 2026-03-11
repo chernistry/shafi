@@ -47,6 +47,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 _DEFAULT_UNANSWERABLE_FREE_TEXT = "There is no information on this question in the provided documents."
+_PLATFORM_RATE_LIMIT_MAX_ATTEMPTS = 4
+_PLATFORM_RATE_LIMIT_BASE_DELAY_S = 5.0
+_PLATFORM_RATE_LIMIT_MAX_DELAY_S = 60.0
 _PAGE_ID_RE = re.compile(r"^(?P<doc_id>.+)_(?P<page>\d+)$")
 _SECRET_VALUE_PATTERNS = (
     re.compile(r"\bmcs_[A-Za-z0-9]{24,}\b"),
@@ -138,9 +141,76 @@ class PlatformEvaluationClient:
     async def close(self) -> None:
         await self._client.aclose()
 
+    @staticmethod
+    def _retry_delay_seconds(response: httpx.Response, attempt: int) -> float:
+        raw_retry_after = response.headers.get("Retry-After", "").strip()
+        if raw_retry_after:
+            try:
+                retry_after = float(raw_retry_after)
+            except ValueError:
+                retry_after = 0.0
+            else:
+                return max(0.0, min(_PLATFORM_RATE_LIMIT_MAX_DELAY_S, retry_after))
+        return min(
+            _PLATFORM_RATE_LIMIT_MAX_DELAY_S,
+            _PLATFORM_RATE_LIMIT_BASE_DELAY_S * (2 ** max(0, attempt - 1)),
+        )
+
+    async def _get_with_rate_limit_retry(self, url: str) -> httpx.Response:
+        last_response: httpx.Response | None = None
+        for attempt in range(1, _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS + 1):
+            response = await self._client.get(url)
+            if response.status_code != 429:
+                response.raise_for_status()
+                return response
+            last_response = response
+            if attempt >= _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS:
+                break
+            delay_s = self._retry_delay_seconds(response, attempt)
+            logger.warning(
+                "Platform API rate-limited on GET %s; retrying in %.1fs (attempt %d/%d)",
+                url,
+                delay_s,
+                attempt,
+                _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS,
+            )
+            await asyncio.sleep(delay_s)
+        if last_response is None:
+            raise RuntimeError(f"Platform request failed without a response: GET {url}")
+        last_response.raise_for_status()
+        return last_response
+
+    async def _post_files_with_rate_limit_retry(
+        self,
+        url: str,
+        *,
+        files: dict[str, tuple[str, Any, str]],
+    ) -> httpx.Response:
+        last_response: httpx.Response | None = None
+        for attempt in range(1, _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS + 1):
+            response = await self._client.post(url, files=files)
+            if response.status_code != 429:
+                response.raise_for_status()
+                return response
+            last_response = response
+            if attempt >= _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS:
+                break
+            delay_s = self._retry_delay_seconds(response, attempt)
+            logger.warning(
+                "Platform API rate-limited on POST %s; retrying in %.1fs (attempt %d/%d)",
+                url,
+                delay_s,
+                attempt,
+                _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS,
+            )
+            await asyncio.sleep(delay_s)
+        if last_response is None:
+            raise RuntimeError(f"Platform request failed without a response: POST {url}")
+        last_response.raise_for_status()
+        return last_response
+
     async def download_questions(self, target_path: Path) -> Path:
-        response = await self._client.get(f"{self._base_url}/questions")
-        response.raise_for_status()
+        response = await self._get_with_rate_limit_retry(f"{self._base_url}/questions")
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(
             json.dumps(response.json(), ensure_ascii=False, indent=2),
@@ -149,8 +219,7 @@ class PlatformEvaluationClient:
         return target_path
 
     async def download_documents(self, target_dir: Path) -> Path:
-        response = await self._client.get(f"{self._base_url}/documents")
-        response.raise_for_status()
+        response = await self._get_with_rate_limit_retry(f"{self._base_url}/documents")
         target_dir.mkdir(parents=True, exist_ok=True)
         archive_path = target_dir / "documents.zip"
         archive_path.write_bytes(response.content)
@@ -160,22 +229,20 @@ class PlatformEvaluationClient:
 
     async def submit_submission(self, submission_path: Path, code_archive_path: Path) -> dict[str, object]:
         with submission_path.open("rb") as submission_handle, code_archive_path.open("rb") as archive_handle:
-            response = await self._client.post(
+            response = await self._post_files_with_rate_limit_retry(
                 f"{self._base_url}/submissions",
                 files={
                     "file": (submission_path.name, submission_handle, "application/json"),
                     "code_archive": (code_archive_path.name, archive_handle, "application/zip"),
                 },
             )
-        response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
             raise ValueError("Submission response must be an object")
         return cast("dict[str, object]", payload)
 
     async def get_submission_status(self, submission_uuid: str) -> dict[str, object]:
-        response = await self._client.get(f"{self._base_url}/submissions/{submission_uuid}/status")
-        response.raise_for_status()
+        response = await self._get_with_rate_limit_retry(f"{self._base_url}/submissions/{submission_uuid}/status")
         payload = response.json()
         if not isinstance(payload, dict):
             raise ValueError("Status response must be an object")

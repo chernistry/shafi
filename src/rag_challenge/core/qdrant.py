@@ -99,6 +99,7 @@ class QdrantStore:
         """Create keyword indexes on filterable payload fields."""
         index_fields = [
             "doc_id",
+            "doc_title",
             "doc_type",
             "jurisdiction",
             "chunk_id",

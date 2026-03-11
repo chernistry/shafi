@@ -12,6 +12,7 @@ from rag_challenge.submission.common import SubmissionCase
 from rag_challenge.submission.platform import (
     ArchiveAllowlist,
     PlatformCaseResult,
+    PlatformEvaluationClient,
     PlatformPaths,
     _build_preflight_summary,
     _create_code_archive,
@@ -304,3 +305,31 @@ def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> No
     assert isinstance(summary["code_archive_sha256"], str) and summary["code_archive_sha256"]
     assert isinstance(summary["questions_sha256"], str) and summary["questions_sha256"]
     assert isinstance(summary["documents_zip_sha256"], str) and summary["documents_zip_sha256"]
+
+
+@pytest.mark.asyncio
+async def test_platform_client_retries_rate_limited_question_download(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    client = PlatformEvaluationClient(api_key="test-key", base_url="https://platform.example/api/v1")
+    await client.close()
+
+    request = httpx.Request("GET", "https://platform.example/api/v1/questions")
+    first = httpx.Response(429, request=request, headers={"Retry-After": "0"})
+    second = httpx.Response(200, request=request, json=[{"id": "q-1", "question": "Q?", "answer_type": "boolean"}])
+    get_mock = AsyncMock(side_effect=[first, second])
+    sleep_mock = AsyncMock()
+    client._client = AsyncMock()
+    client._client.get = get_mock
+    monkeypatch.setattr("rag_challenge.submission.platform.asyncio.sleep", sleep_mock)
+
+    target_path = tmp_path / "questions.json"
+    downloaded = await client.download_questions(target_path)
+
+    assert downloaded == target_path
+    assert json.loads(target_path.read_text(encoding="utf-8")) == [
+        {"id": "q-1", "question": "Q?", "answer_type": "boolean"}
+    ]
+    assert get_mock.await_count == 2
+    sleep_mock.assert_awaited_once()

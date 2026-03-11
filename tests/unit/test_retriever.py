@@ -150,8 +150,41 @@ async def test_retrieve_with_doc_refs_adds_citation_filter_and_soft_case_law_fil
     must = first_filter.must
     assert isinstance(must, list)
     keys = {getattr(cond, "key", "") for cond in must}
-    assert "citations" in keys
     assert "doc_type" in keys
+    should = first_filter.should
+    assert isinstance(should, list)
+    assert any(getattr(cond, "key", "") == "citations" for cond in should)
+
+
+def test_build_filter_adds_doc_title_should_for_title_year_refs():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    where = HybridRetriever._build_filter(
+        doc_type_filter=None,
+        jurisdiction_filter=None,
+        doc_refs=["Operating Law 2018"],
+    )
+
+    assert isinstance(where, models.Filter)
+    should = where.should
+    assert isinstance(should, list)
+    assert len(should) == 2
+    citations_condition = should[0]
+    title_condition = should[1]
+    assert getattr(citations_condition, "key", "") == "citations"
+    assert getattr(title_condition, "key", "") == "doc_title"
+    title_match = getattr(title_condition, "match", None)
+    assert isinstance(title_match, models.MatchAny)
+    assert "Operating Law" in title_match.any
+
+
+def test_expand_doc_ref_variants_adds_yearless_title_variants():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    variants = HybridRetriever._expand_doc_ref_variants(["Employment Law 2019"])
+
+    assert "Employment Law 2019" in variants
+    assert "Employment Law" in variants
 
 
 @pytest.mark.asyncio
