@@ -11,7 +11,7 @@ Output rules:
 - If asked for a year: match the EXACT law title from the question. "Employment Law Amendment Law" (enacted 2021) ≠ "Employment Law" (enacted 2019).
 - If asked for years in a date-number format like "six (6) years", output the digit in parentheses.
 - For `name`/`names`, return only party/entity names; remove case ID prefixes.
-- For `date`, return one date exactly as written in sources (prefer YYYY-MM-DD when present).
+- For `date`, return exactly one date in `YYYY-MM-DD` format.
 - For `boolean`, output ONLY `Yes` or `No`.
 
 Verification steps — do these BEFORE answering:

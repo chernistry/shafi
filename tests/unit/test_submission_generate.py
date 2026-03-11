@@ -118,6 +118,13 @@ def test_coerce_answer_type_parses_boolean_json_values() -> None:
     assert _coerce_answer_type("false", "boolean") is False
 
 
+def test_coerce_answer_type_normalizes_textual_dates_to_iso() -> None:
+    assert _coerce_answer_type("11 March 2025", "date") == "2025-03-11"
+    assert _coerce_answer_type("March 11, 2025", "date") == "2025-03-11"
+    assert _coerce_answer_type("01/03/2025", "date") == "2025-03-01"
+    assert _coerce_answer_type("2025-03-11", "date") == "2025-03-11"
+
+
 def test_coerce_answer_type_skips_case_number_fragments() -> None:
     value = _coerce_answer_type("In CA 005/2025 the claim value is 250,499.26 AED.", "number")
     assert value == 250499.26
@@ -149,6 +156,17 @@ def test_normalize_free_text_answer_strips_citations_and_caps_length() -> None:
     assert len(normalized) <= 280
     assert "Foundations Law 2018" in normalized
     assert "Trust Law 2018" in normalized
+
+
+def test_normalize_free_text_answer_caps_to_three_sentences() -> None:
+    answer = (
+        "Alpha is supported. Beta is supported too. Gamma remains supported. "
+        "Delta should not survive projection."
+    )
+
+    normalized = _normalize_free_text_answer(answer)
+
+    assert normalized == "Alpha is supported. Beta is supported too. Gamma remains supported."
 
 
 @pytest.mark.asyncio
@@ -221,3 +239,4 @@ async def test_submission_normalizes_free_text_for_submission_format() -> None:
     assert isinstance(result["answer"], str)
     assert "(cite:" not in result["answer"]
     assert len(result["answer"]) <= 280
+    assert result["answer"].count(".") <= 3

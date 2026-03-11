@@ -9,7 +9,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import httpx
 from qdrant_client import AsyncQdrantClient
@@ -27,7 +27,12 @@ from rag_challenge.eval.sources import (
     select_used_pages,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 logger = logging.getLogger(__name__)
+
+_EVAL_QUERY_MAX_ATTEMPTS = 3
 
 
 def _float_list_factory() -> list[float]:
@@ -137,6 +142,12 @@ class EvalResult:
         return _percentile(self.ttft_values, 0.95)
 
     @property
+    def ttft_modifier_estimate_mean(self) -> float | None:
+        if not self.ttft_values:
+            return None
+        return _mean(_estimate_ttft_factor(value) for value in self.ttft_values)
+
+    @property
     def doc_ref_hit_rate(self) -> float | None:
         if self.doc_ref_measured_cases <= 0:
             return None
@@ -159,6 +170,7 @@ class EvalResult:
             ttft_by_type[answer_type] = {
                 "p50_ms": round(_percentile(values, 0.5), 1),
                 "p95_ms": round(_percentile(values, 0.95), 1),
+                "ttft_modifier_estimate_mean": round(_mean(_estimate_ttft_factor(value) for value in values), 4),
                 "count": len(values),
             }
 
@@ -225,6 +237,9 @@ class EvalResult:
             "doc_ref_hit_rate": None if doc_ref_hit is None else round(doc_ref_hit, 4),
             "ttft_p50_ms": round(self.ttft_p50, 1),
             "ttft_p95_ms": round(self.ttft_p95, 1),
+            "ttft_modifier_estimate_mean": (
+                None if self.ttft_modifier_estimate_mean is None else round(self.ttft_modifier_estimate_mean, 4)
+            ),
             "ttft_count": len(self.ttft_values),
             "ttft_by_answer_type": ttft_by_type,
             "format_compliance_by_answer_type": format_by_type,
@@ -358,24 +373,32 @@ async def run_evaluation(
             judge_failure = ""
 
             try:
-                async with endpoint_semaphore:
-                    t0 = time.perf_counter()
-                    request_payload: dict[str, object] = {
-                        "question": case.question,
-                        "request_id": case.case_id,
-                        # Ticket 25 compatibility: harmless for old API (ignored extra fields).
-                        "question_id": case.case_id,
-                        "answer_type": case.answer_type,
-                    }
-                    response = await client.post(
-                        endpoint_url,
-                        json=request_payload,
-                        timeout=30.0,
-                    )
-                    elapsed_ms = (time.perf_counter() - t0) * 1000.0
-                    response.raise_for_status()
+                elapsed_ms = 0.0
+                for attempt in range(_EVAL_QUERY_MAX_ATTEMPTS):
+                    async with endpoint_semaphore:
+                        t0 = time.perf_counter()
+                        request_payload: dict[str, object] = {
+                            "question": case.question,
+                            "request_id": case.case_id,
+                            # Ticket 25 compatibility: harmless for old API (ignored extra fields).
+                            "question_id": case.case_id,
+                            "answer_type": case.answer_type,
+                        }
+                        try:
+                            response = await client.post(
+                                endpoint_url,
+                                json=request_payload,
+                                timeout=30.0,
+                            )
+                            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+                            response.raise_for_status()
+                            sse_events = _parse_sse_body(response.text)
+                        except Exception as exc:
+                            if attempt + 1 < _EVAL_QUERY_MAX_ATTEMPTS and _is_retryable_eval_exception(exc):
+                                await asyncio.sleep(0.2 * float(attempt + 1))
+                                continue
+                            raise
 
-                    sse_events = _parse_sse_body(response.text)
                     answer_final_evt = next(
                         (evt for evt in sse_events if evt.get("type") == "answer_final"), None
                     )
@@ -388,6 +411,9 @@ async def run_evaluation(
                     telemetry_event = next((evt for evt in sse_events if evt.get("type") == "telemetry"), None)
 
                     if telemetry_event is None:
+                        if attempt + 1 < _EVAL_QUERY_MAX_ATTEMPTS:
+                            await asyncio.sleep(0.2 * float(attempt + 1))
+                            continue
                         failure = f"No telemetry SSE event for: {case.question[:80]}"
                     else:
                         payload_obj = telemetry_event.get("payload", {})
@@ -455,6 +481,7 @@ async def run_evaluation(
                                 doc_refs=doc_refs,
                                 citations_cache=citations_cache,
                             )
+                    break
 
                 if has_answer_type:
                     format_compliance = (
@@ -690,6 +717,47 @@ def _percentile(values: list[float], q: float) -> float:
     sorted_values = sorted(values)
     idx = min(len(sorted_values) - 1, max(0, int((len(sorted_values) - 1) * q)))
     return float(sorted_values[idx])
+
+
+def _mean(values: Iterable[float]) -> float:
+    numbers = [float(value) for value in values]
+    if not numbers:
+        return 0.0
+    return sum(numbers) / len(numbers)
+
+
+def _estimate_ttft_factor(ttft_ms: float) -> float:
+    value = max(0.0, float(ttft_ms))
+    if value < 1000.0:
+        return 1.05
+    if value < 2000.0:
+        return 1.02
+    if value <= 3000.0:
+        return 1.0
+    if value >= 5000.0:
+        return 0.85
+    penalty_ratio = (value - 3000.0) / 2000.0
+    return 0.99 - (0.14 * penalty_ratio)
+
+
+def _is_retryable_eval_exception(exc: Exception) -> bool:
+    if isinstance(exc, (httpx.HTTPError, asyncio.TimeoutError)):
+        return True
+    message = str(exc).strip().lower()
+    if not message:
+        return True
+    retry_markers = (
+        "connection",
+        "connect",
+        "timeout",
+        "timed out",
+        "chunked",
+        "eof",
+        "closed",
+        "reset by peer",
+        "temporarily unavailable",
+    )
+    return any(marker in message for marker in retry_markers)
 
 
 def _judge_top_fails(cases: list[dict[str, object]]) -> list[dict[str, object]]:

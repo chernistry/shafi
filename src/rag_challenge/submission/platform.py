@@ -33,7 +33,9 @@ from rag_challenge.submission.common import (
     as_int,
     classify_unanswerable_answer,
     coerce_answer_type,
+    count_submission_sentences,
     load_cases,
+    normalize_date_answer,
     select_submission_used_pages,
 )
 from rag_challenge.telemetry import TelemetryCollector
@@ -363,13 +365,19 @@ def _validate_projected_answer(answer: SubmissionAnswer, answer_type: str) -> No
         items = cast("list[object]", answer)
         if any(not isinstance(item, str) for item in items):
             raise ValueError(f"Names answer must project to list[str] or null, got {answer!r}")
-    if answer_type_key == "date" and not isinstance(answer, str):
-        raise ValueError(f"Date answer must project to ISO string or null, got {answer!r}")
+    if answer_type_key == "date":
+        if not isinstance(answer, str):
+            raise ValueError(f"Date answer must project to ISO string or null, got {answer!r}")
+        if normalize_date_answer(answer) != answer:
+            raise ValueError(f"Date answer must be ISO YYYY-MM-DD or null, got {answer!r}")
     if answer_type_key == "free_text":
         if not isinstance(answer, str):
             raise ValueError(f"Free-text answer must project to string, got {answer!r}")
         if len(answer) > 280:
             raise ValueError(f"Free-text answer exceeds 280 chars: {len(answer)}")
+        sentence_count = count_submission_sentences(answer)
+        if sentence_count < 1 or sentence_count > 3:
+            raise ValueError(f"Free-text answer must contain 1-3 sentences, got {sentence_count}")
 
 
 def _project_platform_answer(result: PlatformCaseResult) -> dict[str, object]:

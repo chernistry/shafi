@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -16,6 +17,12 @@ _LIST_ITEM_SEPARATOR_RE = re.compile(r"(?:^|\n)\s*(?:\d+\.\s*|[-*]\s*)")
 _WHITESPACE_RE = re.compile(r"\s+")
 _BOOLEAN_TRUE_RE = re.compile(r"^(?:yes|true)\b", re.IGNORECASE)
 _BOOLEAN_FALSE_RE = re.compile(r"^(?:no|false)\b", re.IGNORECASE)
+_ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+_SLASH_DATE_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b")
+_TEXTUAL_DAY_FIRST_DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b")
+_TEXTUAL_MONTH_FIRST_DATE_RE = re.compile(r"\b[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}\b")
+_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+")
+_SENTENCE_END_RE = re.compile(r"[.!?](?:['\")\]]+)?$")
 _FREE_TEXT_LIMIT = 280
 
 SubmissionAnswer = bool | str | int | float | list[str] | None
@@ -164,6 +171,60 @@ def truncate_at_word_boundary(text: str, *, limit: int) -> str:
     return text[:cutoff].rstrip(" ,;:.") + "..."
 
 
+def normalize_date_answer(answer: str) -> str | None:
+    text = _WHITESPACE_RE.sub(" ", (answer or "").strip())
+    if not text:
+        return None
+
+    candidates: list[tuple[int, str, tuple[str, ...]]] = []
+    for pattern, formats in (
+        (_ISO_DATE_RE, ("%Y-%m-%d",)),
+        (_SLASH_DATE_RE, ("%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%m-%d-%Y", "%d/%m/%y", "%m/%d/%y")),
+        (_TEXTUAL_DAY_FIRST_DATE_RE, ("%d %B %Y", "%d %b %Y")),
+        (_TEXTUAL_MONTH_FIRST_DATE_RE, ("%B %d, %Y", "%b %d, %Y", "%B %d %Y", "%b %d %Y")),
+    ):
+        match = pattern.search(text)
+        if match is None:
+            continue
+        candidates.append((match.start(), match.group(0), formats))
+
+    if not candidates:
+        return None
+
+    _, raw, formats = min(candidates, key=lambda item: item[0])
+    for fmt in formats:
+        try:
+            parsed = datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+        return parsed.strftime("%Y-%m-%d")
+    return None
+
+
+def split_submission_sentences(text: str) -> list[str]:
+    normalized = _WHITESPACE_RE.sub(" ", (text or "").strip())
+    if not normalized:
+        return []
+
+    raw_parts = [part.strip() for part in _SENTENCE_BOUNDARY_RE.split(normalized) if part.strip()]
+    if not raw_parts:
+        return []
+
+    sentences: list[str] = []
+    for idx, part in enumerate(raw_parts):
+        if _SENTENCE_END_RE.search(part):
+            sentences.append(part)
+            continue
+        if idx == 0:
+            sentences.append(part)
+        break
+    return sentences
+
+
+def count_submission_sentences(text: str) -> int:
+    return len(split_submission_sentences(text))
+
+
 def normalize_free_text_answer(answer: str) -> str:
     text = strip_inline_citations(answer).replace("\r", "\n").strip()
     if not text:
@@ -190,6 +251,15 @@ def normalize_free_text_answer(answer: str) -> str:
     text = re.sub(r",\s*,", ", ", text)
     text = re.sub(r";\s*;", "; ", text)
     text = text.strip()
+    sentences = split_submission_sentences(text)
+    if sentences:
+        capped_sentences = sentences[:3]
+        while capped_sentences:
+            candidate = " ".join(capped_sentences).strip()
+            if len(candidate) <= _FREE_TEXT_LIMIT:
+                return candidate
+            capped_sentences = capped_sentences[:-1]
+
     return truncate_at_word_boundary(text, limit=_FREE_TEXT_LIMIT)
 
 
@@ -211,6 +281,9 @@ def coerce_answer_type(answer: str | None, answer_type: str) -> SubmissionAnswer
     if kind == "number":
         numeric = parse_json_number(text)
         return text if numeric is None else numeric
+    if kind == "date":
+        normalized_date = normalize_date_answer(text)
+        return text if normalized_date is None else normalized_date
     if kind == "names":
         names = coerce_names(text)
         return names if names else [text]

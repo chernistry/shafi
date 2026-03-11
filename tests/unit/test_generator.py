@@ -400,6 +400,47 @@ def test_cleanup_named_multi_title_lookup_answer_prefers_identity_page_for_title
     assert "ip:cover" in cleaned
 
 
+def test_cleanup_named_multi_title_lookup_answer_strips_historical_year_from_amendment_titles() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="law6:cover",
+            doc_id="law6",
+            doc_title="ARBITRATION LAW AMENDMENT LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="ARBITRATION LAW AMENDMENT LAW DIFC LAW No. 6 of 2013",
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="**Document Title:** Arbitration Law of 2008 Amendment Law, DIFC Law No. 6 of 2013",
+        ),
+        RankedChunk(
+            chunk_id="law3:cover",
+            doc_id="law3",
+            doc_title="GENERAL PARTNERSHIP LAW AMENDMENT LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="GENERAL PARTNERSHIP LAW AMENDMENT LAW DIFC LAW No. 3 of 2013",
+            retrieval_score=0.97,
+            rerank_score=0.97,
+            doc_summary="**Document Title:** General Partnership Law 2004 Amendment Law, DIFC Law No. 3 of 2013",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_multi_title_lookup_answer(
+        "",
+        question="What are the titles of DIFC Law No. 6 of 2013 and DIFC Law No. 3 of 2013?",
+        chunks=chunks,
+        doc_refs=["Law No. 6 of 2013", "Law No. 3 of 2013"],
+    )
+
+    assert "Arbitration Law Amendment Law, DIFC Law No. 6 of 2013" in cleaned
+    assert "General Partnership Law Amendment Law, DIFC Law No. 3 of 2013" in cleaned
+    assert "Arbitration Law of 2008 Amendment Law" not in cleaned
+    assert "General Partnership Law 2004 Amendment Law" not in cleaned
+
+
 def test_recover_doc_title_from_chunks_prefers_legal_title_over_body_clause() -> None:
     from rag_challenge.llm.generator import RAGGenerator
 

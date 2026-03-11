@@ -2307,6 +2307,17 @@ class RAGGenerator:
         cleaned = re.sub(r"^The\s+The\b", "The", cleaned, flags=re.IGNORECASE)
         return cleaned
 
+    @staticmethod
+    def _clean_amendment_title_historical_year(label: str) -> str:
+        cleaned = re.sub(r"\s+", " ", (label or "").strip()).strip(" ,.;:")
+        if "amendment law" not in cleaned.casefold() or "difc law no." not in cleaned.casefold():
+            return cleaned
+        return re.sub(
+            r"(?i)\b(Law)(?:\s+of)?\s+\d{4}\s+(Amendment Law)\b",
+            r"\1 \2",
+            cleaned,
+        ).strip(" ,.;:")
+
     @classmethod
     def cleanup_named_commencement_answer(
         cls,
@@ -2616,6 +2627,7 @@ class RAGGenerator:
 
                 title = cls._recover_doc_title_from_chunks(doc_chunks, prefer_citation_title=True) or ref
                 title = cls._clean_structured_doc_label(title) or ref.strip(" ,.;:") or ref
+                title = cls._clean_amendment_title_historical_year(title) or title
                 if match_score > fallback_score:
                     fallback_title = title
                     fallback_score = match_score
@@ -3648,7 +3660,7 @@ class RAGGenerator:
         if kind == "number":
             return "Output format: output ONLY a single numeric value."
         if kind == "date":
-            return "Output format: output ONLY one date (prefer YYYY-MM-DD when source allows)."
+            return "Output format: output ONLY one date in YYYY-MM-DD format."
         if kind == "name":
             return "Output format: output ONLY one exact name/title."
         if kind == "names":

@@ -26,7 +26,10 @@ def test_check_submission_projection_script_reports_projection_summary(tmp_path:
                     {
                         "question_id": "q-free",
                         "answer_type": "free_text",
-                        "answer": "1. Alpha (cite: doca:0:0:x)\n2. " + ("Beta " * 100),
+                        "answer": (
+                            "Alpha is supported. Beta is supported. Gamma is supported. "
+                            "Delta should be trimmed away."
+                        ),
                         "telemetry": {"used_page_ids": ["docb_2"], "ttft_ms": 20},
                     },
                     {
@@ -58,7 +61,9 @@ def test_check_submission_projection_script_reports_projection_summary(tmp_path:
 
     report = report_path.read_text(encoding="utf-8")
     assert "Submission Projection Check" in report
-    assert "Submission-compliant cases: `2/3`" in report
-    assert "Cases with projected answer changes vs eval artifact: `2`" in report
+    assert "Submission-compliant cases: `3/3`" in report
+    assert "Cases with projected answer changes vs eval artifact: `3`" in report
     assert "Boolean JSON-safe after projection: `1/1`" in report
-    assert "`q-date` [date] `answer`: date must be ISO YYYY-MM-DD or null" in report
+    assert "Free-text projected max sentences: `3`" in report
+    assert "## Issues" in report
+    assert "- None" in report

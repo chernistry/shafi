@@ -9,7 +9,7 @@ Tasks:
 1) Strict-type format validation:
 - boolean: answer must be exactly "Yes" or "No"
 - number: answer must be exactly one numeric value (digits with optional decimal)
-- date: answer must be exactly one date (prefer YYYY-MM-DD if sources allow)
+- date: answer must be exactly one date in YYYY-MM-DD format
 - name: answer must be exactly one name/title, not a sentence
 - names: answer must be a list of names (comma-separated ok), not a sentence
 

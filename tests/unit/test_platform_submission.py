@@ -53,6 +53,43 @@ def test_project_platform_answer_uses_nested_platform_shape() -> None:
     ]
 
 
+def test_project_platform_answer_normalizes_date_and_caps_free_text_sentences() -> None:
+    date_result = PlatformCaseResult(
+        case=SubmissionCase(case_id="q-date", question="Q?", answer_type="date"),
+        answer_text="March 11, 2025",
+        telemetry={
+            "ttft_ms": 100,
+            "time_per_output_token_ms": 10,
+            "total_ms": 150,
+            "used_page_ids": ["doca_1"],
+            "prompt_tokens": 5,
+            "completion_tokens": 2,
+            "model_llm": "gpt-4.1-mini",
+        },
+        total_ms=150,
+    )
+    free_text_result = PlatformCaseResult(
+        case=SubmissionCase(case_id="q-free", question="Q?", answer_type="free_text"),
+        answer_text="Alpha. Beta. Gamma. Delta.",
+        telemetry={
+            "ttft_ms": 100,
+            "time_per_output_token_ms": 10,
+            "total_ms": 150,
+            "used_page_ids": ["docb_2"],
+            "prompt_tokens": 5,
+            "completion_tokens": 8,
+            "model_llm": "gpt-4.1",
+        },
+        total_ms=150,
+    )
+
+    date_payload = _project_platform_answer(date_result)
+    free_text_payload = _project_platform_answer(free_text_result)
+
+    assert date_payload["answer"] == "2025-03-11"
+    assert free_text_payload["answer"] == "Alpha. Beta. Gamma."
+
+
 def test_create_code_archive_only_includes_allowlisted_files(tmp_path: Path) -> None:
     root = tmp_path
     (root / "src" / "pkg").mkdir(parents=True)

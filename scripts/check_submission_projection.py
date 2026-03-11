@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from rag_challenge.submission.common import count_submission_sentences
 from rag_challenge.submission.generate import _project_submission_result
 
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -54,12 +55,14 @@ def _is_submission_answer_compliant(answer: object, answer_type: str) -> tuple[b
             )
         ), "names must be list[str]/null"
     if kind == "free_text":
+        sentence_count = count_submission_sentences(answer) if isinstance(answer, str) else 0
         return (
             isinstance(answer, str)
             and bool(answer.strip())
             and len(answer) <= 280
+            and 1 <= sentence_count <= 3
             and "(cite:" not in answer.lower()
-        ), "free_text must be non-empty <=280 chars without inline citations"
+        ), "free_text must be 1-3 sentences, non-empty, <=280 chars, without inline citations"
     return False, f"unsupported answer_type={answer_type}"
 
 
@@ -159,6 +162,7 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
         and isinstance(_project_case(case).get("answer"), str)
     ]
     max_free_text_len = max((len(answer) for answer in free_text_projected), default=0)
+    max_free_text_sentences = max((count_submission_sentences(answer) for answer in free_text_projected), default=0)
     bool_cases = sum(1 for case in cases if str(case.get("answer_type") or "").strip().lower() == "boolean")
     projected_bool_answers = [_project_case(case).get("answer") for case in cases if str(case.get("answer_type") or "").strip().lower() == "boolean"]
     boolean_json_safe = sum(1 for answer in projected_bool_answers if isinstance(answer, bool) or answer is None)
@@ -172,6 +176,7 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
         f"- Cases with projected answer changes vs eval artifact: `{changed_answers}`",
         f"- Cases with projected retrieved pages changes vs eval telemetry: `{changed_page_sets}`",
         f"- Free-text projected max length: `{max_free_text_len}`",
+        f"- Free-text projected max sentences: `{max_free_text_sentences}`",
         f"- Boolean JSON-safe after projection: `{boolean_json_safe}/{bool_cases}`",
         "",
         "## By Answer Type",

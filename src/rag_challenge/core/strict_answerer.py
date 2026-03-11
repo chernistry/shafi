@@ -15,6 +15,7 @@ _NUMBER_RE = re.compile(r"[+-]?\d+(?:[.,]\d+)?")
 _ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _SLASH_DATE_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b")
 _TEXTUAL_DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b")
+_TEXTUAL_MONTH_FIRST_DATE_RE = re.compile(r"\b[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}\b")
 _YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 _LAW_NO_FULL_RE = re.compile(r"\b(?:DIFC\s+)?Law\s+No\.?\s*(\d+)\s+of\s+(\d{4})\b", re.IGNORECASE)
 _TITLE_REF_RE = re.compile(
@@ -719,6 +720,12 @@ class StrictAnswerer:
                     return datetime.strptime(text, fmt)
                 except ValueError:
                     continue
+        if _TEXTUAL_MONTH_FIRST_DATE_RE.fullmatch(text):
+            for fmt in ("%B %d, %Y", "%b %d, %Y", "%B %d %Y", "%b %d %Y"):
+                try:
+                    return datetime.strptime(text, fmt)
+                except ValueError:
+                    continue
         return None
 
     @staticmethod
@@ -733,19 +740,29 @@ class StrictAnswerer:
 
     @staticmethod
     def _extract_date(text: str) -> str | None:
-        match = _ISO_DATE_RE.search(text) or _SLASH_DATE_RE.search(text) or _TEXTUAL_DATE_RE.search(text)
-        if match is None:
+        candidates: list[tuple[int, str, tuple[str, ...]]] = []
+        for pattern, formats in (
+            (_ISO_DATE_RE, ("%Y-%m-%d",)),
+            (_SLASH_DATE_RE, ("%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%m-%d-%Y", "%d/%m/%y", "%m/%d/%y")),
+            (_TEXTUAL_DATE_RE, ("%d %B %Y", "%d %b %Y")),
+            (_TEXTUAL_MONTH_FIRST_DATE_RE, ("%B %d, %Y", "%b %d, %Y", "%B %d %Y", "%b %d %Y")),
+        ):
+            match = pattern.search(text)
+            if match is None:
+                continue
+            candidates.append((match.start(), match.group(0), formats))
+
+        if not candidates:
             return None
-        raw = match.group(0)
-        # Normalize only slash dates to ISO when possible.
-        if _SLASH_DATE_RE.fullmatch(raw):
-            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%m-%d-%Y", "%d/%m/%y", "%m/%d/%y"):
-                try:
-                    parsed = datetime.strptime(raw, fmt)
-                    return parsed.strftime("%Y-%m-%d")
-                except ValueError:
-                    continue
-        return raw
+
+        _, raw, formats = min(candidates, key=lambda item: item[0])
+        for fmt in formats:
+            try:
+                parsed = datetime.strptime(raw, fmt)
+            except ValueError:
+                continue
+            return parsed.strftime("%Y-%m-%d")
+        return None
 
     # NOTE: strict answer strings must be parse-safe for deterministic evaluation.
     # We keep evidence separately via `cited_chunk_ids` and telemetry "used pages".

@@ -57,6 +57,38 @@ def test_strict_answerer_extracts_number_and_returns_evidence_ids() -> None:
     assert result.cited_chunk_ids == ["c1"]
 
 
+def test_strict_answerer_normalizes_day_first_textual_date_to_iso() -> None:
+    answerer = StrictAnswerer()
+    chunks = [_chunk(chunk_id="c1", text="This Law comes into force on 11 March 2025.")]
+
+    result = answerer.answer(
+        answer_type="date",
+        query="On what date does this Law come into force?",
+        context_chunks=chunks,
+        max_chunks=2,
+    )
+
+    assert result is not None
+    assert result.answer == "2025-03-11"
+    assert result.cited_chunk_ids == ["c1"]
+
+
+def test_strict_answerer_normalizes_month_first_textual_date_to_iso() -> None:
+    answerer = StrictAnswerer()
+    chunks = [_chunk(chunk_id="c1", text="The enactment notice was issued on March 11, 2025.")]
+
+    result = answerer.answer(
+        answer_type="date",
+        query="What is the date of the enactment notice?",
+        context_chunks=chunks,
+        max_chunks=2,
+    )
+
+    assert result is not None
+    assert result.answer == "2025-03-11"
+    assert result.cited_chunk_ids == ["c1"]
+
+
 def test_strict_answerer_compares_same_year_for_named_law_titles() -> None:
     answerer = StrictAnswerer()
     chunks = [
