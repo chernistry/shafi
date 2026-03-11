@@ -263,7 +263,33 @@ def _is_common_judge_compare_query(query: str) -> bool:
     q = re.sub(r"\s+", " ", (query or "").strip()).lower()
     if not q:
         return False
-    return "judge" in q and ("in common" in q or "same judge" in q or "judges in common" in q)
+    return "judge" in q and (
+        "in common" in q
+        or "same judge" in q
+        or "judges in common" in q
+        or "judge who presided over both" in q
+        or "presided over both" in q
+        or ("did any judge" in q and "both" in q)
+        or "judge involved in both" in q
+        or "judge participated in both" in q
+        or "judge who participated in both" in q
+    )
+
+
+def _is_case_issue_date_name_compare_query(query: str, *, answer_type: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if answer_type.strip().lower() != "name":
+        return False
+    case_ref_count = len(_DIFC_CASE_ID_RE.findall(query or ""))
+    if case_ref_count != 2:
+        return False
+    return (
+        "date of issue" in q
+        or "issue date" in q
+        or "issued first" in q
+        or "issued earlier" in q
+        or ("issued" in q and "earlier" in q)
+    )
 
 
 def _is_interpretation_sections_common_elements_query(query: str) -> bool:
@@ -753,6 +779,14 @@ class RAGPipelineBuilder:
                                 if _is_common_judge_compare_query(state["query"]):
                                     seed = (
                                         self._select_case_judge_seed_chunk_id(row)
+                                        or self._select_seed_chunk_id(row, seed_terms)
+                                        or row[0].chunk_id
+                                    )
+                                elif _is_case_issue_date_name_compare_query(
+                                    state["query"], answer_type=state["answer_type"]
+                                ):
+                                    seed = (
+                                        self._select_case_issue_date_seed_chunk_id(row)
                                         or self._select_seed_chunk_id(row, seed_terms)
                                         or row[0].chunk_id
                                     )
@@ -1559,6 +1593,36 @@ class RAGPipelineBuilder:
         best_score = 0
         for chunk in chunks:
             score = self._case_judge_seed_chunk_score(chunk=chunk)
+            if score > best_score:
+                best_score = score
+                best_chunk_id = chunk.chunk_id
+        return best_chunk_id or None
+
+    @classmethod
+    def _case_issue_date_seed_chunk_score(cls, *, chunk: RetrievedChunk | RankedChunk) -> int:
+        text = re.sub(r"\s+", " ", str(getattr(chunk, "text", "") or "")).strip().casefold()
+        if not text:
+            return 0
+
+        score = 0
+        page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+        if page_num <= 2:
+            score += 220
+        if "date of issue" in text:
+            score += 320
+        if "issued by" in text or "at:" in text:
+            score += 60
+        if "decision date" in text or "judgment" in text or "judgement" in text:
+            score -= 80
+        if "claim no." in text:
+            score += 20
+        return score
+
+    def _select_case_issue_date_seed_chunk_id(self, chunks: Sequence[RetrievedChunk]) -> str | None:
+        best_chunk_id = ""
+        best_score = 0
+        for chunk in chunks:
+            score = self._case_issue_date_seed_chunk_score(chunk=chunk)
             if score > best_score:
                 best_score = score
                 best_chunk_id = chunk.chunk_id

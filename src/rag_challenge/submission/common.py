@@ -23,6 +23,7 @@ _TEXTUAL_DAY_FIRST_DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b")
 _TEXTUAL_MONTH_FIRST_DATE_RE = re.compile(r"\b[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}\b")
 _SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+")
 _SENTENCE_END_RE = re.compile(r"[.!?](?:['\")\]]+)?$")
+_DANGLING_LIST_MARKER_RE = re.compile(r"(?:^|[; ])\d+\.$")
 _FREE_TEXT_LIMIT = 280
 
 SubmissionAnswer = bool | str | int | float | list[str] | None
@@ -161,6 +162,83 @@ def strip_inline_citations(text: str) -> str:
     return _INLINE_CITATION_RE.sub("", text)
 
 
+def _normalize_submission_text(text: str) -> str:
+    text = _WHITESPACE_RE.sub(" ", text)
+    text = re.sub(r"\s+([,.;:])", r"\1", text)
+    text = re.sub(r"([,.;:])\1+", r"\1", text)
+    text = re.sub(r",\s*,", ", ", text)
+    text = re.sub(r";\s*;", "; ", text)
+    return text.strip()
+
+
+def _has_submission_free_text_fragment(text: str) -> bool:
+    raw = (text or "").strip()
+    if raw.endswith("..."):
+        return True
+    normalized = _normalize_submission_text(text)
+    if not normalized:
+        return True
+    if _DANGLING_LIST_MARKER_RE.search(normalized):
+        return True
+    if normalized.endswith("No.") or normalized.endswith("No"):
+        return True
+    return bool(normalized.endswith(":"))
+
+
+def _extract_list_like_segments(text: str) -> list[str]:
+    raw = strip_inline_citations(text).replace("\r", "\n").strip()
+    if not raw:
+        return []
+
+    candidates: list[str] = []
+    if "\n" in raw:
+        candidates = [line.strip() for line in raw.splitlines() if line.strip()]
+    else:
+        split_parts = [segment.strip() for segment in _LIST_ITEM_SEPARATOR_RE.split(raw) if segment.strip()]
+        if len(split_parts) > 1:
+            candidates = split_parts
+        elif ";" in raw:
+            semicolon_parts = [segment.strip() for segment in raw.split(";") if segment.strip()]
+            if len(semicolon_parts) > 1:
+                candidates = semicolon_parts
+
+    segments: list[str] = []
+    for candidate in candidates:
+        if re.fullmatch(r"\d+\.\s*", candidate):
+            continue
+        if candidate.strip().endswith("..."):
+            continue
+        normalized = _normalize_submission_text(_LIST_ITEM_PREFIX_RE.sub("", candidate).strip())
+        if not normalized or _has_submission_free_text_fragment(normalized):
+            continue
+        segments.append(normalized)
+    return segments
+
+
+def _pack_complete_segments(segments: list[str], *, separator: str, limit: int) -> str:
+    packed: list[str] = []
+    for segment in segments:
+        candidate = segment if not packed else f"{separator.join(packed)}{separator}{segment}"
+        if len(candidate) > limit:
+            break
+        packed.append(segment)
+    return separator.join(packed).strip()
+
+
+def _trim_fragment_tail(text: str) -> str:
+    candidate = _normalize_submission_text(text)
+    while candidate and _has_submission_free_text_fragment(candidate):
+        if "; " in candidate:
+            candidate = candidate.rsplit("; ", maxsplit=1)[0].strip()
+            continue
+        sentences = split_submission_sentences(candidate)
+        if len(sentences) > 1:
+            candidate = " ".join(sentences[:-1]).strip()
+            continue
+        return ""
+    return candidate
+
+
 def truncate_at_word_boundary(text: str, *, limit: int) -> str:
     if len(text) <= limit:
         return text
@@ -230,6 +308,12 @@ def normalize_free_text_answer(answer: str) -> str:
     if not text:
         return ""
 
+    segments = _extract_list_like_segments(text)
+    if segments:
+        packed_segments = _pack_complete_segments(segments, separator="; ", limit=_FREE_TEXT_LIMIT)
+        if packed_segments:
+            return packed_segments
+
     if "\n" in text:
         parts: list[str] = []
         for raw_line in text.splitlines():
@@ -245,22 +329,17 @@ def normalize_free_text_answer(answer: str) -> str:
         else:
             text = _LIST_ITEM_PREFIX_RE.sub("", text).strip()
 
-    text = _WHITESPACE_RE.sub(" ", text)
-    text = re.sub(r"\s+([,.;:])", r"\1", text)
-    text = re.sub(r"([,.;:])\1+", r"\1", text)
-    text = re.sub(r",\s*,", ", ", text)
-    text = re.sub(r";\s*;", "; ", text)
-    text = text.strip()
+    text = _normalize_submission_text(text)
     sentences = split_submission_sentences(text)
     if sentences:
         capped_sentences = sentences[:3]
         while capped_sentences:
-            candidate = " ".join(capped_sentences).strip()
+            candidate = _trim_fragment_tail(" ".join(capped_sentences).strip())
             if len(candidate) <= _FREE_TEXT_LIMIT:
                 return candidate
             capped_sentences = capped_sentences[:-1]
 
-    return truncate_at_word_boundary(text, limit=_FREE_TEXT_LIMIT)
+    return _trim_fragment_tail(truncate_at_word_boundary(text, limit=_FREE_TEXT_LIMIT))
 
 
 def coerce_answer_type(answer: str | None, answer_type: str) -> SubmissionAnswer:

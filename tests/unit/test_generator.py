@@ -1937,6 +1937,178 @@ def test_cleanup_account_effective_dates_answer_uses_opaque_notice_chunk_for_exa
     )
 
 
+def test_cleanup_account_effective_dates_answer_handles_effective_dates_without_enactment_request() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="crs:0",
+            doc_id="crs",
+            doc_title="COMMON REPORTING",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                "This Law comes into force on the date specified in the Enactment Notice in respect of this Law, except "
+                "in respect of Pre-existing Accounts that are subject to due diligence requirements under this Law, "
+                "the effective date is 31 December, 2016; and in respect of New Accounts that are subject to due "
+                "diligence requirements under this Law, the effective date is 1 January, 2017."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Common Reporting Standard Law 2018",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_account_effective_dates_answer(
+        "",
+        question=(
+            "What is the effective date for due diligence requirements for Pre-existing Accounts and "
+            "New Accounts under the Common Reporting Standard Law 2018?"
+        ),
+        chunks=chunks,
+        doc_refs=["Common Reporting Standard Law 2018"],
+    )
+
+    assert cleaned == (
+        "1. Pre-existing Accounts: The effective date is 31 December, 2016 (cite: crs:0)\n"
+        "2. New Accounts: The effective date is 1 January, 2017 (cite: crs:0)"
+    )
+
+
+def test_cleanup_named_retention_period_answer_rebuilds_crs_and_general_partnership() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="crs:0",
+            doc_id="crs",
+            doc_title="COMMON REPORTING STANDARD LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text=(
+                "All records required to be kept by Reporting Financial Institutions pursuant to the provisions of "
+                "this Law and the Regulations shall be retained in an electronically readable format for a retention "
+                "period of six (6) years after the date of reporting the information."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Common Reporting Standard Law 2018",
+        ),
+        RankedChunk(
+            chunk_id="gp:0",
+            doc_id="gp",
+            doc_title="GENERAL PARTNERSHIP LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text=(
+                "A General Partnership's Accounting Records shall be preserved by the General Partnership for at "
+                "least six (6) years from the date upon which they were created, or for some other period as may "
+                "be prescribed in the Regulations."
+            ),
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="**Document Title:** General Partnership Law 2004",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_retention_period_answer(
+        "",
+        question=(
+            "According to Article 12(4) of the Common Reporting Standard Law and Article 18(2)(b) of the "
+            "General Partnership Law, what are the retention periods for records?"
+        ),
+        chunks=chunks,
+        doc_refs=["Common Reporting Standard Law 2018", "General Partnership Law 2004"],
+    )
+
+    assert cleaned == (
+        "1. Common Reporting Standard Law 2018: Records must be retained for a retention period of six (6) years "
+        "after the date of reporting the information. (cite: crs:0)\n"
+        "2. General Partnership Law 2004: Accounting Records must be preserved by the General Partnership for at "
+        "least six (6) years from the date upon which they were created. (cite: gp:0)"
+    )
+
+
+def test_cleanup_named_retention_period_answer_rebuilds_general_partnership_and_llp() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="gp:0",
+            doc_id="gp",
+            doc_title="GENERAL PARTNERSHIP LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text=(
+                "A General Partnership's Accounting Records shall be preserved by the General Partnership for at "
+                "least six (6) years from the date upon which they were created, or for some other period as may "
+                "be prescribed in the Regulations."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** General Partnership Law 2004",
+        ),
+        RankedChunk(
+            chunk_id="llp:0",
+            doc_id="llp",
+            doc_title="LIMITED LIABILITY PARTNERSHIP LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:10",
+            text=(
+                "A Limited Liability Partnership's Accounting Records shall be preserved by the Limited Liability "
+                "Partnership for at least six (6) years from the date upon which they were created, or for some "
+                "other period as may be Prescribed in the Regulations."
+            ),
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="**Document Title:** Limited Liability Partnership Law 2018",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_retention_period_answer(
+        "",
+        question=(
+            "What is the minimum period for which a DIFC-incorporated General Partnership and a DIFC-incorporated "
+            "Limited Liability Partnership must preserve their accounting records?"
+        ),
+        chunks=chunks,
+    )
+
+    assert cleaned == (
+        "1. General Partnership Law 2004: Accounting Records must be preserved by the General Partnership for at "
+        "least six (6) years from the date upon which they were created. (cite: gp:0)\n"
+        "2. Limited Liability Partnership Law 2018: Accounting Records must be preserved by the Limited Liability "
+        "Partnership for at least six (6) years from the date upon which they were created. (cite: llp:0)"
+    )
+
+
+def test_cleanup_named_administration_answer_handles_single_law_without_duplication() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="employment:0",
+            doc_id="employment",
+            doc_title="EMPLOYMENT LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:2",
+            text="This Law and any Regulations made under it shall be administered by the DIFCA.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Employment Law 2019",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_administration_answer(
+        "",
+        question="Who is responsible for administering the Employment Law and any Regulations made under it?",
+        chunks=chunks,
+        doc_refs=["Employment Law 2019"],
+    )
+
+    assert cleaned == "DIFCA administers Employment Law 2019 and any Regulations made under it (cite: employment:0)"
+
+
 def test_cleanup_interpretative_provisions_enumeration_items_recovers_law_titles() -> None:
     from rag_challenge.llm.generator import RAGGenerator
 

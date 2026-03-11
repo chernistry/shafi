@@ -169,6 +169,43 @@ def test_normalize_free_text_answer_caps_to_three_sentences() -> None:
     assert normalized == "Alpha is supported. Beta is supported too. Gamma remains supported."
 
 
+def test_normalize_free_text_answer_drops_dangling_list_marker_tail() -> None:
+    answer = (
+        "1. DIFC-incorporated General Partnership: A General Partnership must preserve its accounting records for at least six (6) years.\n"
+        "2."
+    )
+
+    normalized = _normalize_free_text_answer(answer)
+
+    assert normalized == (
+        "DIFC-incorporated General Partnership: A General Partnership must preserve its accounting records "
+        "for at least six (6) years."
+    )
+
+
+def test_normalize_free_text_answer_skips_heading_only_fragment_item() -> None:
+    answer = (
+        "1. The Claimant's Application No.\n"
+        "2. The application was dismissed on the last page of the document."
+    )
+
+    normalized = _normalize_free_text_answer(answer)
+
+    assert "The Claimant's Application No." not in normalized
+    assert normalized == "The application was dismissed on the last page of the document."
+
+
+def test_normalize_free_text_answer_drops_ellipsis_truncated_tail() -> None:
+    answer = (
+        "1. Common Reporting Standard Law: records must be retained for six years after reporting.\n"
+        "2. General Partnership Law: records must be retained for six years after the date of reporting the..."
+    )
+
+    normalized = _normalize_free_text_answer(answer)
+
+    assert normalized == "Common Reporting Standard Law: records must be retained for six years after reporting."
+
+
 @pytest.mark.asyncio
 async def test_submission_outputs_null_and_clears_refs_for_strict_unanswerable() -> None:
     telemetry = {

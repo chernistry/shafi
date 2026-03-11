@@ -78,5 +78,54 @@ def test_check_submission_projection_script_reports_projection_summary(tmp_path:
     assert "Free-text cases losing 1+ sentence: `1`" in report
     assert "Free-text cases clipped at 280 chars: `0`" in report
     assert "Free-text cases projected to unanswerable text: `0`" in report
+    assert "## Free-Text Artifact Fragments" in report
+    assert "- None" in report
     assert "## Issues" in report
     assert "- None" in report
+
+
+def test_check_submission_projection_script_flags_free_text_fragment_offenders(tmp_path: Path) -> None:
+    eval_path = tmp_path / "eval.json"
+    report_path = tmp_path / "report.md"
+
+    eval_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "question_id": "q-fragment",
+                        "answer_type": "free_text",
+                        "answer": "The Claimant's Application No.",
+                        "telemetry": {"used_page_ids": ["doca_1"], "ttft_ms": 10},
+                    },
+                    {
+                        "question_id": "q-dangling",
+                        "answer_type": "free_text",
+                        "answer": "Alpha complete. 2.",
+                        "telemetry": {"used_page_ids": ["docb_2"], "ttft_ms": 20},
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/check_submission_projection.py",
+            "--eval",
+            str(eval_path),
+            "--out",
+            str(report_path),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    report = report_path.read_text(encoding="utf-8")
+    assert "## Free-Text Artifact Fragments" in report
+    assert "- `heading_like_fragment`: `1`" in report
+    assert "artifact_fragment" in report

@@ -357,7 +357,17 @@ class StrictAnswerer:
             return set(), ""
 
         # 2a) "Same judge" / "judges in common" comparisons.
-        if len(case_refs) == 2 and "judge" in q_lower and ("common" in q_lower or "same" in q_lower):
+        same_judge_compare = len(case_refs) == 2 and "judge" in q_lower and (
+            "common" in q_lower
+            or "same" in q_lower
+            or "judge who presided over both" in q_lower
+            or "presided over both" in q_lower
+            or ("did any judge" in q_lower and "both" in q_lower)
+            or "judge involved in both" in q_lower
+            or "judge participated in both" in q_lower
+            or "judge who participated in both" in q_lower
+        )
+        if same_judge_compare:
             left_judges, left_cited = _extract_judges(_relevant_chunks(case_refs[0]))
             right_judges, right_cited = _extract_judges(_relevant_chunks(case_refs[1]))
             if left_judges and right_judges and left_cited and right_cited:
@@ -601,33 +611,15 @@ class StrictAnswerer:
             return None
 
         # Handle comparative case-ID questions deterministically when possible.
-        case_refs: list[str] = []
-        for match in _DIFC_CASE_ID_RE.finditer(q):
-            prefix = match.group(1).upper()
-            num = int(match.group(2))
-            year = match.group(3)
-            ref = f"{prefix} {num:03d}/{year}"
-            if ref not in case_refs:
-                case_refs.append(ref)
+        case_refs = self._extract_case_refs(query)
         if len(case_refs) != 2:
             return None
 
-        def _relevant_chunks(ref: str) -> list[RankedChunk]:
-            ref_lower = ref.lower()
-            relevant = [
-                chunk
-                for chunk in chunks
-                if ref_lower in chunk.doc_title.lower() or ref_lower in chunk.text.lower()
-            ]
-            if not relevant:
-                return list(chunks[:2])
-            return relevant[:3]
-
         if "decision date" in q_lower and ("earlier" in q_lower or "later" in q_lower):
             dates: dict[str, datetime] = {}
-            cited = {}
+            cited: dict[str, str] = {}
             for ref in case_refs:
-                dt, cited_id = self._extract_best_decision_date(_relevant_chunks(ref))
+                dt, cited_id = self._extract_best_decision_date(self._relevant_case_chunks(ref=ref, chunks=chunks))
                 if dt is not None and cited_id:
                     dates[ref] = dt
                     cited[ref] = cited_id
@@ -635,21 +627,151 @@ class StrictAnswerer:
                 earlier = min(dates.items(), key=lambda it: it[1])[0]
                 later = max(dates.items(), key=lambda it: it[1])[0]
                 chosen_ref = earlier if "earlier" in q_lower else later
-                return StrictAnswerResult(answer=chosen_ref, cited_chunk_ids=[cited[chosen_ref]], confident=True)
+                cited_ids = [cited[ref] for ref in case_refs if ref in cited]
+                return StrictAnswerResult(answer=chosen_ref, cited_chunk_ids=cited_ids, confident=True)
 
-        if "higher" in q_lower and ("monetary amount" in q_lower or "amount" in q_lower):
+        if self._is_issue_date_compare_query(q_lower):
+            dates: dict[str, datetime] = {}
+            cited: dict[str, str] = {}
+            for ref in case_refs:
+                dt, cited_id = self._extract_best_issue_date(self._relevant_case_chunks(ref=ref, chunks=chunks))
+                if dt is not None and cited_id:
+                    dates[ref] = dt
+                    cited[ref] = cited_id
+            if len(dates) == 2:
+                left_ref, right_ref = case_refs
+                if dates[left_ref] == dates[right_ref]:
+                    return None
+                chosen_ref = left_ref if dates[left_ref] < dates[right_ref] else right_ref
+                cited_ids = [cited[ref] for ref in case_refs if ref in cited]
+                return StrictAnswerResult(answer=chosen_ref, cited_chunk_ids=cited_ids, confident=True)
+
+        if self._is_monetary_claim_compare_query(q_lower):
             amounts: dict[str, Decimal] = {}
             cited: dict[str, str] = {}
             for ref in case_refs:
-                value, cited_id = self._extract_max_money_amount(_relevant_chunks(ref))
+                value, cited_id = self._extract_max_money_amount(self._relevant_case_chunks(ref=ref, chunks=chunks))
                 if value is not None and cited_id:
                     amounts[ref] = value
                     cited[ref] = cited_id
             if len(amounts) == 2:
-                chosen_ref = max(amounts.items(), key=lambda it: it[1])[0]
-                return StrictAnswerResult(answer=chosen_ref, cited_chunk_ids=[cited[chosen_ref]], confident=True)
+                left_ref, right_ref = case_refs
+                if amounts[left_ref] == amounts[right_ref]:
+                    return None
+                chosen_ref = left_ref if amounts[left_ref] > amounts[right_ref] else right_ref
+                cited_ids = [cited[ref] for ref in case_refs if ref in cited]
+                return StrictAnswerResult(answer=chosen_ref, cited_chunk_ids=cited_ids, confident=True)
 
         return None
+
+    @staticmethod
+    def _extract_case_refs(query: str) -> list[str]:
+        refs: list[str] = []
+        for match in _DIFC_CASE_ID_RE.finditer(query or ""):
+            prefix = match.group(1).upper()
+            num = int(match.group(2))
+            year = match.group(3)
+            ref = f"{prefix} {num:03d}/{year}"
+            if ref not in refs:
+                refs.append(ref)
+        return refs
+
+    @staticmethod
+    def _is_issue_date_compare_query(query_lower: str) -> bool:
+        return (
+            "date of issue" in query_lower
+            or "issue date" in query_lower
+            or "issued first" in query_lower
+            or "issued earlier" in query_lower
+            or ("issued" in query_lower and "earlier" in query_lower)
+        )
+
+    @staticmethod
+    def _is_monetary_claim_compare_query(query_lower: str) -> bool:
+        return (
+            "higher monetary claim" in query_lower
+            or ("higher" in query_lower and "claim" in query_lower)
+            or ("higher" in query_lower and "monetary amount" in query_lower)
+            or ("higher" in query_lower and "amount" in query_lower and "claim" in query_lower)
+        )
+
+    @classmethod
+    def _case_patterns(cls, ref: str) -> list[re.Pattern[str]]:
+        match = re.match(r"^(CFI|CA|SCT|ENF|DEC|TCD|ARB)\s+0*(\d{1,4})/(\d{4})$", ref.strip(), re.IGNORECASE)
+        if match is None:
+            return []
+        prefix = match.group(1).upper()
+        num = int(match.group(2))
+        year = match.group(3)
+        return [
+            re.compile(rf"\b{prefix}\s*0*{num}\s*/\s*{year}\b", re.IGNORECASE),
+            re.compile(rf"\b{prefix}\s*0*{num}\b", re.IGNORECASE),
+        ]
+
+    @classmethod
+    def _relevant_case_chunks(cls, *, ref: str, chunks: Sequence[RankedChunk]) -> list[RankedChunk]:
+        patterns = cls._case_patterns(ref)
+        relevant: list[RankedChunk] = []
+        for chunk in chunks:
+            hay_title = chunk.doc_title or ""
+            hay_text = chunk.text or ""
+            if any(pattern.search(hay_title) or pattern.search(hay_text) for pattern in patterns):
+                relevant.append(chunk)
+        if not relevant:
+            return list(chunks[:4])
+        relevant.sort(
+            key=lambda chunk: (
+                cls._page_num(chunk.section_path),
+                -float(chunk.rerank_score),
+                -float(chunk.retrieval_score),
+            )
+        )
+        return relevant[:8]
+
+    @staticmethod
+    def _page_num(section_path: str | None) -> int:
+        match = re.search(r"page:(\d+)", section_path or "", flags=re.IGNORECASE)
+        if match is None:
+            return 10_000
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return 10_000
+
+    def _extract_best_issue_date(self, chunks: list[RankedChunk]) -> tuple[datetime | None, str]:
+        best: tuple[int, int, datetime, str] | None = None  # (score, -pos, parsed, chunk_id)
+        for chunk in chunks:
+            text = (chunk.text or "").strip()
+            if not text:
+                continue
+            for match in (
+                list(_ISO_DATE_RE.finditer(text))
+                + list(_SLASH_DATE_RE.finditer(text))
+                + list(_TEXTUAL_DATE_RE.finditer(text))
+                + list(_TEXTUAL_MONTH_FIRST_DATE_RE.finditer(text))
+            ):
+                raw = match.group(0)
+                parsed = self._parse_date_value(raw)
+                if parsed is None:
+                    continue
+                window = text[max(0, match.start() - 120) : min(len(text), match.end() + 120)].lower()
+                score = 0
+                if "date of issue" in window:
+                    score += 8
+                if "issued on" in window or "date issued" in window:
+                    score += 4
+                if "decision date" in window or "judgment" in window or "judgement" in window:
+                    score -= 4
+                if "hearing date" in window or "hearing" in window:
+                    score -= 2
+                if self._page_num(chunk.section_path) == 1:
+                    score += 2
+                candidate = (score, -match.start(), parsed, chunk.chunk_id)
+                if best is None or candidate > best:
+                    best = candidate
+        if best is None or best[0] <= 0:
+            return (None, "")
+        return (best[2], best[3])
 
     def _extract_best_decision_date(self, chunks: list[RankedChunk]) -> tuple[datetime | None, str]:
         # Try to find a date close to "decision"/"judgment" cues.

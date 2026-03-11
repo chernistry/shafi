@@ -2338,6 +2338,136 @@ async def test_retrieve_multi_ref_boolean_judge_compare_keeps_judge_title_pages(
     assert {"ca:page1", "arb:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
 
 
+@pytest.mark.asyncio
+async def test_retrieve_multi_ref_boolean_presided_over_both_keeps_judge_title_pages(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retriever = MagicMock()
+    retriever.retrieve = AsyncMock(
+        side_effect=[
+            [
+                _make_retrieved_chunk(
+                    chunk_id="arb:page5",
+                    doc_id="arb-034",
+                    doc_title="ARB 034/2025 Example v Example",
+                    section_path="page:5",
+                    text="Later procedural page without judge title markers.",
+                    score=0.97,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="arb:page1",
+                    doc_id="arb-034",
+                    doc_title="ARB 034/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
+                    score=0.82,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="cfi:page1",
+                    doc_id="cfi-067",
+                    doc_title="CFI 067/2025 Example v Example",
+                    section_path="page:1",
+                    text="ORDER WITH REASONS OF H.E. JUSTICE MICHAEL BLACK KC",
+                    score=0.81,
+                ),
+            ],
+        ]
+    )
+
+    builder = RAGPipelineBuilder(
+        retriever=retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="judges-presided-both")
+
+    result = await builder._retrieve(
+        {
+            "query": "Is there a judge who presided over both case ARB 034/2025 and case CFI 067/2025?",
+            "collector": collector,
+            "answer_type": "boolean",
+            "doc_refs": ["ARB 034/2025", "CFI 067/2025"],
+        }
+    )
+
+    assert retriever.retrieve.await_count == 2
+    assert "arb:page1" in result["must_include_chunk_ids"]
+    assert "cfi:page1" in result["must_include_chunk_ids"]
+    assert {"arb:page1", "cfi:page1"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
+
+
+@pytest.mark.asyncio
+async def test_retrieve_multi_ref_name_issue_date_keeps_issue_pages(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retriever = MagicMock()
+    retriever.retrieve = AsyncMock(
+        side_effect=[
+            [
+                _make_retrieved_chunk(
+                    chunk_id="sct169:page5",
+                    doc_id="sct-169",
+                    doc_title="SCT 169/2025 Obasi v Oreana",
+                    section_path="page:5",
+                    text="Later procedural page without issue-date field.",
+                    score=0.97,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="sct169:page2",
+                    doc_id="sct-169",
+                    doc_title="SCT 169/2025 Obasi v Oreana",
+                    section_path="page:2",
+                    text="Issued by: Delvin Sumo. Date of Issue: 24 December 2025.",
+                    score=0.81,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="sct295:page7",
+                    doc_id="sct-295",
+                    doc_title="SCT 295/2025 Olexa v Odon",
+                    section_path="page:7",
+                    text="Later page mentioning the case title only.",
+                    score=0.96,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="sct295:page2",
+                    doc_id="sct-295",
+                    doc_title="SCT 295/2025 Olexa v Odon",
+                    section_path="page:2",
+                    text="Issued by: Delvin Sumo. Date of Issue: 10 December 2025.",
+                    score=0.8,
+                ),
+            ],
+        ]
+    )
+
+    builder = RAGPipelineBuilder(
+        retriever=retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="issue-date-pair")
+
+    result = await builder._retrieve(
+        {
+            "query": "Which case has an earlier Date of Issue: SCT 169/2025 or SCT 295/2025?",
+            "collector": collector,
+            "answer_type": "name",
+            "doc_refs": ["SCT 169/2025", "SCT 295/2025"],
+        }
+    )
+
+    assert retriever.retrieve.await_count == 2
+    assert "sct169:page2" in result["must_include_chunk_ids"]
+    assert "sct295:page2" in result["must_include_chunk_ids"]
+    assert {"sct169:page2", "sct295:page2"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
+
+
 def test_ensure_named_commencement_context_keeps_title_and_commencement_chunks(mock_settings):
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 

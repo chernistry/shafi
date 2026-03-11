@@ -276,3 +276,40 @@ def test_strict_answerer_answers_no_for_employing_child_under_sixteen() -> None:
     assert result is not None
     assert result.answer == "No"
     assert result.cited_chunk_ids == ["employment:article13"]
+
+
+def test_strict_answerer_handles_presided_over_both_judge_compare_phrase() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        RankedChunk(
+            chunk_id="arb:page1",
+            doc_id="arb-034",
+            doc_title="ARB 034/2025 Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+        ),
+        RankedChunk(
+            chunk_id="cfi:page1",
+            doc_id="cfi-067",
+            doc_title="CFI 067/2025 Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="ORDER WITH REASONS OF H.E. JUSTICE MICHAEL BLACK KC.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+        ),
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query="Is there a judge who presided over both case ARB 034/2025 and case CFI 067/2025?",
+        context_chunks=chunks,
+        max_chunks=4,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["arb:page1", "cfi:page1"]

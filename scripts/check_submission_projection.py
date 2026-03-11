@@ -68,6 +68,19 @@ def strip_inline_citations(text: str) -> str:
     return re.sub(r"\s*\(cite:[^)]+\)", "", text)
 
 
+def _classify_free_text_fragment(projected_answer: str) -> str | None:
+    text = projected_answer.strip()
+    if not text:
+        return "empty_fragment"
+    if text.endswith("..."):
+        return "ellipsis_truncated_tail"
+    if re.search(r"(?:^|[; ])\d+\.$", text):
+        return "dangling_list_marker"
+    if text.endswith("No.") or text.endswith("No") or text.endswith(":"):
+        return "heading_like_fragment"
+    return None
+
+
 def _coerce_cases(eval_obj: object) -> list[dict[str, object]]:
     if isinstance(eval_obj, dict):
         cases_obj = eval_obj.get("cases")
@@ -164,6 +177,7 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
     free_text_sentence_loss_cases = 0
     free_text_hit_limit_cases = 0
     free_text_unanswerable_projection_cases = 0
+    free_text_fragment_buckets: dict[str, int] = {}
 
     for case in cases:
         answer_type = str(case.get("answer_type") or "free_text").strip().lower() or "free_text"
@@ -217,6 +231,19 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
                     detail=answer_detail,
                 )
             )
+        if answer_type == "free_text":
+            fragment_source = projected_answer if isinstance(projected_answer, str) else (str(raw_answer) if raw_answer is not None else "")
+            fragment_issue = _classify_free_text_fragment(fragment_source) if fragment_source else None
+            if fragment_issue is not None:
+                free_text_fragment_buckets[fragment_issue] = free_text_fragment_buckets.get(fragment_issue, 0) + 1
+                issues.append(
+                    ProjectionIssue(
+                        question_id=str(case.get("question_id") or case.get("case_id") or ""),
+                        answer_type=answer_type,
+                        issue="artifact_fragment",
+                        detail=fragment_issue,
+                    )
+                )
 
         pages_ok, page_detail = _is_page_list_compliant(projected_pages, answer=projected_answer, answer_type=answer_type)
         if not pages_ok:
@@ -291,6 +318,12 @@ def _build_report(eval_path: Path, cases: list[dict[str, object]]) -> str:
                 f"- Free-text cases projected to unanswerable text: `{free_text_unanswerable_projection_cases}`",
             ]
         )
+    lines.extend(["", "## Free-Text Artifact Fragments", ""])
+    if free_text_fragment_buckets:
+        for issue_name in sorted(free_text_fragment_buckets):
+            lines.append(f"- `{issue_name}`: `{free_text_fragment_buckets[issue_name]}`")
+    else:
+        lines.append("- None")
 
     lines.extend(["", "## Issues", ""])
     if not issues:
