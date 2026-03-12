@@ -294,3 +294,78 @@ def test_build_counterfactual_candidate_can_limit_page_projection_to_allowlist(t
     report = json.loads(out_report.read_text(encoding="utf-8"))
     assert report["answer_changed_count_vs_answer_source"] == 0
     assert report["page_projection_changed_count_vs_answer_source"] == 1
+
+
+def test_build_counterfactual_candidate_can_swap_answer_without_page_drift(tmp_path: Path) -> None:
+    answer_submission = tmp_path / "answer_submission.json"
+    answer_raw = tmp_path / "answer_raw.json"
+    answer_preflight = tmp_path / "answer_preflight.json"
+    page_submission = tmp_path / "page_submission.json"
+    page_raw = tmp_path / "page_raw.json"
+    page_preflight = tmp_path / "page_preflight.json"
+    out_submission = tmp_path / "out_submission.json"
+    out_raw = tmp_path / "out_raw.json"
+    out_preflight = tmp_path / "out_preflight.json"
+    out_report = tmp_path / "out_report.json"
+
+    answer_submission.write_text(
+        json.dumps({"architecture_summary": {}, "answers": [_submission_record(qid="q1", answer="A", page_id="doca_1")]}),
+        encoding="utf-8",
+    )
+    answer_raw.write_text(json.dumps([_raw_record(qid="q1", answer_text="A", used_page_id="doca_1", context_page_id="doca_1")]), encoding="utf-8")
+    answer_preflight.write_text(json.dumps(_preflight(p95=1)), encoding="utf-8")
+    page_submission.write_text(
+        json.dumps({"architecture_summary": {}, "answers": [_submission_record(qid="q1", answer="B", page_id="docb_2", model_name="candidate-model")]}),
+        encoding="utf-8",
+    )
+    page_raw.write_text(json.dumps([_raw_record(qid="q1", answer_text="B", used_page_id="docb_2", context_page_id="docb_2")]), encoding="utf-8")
+    page_preflight.write_text(json.dumps(_preflight(p95=2)), encoding="utf-8")
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/build_counterfactual_candidate.py",
+            "--answer-source-submission",
+            str(answer_submission),
+            "--answer-source-raw-results",
+            str(answer_raw),
+            "--answer-source-preflight",
+            str(answer_preflight),
+            "--page-source-submission",
+            str(page_submission),
+            "--page-source-raw-results",
+            str(page_raw),
+            "--page-source-preflight",
+            str(page_preflight),
+            "--page-source-answer-qid",
+            "q1",
+            "--page-source-page-qid",
+            "__no_real_qids__",
+            "--out-submission",
+            str(out_submission),
+            "--out-raw-results",
+            str(out_raw),
+            "--out-preflight",
+            str(out_preflight),
+            "--out-report",
+            str(out_report),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    merged_submission = json.loads(out_submission.read_text(encoding="utf-8"))
+    merged_answer = merged_submission["answers"][0]
+    assert merged_answer["answer"] == "B"
+    assert merged_answer["telemetry"]["retrieval"]["retrieved_chunk_pages"][0]["doc_id"] == "doca"
+
+    merged_raw = json.loads(out_raw.read_text(encoding="utf-8"))[0]
+    assert merged_raw["answer_text"] == "B"
+    assert merged_raw["telemetry"]["used_page_ids"] == ["doca_1"]
+    assert merged_raw["telemetry"]["context_page_ids"] == ["doca_1"]
+
+    report = json.loads(out_report.read_text(encoding="utf-8"))
+    assert report["answer_changed_count_vs_answer_source"] == 1
+    assert report["page_projection_changed_count_vs_answer_source"] == 0

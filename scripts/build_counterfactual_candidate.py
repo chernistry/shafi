@@ -245,7 +245,8 @@ def _merge_records(
         merged_answer_record = cast("JsonDict", _deepcopy_json(chosen_answer_record))
         merged_answer_telemetry = _as_dict(merged_answer_record.get("telemetry"))
         page_telemetry = _as_dict(page_record.get("telemetry"))
-        answer_retrieval = _as_dict(merged_answer_telemetry.get("retrieval"))
+        answer_telemetry = _as_dict(answer_record.get("telemetry"))
+        answer_retrieval = _as_dict(answer_telemetry.get("retrieval"))
         page_retrieval = _as_dict(page_telemetry.get("retrieval"))
         retrieval_source = page_retrieval if use_page_source_pages else answer_retrieval
         merged_answer_telemetry["retrieval"] = _deepcopy_json(retrieval_source)
@@ -255,7 +256,7 @@ def _merge_records(
         merged_raw_record = cast("JsonDict", _deepcopy_json(chosen_answer_raw))
         merged_raw_telemetry = _as_dict(merged_raw_record.get("telemetry"))
         page_raw_telemetry = _as_dict(page_raw.get("telemetry"))
-        answer_raw_telemetry = _as_dict(chosen_answer_raw.get("telemetry"))
+        answer_raw_telemetry = _as_dict(answer_raw.get("telemetry"))
         page_fields = (
             "retrieved_chunk_ids",
             "retrieved_page_ids",
