@@ -500,6 +500,23 @@ def _append_ledger(path: Path, record: ExperimentRecord) -> None:
     path.write_text(json.dumps({"experiments": experiments}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _seed_qids(args: argparse.Namespace) -> list[str]:
+    qids: list[str] = []
+    seen: set[str] = set()
+    raw_values: list[str] = []
+    raw_values.extend(str(qid).strip() for qid in args.seed_qid)
+    seed_qids_file = getattr(args, "seed_qids_file", None)
+    if isinstance(seed_qids_file, Path):
+        raw_values.extend(seed_qids_file.read_text(encoding="utf-8").splitlines())
+    for raw in raw_values:
+        text = str(raw).strip()
+        if not text or text.startswith("#") or text in seen:
+            continue
+        seen.add(text)
+        qids.append(text)
+    return qids
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a bounded experiment gate for branch-vs-baseline RAG artifacts.")
     parser.add_argument("--label", required=True, help="Short label for the candidate experiment.")
@@ -514,6 +531,7 @@ def main() -> None:
     parser.add_argument("--baseline-preflight", type=Path, default=None)
     parser.add_argument("--candidate-preflight", type=Path, default=None)
     parser.add_argument("--seed-qid", action="append", default=[])
+    parser.add_argument("--seed-qids-file", "--seed-qid-file", dest="seed_qids_file", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--ledger-json", type=Path, default=None)
     args = parser.parse_args()
@@ -531,7 +549,7 @@ def main() -> None:
         candidate_scaffold_path=args.candidate_scaffold,
         baseline_raw_results_path=args.baseline_raw_results,
         candidate_raw_results_path=args.candidate_raw_results,
-        seed_qids=[str(qid).strip() for qid in args.seed_qid if str(qid).strip()],
+        seed_qids=_seed_qids(args),
     )
     recommendation, notes = _recommendation(
         baseline_trusted=baseline_trusted,
