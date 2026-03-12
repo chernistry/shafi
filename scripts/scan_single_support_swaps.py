@@ -136,10 +136,6 @@ def _eligible_qids(*, baseline_submission: dict[str, JsonDict], page_submission:
         page_record = page_submission.get(qid)
         if page_record is None:
             continue
-        baseline_answer = baseline_record.get("answer")
-        page_answer = page_record.get("answer")
-        if baseline_answer != page_answer:
-            continue
         baseline_retrieval = cast("JsonDict", cast("JsonDict", baseline_record.get("telemetry", {})).get("retrieval", {}))
         page_retrieval = cast("JsonDict", cast("JsonDict", page_record.get("telemetry", {})).get("retrieval", {}))
         if baseline_retrieval.get("retrieved_chunk_pages") == page_retrieval.get("retrieved_chunk_pages"):
