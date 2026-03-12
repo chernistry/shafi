@@ -285,6 +285,59 @@ def test_anchor_rescue_target_page_skips_generic_page_one_rescue_for_monetary_cl
     assert target is None
 
 
+def test_anchor_rescue_target_page_skips_generic_page_one_rescue_for_issue_date_compare():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    target = HybridRetriever._anchor_rescue_target_page(
+        query="Which case has the earlier Date of Issue: CFI 016/2025 or ENF 269/2023?",
+        extracted_refs=["CFI 016/2025", "ENF 269/2023"],
+    )
+
+    assert target is None
+
+
+def test_metadata_bonus_does_not_page_one_bias_generic_issue_date_compare():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    title_chunk = RetrievedChunk(
+        chunk_id="case-a:title",
+        doc_id="case-a",
+        doc_title="CFI 016/2025 Example",
+        doc_type=DocType.CASE_LAW,
+        section_path="page:1",
+        text="BETWEEN Alpha and Beta",
+        score=0.5,
+        page_number=1,
+        page_type="title_anchor",
+        has_caption_terms=True,
+        doc_refs=["CFI 016/2025"],
+    )
+    later_chunk = RetrievedChunk(
+        chunk_id="case-a:later",
+        doc_id="case-a",
+        doc_title="CFI 016/2025 Example",
+        doc_type=DocType.CASE_LAW,
+        section_path="page:4",
+        text="Date of Issue: 2025-01-23",
+        score=0.49,
+        page_number=4,
+        doc_refs=["CFI 016/2025"],
+    )
+
+    title_bonus = HybridRetriever._metadata_bonus(
+        query="Which case has the earlier Date of Issue: CFI 016/2025 or ENF 269/2023?",
+        chunk=title_chunk,
+        extracted_refs=["CFI 016/2025", "ENF 269/2023"],
+    )
+    later_bonus = HybridRetriever._metadata_bonus(
+        query="Which case has the earlier Date of Issue: CFI 016/2025 or ENF 269/2023?",
+        chunk=later_chunk,
+        extracted_refs=["CFI 016/2025", "ENF 269/2023"],
+    )
+
+    assert title_bonus == later_bonus == 0.25
+
+
 @pytest.mark.asyncio
 async def test_retrieve_rescues_page_one_anchor_for_multi_doc_party_compare(mock_settings, mock_embedder):
     from rag_challenge.core.retriever import HybridRetriever

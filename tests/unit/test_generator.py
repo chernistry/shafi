@@ -1018,6 +1018,35 @@ def test_build_structured_free_text_answer_prefers_first_page_final_ruling(mock_
     )
 
 
+def test_build_structured_free_text_answer_splits_inline_numbered_first_page_ruling(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="cfi010:inline",
+            doc_id="cfi010",
+            doc_title="CFI 010/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="IT IS HEREBY ORDERED THAT: 1. The Application is dismissed. 2. The Claimant shall bear its own costs of the Application.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="Summarize the court's final ruling in case CFI 010/2024, as stated on the first page of the document.",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The Application is dismissed (cite: cfi010:inline). "
+        "The Claimant shall bear its own costs of the Application (cite: cfi010:inline)."
+    )
+
+
 def test_build_structured_free_text_answer_handles_set_aside_application_without_judge_name_noise(mock_settings) -> None:
     from rag_challenge.llm.generator import RAGGenerator
 
@@ -1090,6 +1119,39 @@ def test_build_structured_free_text_answer_handles_it_is_hereby_ordered_query(mo
     assert answer == (
         "The ASI Order is discharged with immediate effect and the Defendant's Set Aside Application is granted "
         "(cite: arb034:0)."
+    )
+
+
+def test_build_structured_free_text_answer_handles_inline_numbered_order_query(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="arb034:inline",
+            doc_id="arb034",
+            doc_title="ARB 034/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text=(
+                "IT IS HEREBY ORDERED THAT: 1. The ASI Order is discharged with immediate effect. "
+                "2. The Defendant's Set Aside Application is granted. "
+                "3. The Claimant shall pay the Defendant its costs of the Set Aside Application on the standard basis."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to the 'IT IS HEREBY ORDERED THAT' section of arbitration case ARB 034/2025, what did the court decide?",
+        chunks=chunks,
+    )
+
+    assert answer == (
+        "The ASI Order is discharged with immediate effect and the Defendant's Set Aside Application is granted "
+        "(cite: arb034:inline)."
     )
 
 

@@ -226,6 +226,7 @@ _ORDER_SECTION_STOP_RE = re.compile(
     re.IGNORECASE,
 )
 _NUMBERED_LINE_RE = re.compile(r"^\s*\d+\.\s*")
+_INLINE_NUMBERED_ITEM_RE = re.compile(r"(?:(?<=^)|(?<=\s))(?=\d+\.\s+)")
 _OUTCOME_CUE_RE = re.compile(
     r"\b(?:dismissed|refused|granted|allowed|discharged|set aside|restored|proceed to trial|stayed|varied|rejected)\b",
     re.IGNORECASE,
@@ -2420,7 +2421,12 @@ class RAGGenerator:
         if not normalized.strip():
             return []
 
-        raw_lines = [re.sub(r"\s+", " ", line).strip() for line in normalized.splitlines()]
+        raw_lines: list[str] = []
+        for line in normalized.splitlines():
+            compact = re.sub(r"\s+", " ", line).strip()
+            if not compact:
+                continue
+            raw_lines.extend(RAGGenerator._split_inline_numbered_items(compact))
         lines = [line for line in raw_lines if line]
 
         ordered_lines: list[str] = []
@@ -2482,6 +2488,16 @@ class RAGGenerator:
             for sentence in sentence_candidates
             if _OUTCOME_CUE_RE.search(sentence) or _COST_CUE_RE.search(sentence)
         ]
+
+    @staticmethod
+    def _split_inline_numbered_items(line: str) -> list[str]:
+        compact = re.sub(r"\s+", " ", (line or "").strip())
+        if not compact:
+            return []
+        if len(re.findall(r"\b\d+\.\s+", compact)) <= 1:
+            return [compact]
+        parts = [part.strip() for part in _INLINE_NUMBERED_ITEM_RE.split(compact) if part.strip()]
+        return parts or [compact]
 
     @staticmethod
     def _clean_case_outcome_clause(clause: str) -> str:

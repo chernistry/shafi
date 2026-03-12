@@ -290,24 +290,7 @@ class HybridRetriever:
             return 2
 
         explicit_anchor = any(term in q for term in ("title page", "cover page", "first page", "header", "caption"))
-        metadata_anchor = any(
-            term in q
-            for term in (
-                "claim number",
-                "claimant",
-                "defendant",
-                "party",
-                "parties",
-                "main party",
-                "judge",
-                "date of issue",
-                "issue date",
-                "appellant",
-                "respondent",
-                "applicant",
-            )
-        )
-        if explicit_anchor or metadata_anchor or cls._is_multi_doc_party_compare_query(query=query):
+        if explicit_anchor:
             return 1
         return None
 
@@ -422,7 +405,7 @@ class HybridRetriever:
                 score += 100
             if chunk.has_caption_terms:
                 score += 40
-            if any(term in q for term in ("header", "caption", "claimant", "defendant", "party", "parties", "main party")):
+            if any(term in q for term in ("header", "caption", "title page", "cover page", "first page")):
                 score += 40
         elif target_page == 2:
             if page_type == "page2_anchor":
@@ -475,22 +458,7 @@ class HybridRetriever:
             bonus += min(0.75, matched_refs * 0.25)
 
         wants_page_two = "page 2" in q or "second page" in q
-        wants_title_anchor = any(term in q for term in ("title page", "cover page", "first page"))
-        wants_metadata_anchor = any(
-            term in q
-            for term in (
-                "claim number",
-                "party",
-                "parties",
-                "judge",
-                "date of issue",
-                "issue date",
-                "applicant",
-                "respondent",
-                "appellant",
-                "claimant",
-            )
-        )
+        wants_title_anchor = any(term in q for term in ("title page", "cover page", "first page", "header", "caption"))
         wants_monetary_anchor = any(
             term in q
             for term in (
@@ -520,13 +488,6 @@ class HybridRetriever:
         if wants_title_anchor and page_type in {"title_anchor", "caption_anchor"}:
             bonus += 0.65
 
-        if wants_metadata_anchor and page_number == 1:
-            bonus += 0.2
-        if wants_metadata_anchor and page_type in {"title_anchor", "caption_anchor"}:
-            bonus += 0.55
-        if wants_metadata_anchor and chunk.has_caption_terms:
-            bonus += 0.2
-
         if wants_heading_anchor:
             heading_hits = 0
             if "article " in q and ("article " in heading_text or any(ref.startswith("article ") for ref in article_refs)):
@@ -554,7 +515,7 @@ class HybridRetriever:
             elif page_type in {"title_anchor", "caption_anchor"} or page_number == 1:
                 bonus -= 0.2
 
-        if len(extracted_refs) >= 2 and wants_metadata_anchor and page_type in {"title_anchor", "caption_anchor", "page2_anchor"}:
+        if len(extracted_refs) >= 2 and wants_title_anchor and page_type in {"title_anchor", "caption_anchor", "page2_anchor"}:
             bonus += 0.15
 
         return bonus
