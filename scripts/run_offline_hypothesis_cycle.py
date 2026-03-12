@@ -24,6 +24,7 @@ def _write_cycle_summary(
     candidate_preflight: Path,
     candidate_raw_results: Path,
     gate_report: Path,
+    answer_drift_report: Path | None,
     anchor_slice_report: Path | None,
     scoring_report: Path | None,
     supervisor_report: Path,
@@ -35,6 +36,7 @@ def _write_cycle_summary(
         "candidate_preflight": str(candidate_preflight),
         "candidate_raw_results": str(candidate_raw_results),
         "gate_report": str(gate_report),
+        "answer_drift_report": str(answer_drift_report) if answer_drift_report is not None else None,
         "anchor_slice_report": str(anchor_slice_report) if anchor_slice_report is not None else None,
         "scoring_report": str(scoring_report) if scoring_report is not None else None,
         "supervisor_report": str(supervisor_report),
@@ -65,6 +67,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--leaderboard", required=True)
     parser.add_argument("--team", required=True)
     parser.add_argument("--exactness-report", required=True)
+    parser.add_argument("--equivalence-json", default=None)
+    parser.add_argument("--required-safe-baseline-substring", action="append", default=[])
     parser.add_argument("--history-md", default=".sdd/researches/getting_to_1st_001.md")
     parser.add_argument("--backlog-dir", required=True)
     parser.add_argument("--ledger-json", required=True)
@@ -150,6 +154,28 @@ def main() -> int:
     for qid in seed_qids:
         gate_cmd.extend(["--seed-qid", qid])
     _run(gate_cmd, cwd=root, env=env)
+
+    answer_drift_report = research_dir / f"answer_drift_{args.artifact_suffix}_vs_{args.baseline_label}.md"
+    answer_drift_json = research_dir / f"answer_drift_{args.artifact_suffix}_vs_{args.baseline_label}.json"
+    answer_drift_cmd = [
+        sys.executable,
+        "scripts/analyze_answer_drift.py",
+        "--baseline-submission",
+        args.baseline_submission,
+        "--candidate-submission",
+        str(candidate_submission),
+        "--scaffold",
+        str(candidate_scaffold),
+        "--baseline-label",
+        args.baseline_label,
+        "--label",
+        args.artifact_suffix,
+        "--out",
+        str(answer_drift_report),
+        "--json-out",
+        str(answer_drift_json),
+    ]
+    _run(answer_drift_cmd, cwd=root, env=env)
 
     anchor_slice_report = research_dir / f"anchor_slice_{args.artifact_suffix}_vs_{args.baseline_label}.md"
     anchor_slice_json = research_dir / f"anchor_slice_{args.artifact_suffix}_vs_{args.baseline_label}.json"
@@ -240,6 +266,12 @@ def main() -> int:
         "--runs-json",
         str(supervisor_runs),
     ]
+    if args.equivalence_json:
+        supervisor_cmd.extend(["--equivalence-json", str(args.equivalence_json)])
+    for required_baseline in args.required_safe_baseline_substring:
+        text = str(required_baseline).strip()
+        if text:
+            supervisor_cmd.extend(["--required-safe-baseline-substring", text])
     _run(supervisor_cmd, cwd=root, env=env)
 
     progress_report = research_dir / "competition_progress_2026-03-12.md"
@@ -271,6 +303,7 @@ def main() -> int:
         candidate_preflight=candidate_preflight,
         candidate_raw_results=candidate_raw_results,
         gate_report=gate_report,
+        answer_drift_report=answer_drift_report,
         anchor_slice_report=anchor_slice_report,
         scoring_report=scoring_report,
         supervisor_report=supervisor_report,

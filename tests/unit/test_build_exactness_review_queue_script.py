@@ -142,3 +142,74 @@ def test_build_exactness_review_queue_script_downranks_reviewed_semantic_correct
 
     report = out.read_text(encoding="utf-8")
     assert report.index("## q-unresolved") < report.index("## q-reviewed")
+
+
+def test_build_exactness_review_queue_script_flags_stale_dotted_suffix_mismatch(tmp_path: Path) -> None:
+    scaffold = tmp_path / "scaffold.json"
+    out = tmp_path / "queue.md"
+    scaffold.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "question_id": "q-dotted",
+                        "answer_type": "names",
+                        "route_family": "strict",
+                        "question": "Who are the claimants in TCD 001/2024?",
+                        "current_answer": ["Architeriors Interior Design (LLC)"],
+                        "current_answer_text": "[\"Architeriors Interior Design (LLC)\"]",
+                        "expected_answer": ["Architeriors Interior Design (LLC)"],
+                        "manual_verdict": "correct",
+                        "failure_class": "",
+                        "manual_exactness_labels": [],
+                        "exactness_review_flags": [],
+                        "support_shape_flags": [],
+                        "exact_span_candidates": [
+                            {
+                                "doc_title": "TCD 001/2024 Architeriors Interior Design (L.L.C) v Emirates",
+                                "page": 1,
+                                "text": "ARCHITERIORS INTERIOR DESIGN (L.L.C)",
+                            }
+                        ],
+                    },
+                    {
+                        "question_id": "q-generic",
+                        "answer_type": "name",
+                        "route_family": "strict",
+                        "question": "Who is the respondent?",
+                        "current_answer_text": "Alpha",
+                        "expected_answer": "Alpha",
+                        "manual_verdict": "correct",
+                        "failure_class": "",
+                        "manual_exactness_labels": ["semantic_correct"],
+                        "exactness_review_flags": [],
+                        "support_shape_flags": [],
+                        "exact_span_candidates": [],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/build_exactness_review_queue.py",
+            "--scaffold",
+            str(scaffold),
+            "--limit",
+            "10",
+            "--out",
+            str(out),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    report = out.read_text(encoding="utf-8")
+    assert "## q-dotted" in report
+    assert "dotted_suffix_span_mismatch" in report
+    assert "## q-generic" not in report

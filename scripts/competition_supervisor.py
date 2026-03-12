@@ -79,6 +79,12 @@ def _load_exactness_report(path: Path | None) -> dict[str, object] | None:
     return _load_json(path)
 
 
+def _load_equivalence_report(path: Path | None) -> dict[str, object] | None:
+    if path is None or not path.exists():
+        return None
+    return _load_json(path)
+
+
 def _load_scoring_summary(path: Path | None) -> dict[str, object] | None:
     if path is None or not path.exists():
         return None
@@ -111,11 +117,34 @@ def _open_tickets(backlog_dir: Path, *, min_ticket: int) -> list[str]:
     return tickets
 
 
+def _safe_exactness_baselines(
+    equivalence_report: dict[str, object] | None,
+    *,
+    required_safe_baseline_substrings: list[str],
+) -> tuple[list[str], list[str]]:
+    if equivalence_report is None:
+        return [], []
+    safe_obj = equivalence_report.get("safe_baselines")
+    if not isinstance(safe_obj, list):
+        return [], []
+    safe_baselines = [str(item).strip() for item in safe_obj if str(item).strip()]
+    if not required_safe_baseline_substrings:
+        return safe_baselines, safe_baselines
+    matched = [
+        baseline
+        for baseline in safe_baselines
+        if any(required in baseline for required in required_safe_baseline_substrings)
+    ]
+    return safe_baselines, matched
+
+
 def _decide(
     *,
     subject_summary: dict[str, object],
     latest_experiment: dict[str, object] | None,
     exactness_report: dict[str, object] | None,
+    equivalence_report: dict[str, object] | None,
+    required_safe_baseline_substrings: list[str],
     ticket_names: list[str],
     warmup_budget: int,
 ) -> SupervisorDecision:
@@ -144,13 +173,25 @@ def _decide(
         page_changed = _as_int(exactness_report.get("page_changed_count"))
         page_metrics_identical = _exactness_page_metrics_identical(exactness_report)
         if answer_changed > 0 and page_changed == 0 and page_metrics_identical:
-            rationale.append("audit-safe exactness-only fallback artifact exists")
-            return SupervisorDecision(
-                action="exactness_only_candidate",
-                rationale=rationale,
-                submissions_remaining=submissions_remaining,
-                next_tickets=ticket_names[:5],
+            safe_baselines, matched_baselines = _safe_exactness_baselines(
+                equivalence_report,
+                required_safe_baseline_substrings=required_safe_baseline_substrings,
             )
+            if equivalence_report is None:
+                rationale.append("exactness-only fallback exists but lineage proof is missing")
+            elif not safe_baselines:
+                rationale.append("exactness-only fallback exists but has no lineage-safe baseline")
+            elif required_safe_baseline_substrings and not matched_baselines:
+                rationale.append("exactness-only fallback exists but is not lineage-safe for the required champion baseline")
+            else:
+                baseline_note = ", ".join(matched_baselines or safe_baselines)
+                rationale.append(f"audit-safe exactness-only fallback exists for baseline {baseline_note}")
+                return SupervisorDecision(
+                    action="exactness_only_candidate",
+                    rationale=rationale,
+                    submissions_remaining=submissions_remaining,
+                    next_tickets=ticket_names[:5],
+                )
 
     rationale.append("no branch is submit-safe enough yet")
     return SupervisorDecision(
@@ -259,6 +300,8 @@ def main() -> None:
     parser.add_argument("--backlog-dir", type=Path, required=True)
     parser.add_argument("--ledger-json", type=Path, default=None)
     parser.add_argument("--exactness-report", type=Path, default=None)
+    parser.add_argument("--equivalence-json", type=Path, default=None)
+    parser.add_argument("--required-safe-baseline-substring", action="append", default=[])
     parser.add_argument("--scoring-json", type=Path, default=None)
     parser.add_argument("--min-ticket", type=int, default=31)
     parser.add_argument("--warmup-budget", type=int, default=10)
@@ -270,12 +313,17 @@ def main() -> None:
     subject_summary = build_leaderboard_summary(rows, team_name=args.team)
     latest_experiment = _load_latest_experiment(args.ledger_json)
     exactness_report = _load_exactness_report(args.exactness_report)
+    equivalence_report = _load_equivalence_report(args.equivalence_json)
     scoring_summary = _load_scoring_summary(args.scoring_json)
     ticket_names = _open_tickets(args.backlog_dir, min_ticket=args.min_ticket)
     decision = _decide(
         subject_summary=subject_summary,
         latest_experiment=latest_experiment,
         exactness_report=exactness_report,
+        equivalence_report=equivalence_report,
+        required_safe_baseline_substrings=[
+            str(item).strip() for item in args.required_safe_baseline_substring if str(item).strip()
+        ],
         ticket_names=ticket_names,
         warmup_budget=args.warmup_budget,
     )
