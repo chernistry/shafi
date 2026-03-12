@@ -789,6 +789,129 @@ def test_localize_free_text_support_keeps_multiple_pages_for_composite_item() ->
     assert set(localized) == {"data:0:0:title", "data:1:0:update"}
 
 
+def test_apply_support_shape_policy_keeps_both_sides_for_strict_case_compare() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="case-a:title",
+            doc_id="cfi-010-2024",
+            doc_title="CFI 010/2024 Alpha v Beta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="CFI 010/2024 Alpha v Beta. Date of Issue: 12 January 2024.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="case-b:title",
+            doc_id="cfi-016-2025",
+            doc_title="CFI 016/2025 Gamma v Delta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="CFI 016/2025 Gamma v Delta. Date of Issue: 4 February 2025.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="name",
+        answer="CFI 010/2024",
+        query="Which case has an earlier Date of Issue: CFI 010/2024 or CFI 016/2025?",
+        context_chunks=context_chunks,
+        cited_ids=["case-a:title"],
+        support_ids=[],
+    )
+
+    assert set(shaped_ids) == {"case-a:title", "case-b:title"}
+    assert flags == []
+
+
+def test_apply_support_shape_policy_keeps_title_page_for_named_metadata_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="found:title",
+            doc_id="foundations-law",
+            doc_title="Foundations Law 2018",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text='This Law may be cited as the "Foundations Law 2018".',
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="found:admin",
+            doc_id="foundations-law",
+            doc_title="Foundations Law 2018",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text="The Registrar shall administer this Law and any Regulations made under it.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="free_text",
+        answer="Registrar administers Foundations Law 2018 and any Regulations made under it.",
+        query="Who administers the Foundations Law 2018 and any Regulations made under it?",
+        context_chunks=context_chunks,
+        cited_ids=["found:admin"],
+        support_ids=["found:admin"],
+    )
+
+    assert set(shaped_ids) == {"found:title", "found:admin"}
+    assert flags == []
+
+
+def test_apply_support_shape_policy_keeps_outcome_and_cost_pages() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="appeal:outcome",
+            doc_id="ca-009-2024",
+            doc_title="CA 009/2024",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:5",
+            text="The Permission to Appeal Application is refused.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="appeal:costs",
+            doc_id="ca-009-2024",
+            doc_title="CA 009/2024",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:6",
+            text="The Appellant was awarded costs in the sum of USD 40,000.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="free_text",
+        answer="The Permission to Appeal Application is refused. The Appellant was awarded costs in the sum of USD 40,000.",
+        query="How did the Court of Appeal rule, and what costs were awarded?",
+        context_chunks=context_chunks,
+        cited_ids=["appeal:outcome"],
+        support_ids=["appeal:outcome"],
+    )
+
+    assert set(shaped_ids) == {"appeal:outcome", "appeal:costs"}
+    assert flags == []
+
+
 def test_expand_page_spanning_support_chunk_ids_includes_adjacent_continuation_page() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 

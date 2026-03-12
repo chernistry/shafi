@@ -4155,8 +4155,26 @@ class RAGPipelineBuilder:
                             "answer_type": answer_type,
                         },
                     )
+            shaped_used_ids, support_shape_flags = self._apply_support_shape_policy(
+                answer_type=answer_type,
+                answer=answer,
+                query=state["query"],
+                context_chunks=context_chunks,
+                cited_ids=cited_ids,
+                support_ids=[],
+            )
+            if support_shape_flags:
+                logger.warning(
+                    "support_shape_flags_detected",
+                    extra={
+                        "request_id": state.get("request_id"),
+                        "question_id": state.get("question_id"),
+                        "answer_type": answer_type,
+                        "flags": support_shape_flags,
+                    },
+                )
             collector.set_cited_ids(cited_ids)
-            collector.set_used_ids(used_ids)
+            collector.set_used_ids(shaped_used_ids if shaped_used_ids else used_ids)
             citations: list[Citation] = []
             cited_ids = list(cited_ids)
         else:
@@ -4363,13 +4381,25 @@ class RAGPipelineBuilder:
                     context_chunks=context_chunks,
                 )
             collector.set_cited_ids(cited_ids)
-            merged_used_ids = list(dict.fromkeys([*cited_ids, *support_ids]))
-            collector.set_used_ids(
-                self._expand_page_spanning_support_chunk_ids(
-                    chunk_ids=merged_used_ids,
-                    context_chunks=context_chunks,
-                )
+            shaped_used_ids, support_shape_flags = self._apply_support_shape_policy(
+                answer_type=answer_type,
+                answer=answer,
+                query=state["query"],
+                context_chunks=context_chunks,
+                cited_ids=cited_ids,
+                support_ids=support_ids,
             )
+            if support_shape_flags:
+                logger.warning(
+                    "support_shape_flags_detected",
+                    extra={
+                        "request_id": state.get("request_id"),
+                        "question_id": state.get("question_id"),
+                        "answer_type": answer_type,
+                        "flags": support_shape_flags,
+                    },
+                )
+            collector.set_used_ids(shaped_used_ids)
             if answer_type == "free_text" and streamed and answer.strip():
                 writer({"type": "answer_final", "text": answer})
 
@@ -5868,6 +5898,168 @@ class RAGPipelineBuilder:
         if best_score <= 0:
             return ""
         return best_chunk_id
+
+    @classmethod
+    def _doc_ids_for_chunk_ids(
+        cls,
+        *,
+        chunk_ids: Sequence[str],
+        context_chunks: Sequence[RankedChunk],
+    ) -> set[str]:
+        context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+        doc_ids: set[str] = set()
+        for raw_chunk_id in chunk_ids:
+            chunk = context_by_id.get(str(raw_chunk_id).strip())
+            if chunk is None:
+                continue
+            doc_id = str(getattr(chunk, "doc_id", "") or chunk.chunk_id).strip()
+            if doc_id:
+                doc_ids.add(doc_id)
+        return doc_ids
+
+    @classmethod
+    def _is_named_metadata_support_query(cls, query: str) -> bool:
+        q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if not q or _is_broad_enumeration_query(query):
+            return False
+        ref_count = len(_extract_question_title_refs(query)) + len(_LAW_NO_REF_RE.findall(query or ""))
+        if ref_count < 1:
+            return False
+        return any(
+            term in q
+            for term in (
+                "title",
+                "citation title",
+                "updated",
+                "consolidated version",
+                "published",
+                "enact",
+                "effective date",
+                "commencement",
+                "administ",
+                "made by",
+                "who made",
+            )
+        )
+
+    @classmethod
+    def _apply_support_shape_policy(
+        cls,
+        *,
+        answer_type: str,
+        answer: str,
+        query: str,
+        context_chunks: Sequence[RankedChunk],
+        cited_ids: Sequence[str],
+        support_ids: Sequence[str],
+    ) -> tuple[list[str], list[str]]:
+        ordered_ids = list(
+            dict.fromkeys(
+                str(chunk_id).strip()
+                for chunk_id in [*cited_ids, *support_ids]
+                if str(chunk_id).strip()
+            )
+        )
+        if not ordered_ids or not context_chunks:
+            return ordered_ids, []
+
+        kind = answer_type.strip().lower()
+        q_lower = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        extras: list[str] = []
+        seen_ids = set(ordered_ids)
+        flags: list[str] = []
+
+        def _push(chunk_id: str) -> None:
+            normalized = str(chunk_id).strip()
+            if not normalized or normalized in seen_ids:
+                return
+            seen_ids.add(normalized)
+            extras.append(normalized)
+
+        compare_refs = cls._paired_support_question_refs(query)
+        if len(compare_refs) < 2:
+            case_refs: list[str] = []
+            seen_case_refs: set[str] = set()
+            for prefix, number, year in _DIFC_CASE_ID_RE.findall(query or ""):
+                ref = f"{prefix.upper()} {int(number):03d}/{year}"
+                if ref not in seen_case_refs:
+                    seen_case_refs.add(ref)
+                    case_refs.append(ref)
+            if len(case_refs) >= 2:
+                compare_refs = case_refs
+        compare_shape = len(compare_refs) >= 2 and kind in {"boolean", "name", "number", "date"} and (
+            kind == "boolean"
+            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+            or "same year" in q_lower
+            or "administ" in q_lower
+            or "same party" in q_lower
+            or "appeared in both" in q_lower
+            or ("judge" in q_lower and "both" in q_lower)
+        )
+        compare_doc_ids: set[str] = set()
+        if compare_shape:
+            if kind == "boolean":
+                for chunk_id in cls._localize_boolean_compare_support_chunk_ids(
+                    query=query,
+                    context_chunks=context_chunks,
+                ):
+                    _push(chunk_id)
+            for ref in compare_refs[:2]:
+                title_chunk_id = cls._best_title_support_chunk_id(title=ref, context_chunks=context_chunks)
+                if not title_chunk_id:
+                    continue
+                _push(title_chunk_id)
+                compare_doc_ids.update(
+                    cls._doc_ids_for_chunk_ids(chunk_ids=[title_chunk_id], context_chunks=context_chunks)
+                )
+
+        metadata_query = cls._is_named_metadata_support_query(query)
+        metadata_doc_ids: set[str] = set()
+        if metadata_query:
+            for ref in cls._support_question_refs(query)[:4]:
+                title_chunk_id = cls._best_title_support_chunk_id(title=ref, context_chunks=context_chunks)
+                if not title_chunk_id:
+                    continue
+                _push(title_chunk_id)
+                metadata_doc_ids.update(
+                    cls._doc_ids_for_chunk_ids(chunk_ids=[title_chunk_id], context_chunks=context_chunks)
+                )
+
+        costs_query = kind == "free_text" and _is_case_outcome_query(query) and (
+            "cost" in q_lower or "final ruling" in q_lower
+        )
+        if costs_query:
+            for fragment in ("no order as to costs", "costs", "cost"):
+                cost_chunk_id = cls._best_support_chunk_id(
+                    answer_type="free_text",
+                    query=query,
+                    fragment=fragment,
+                    context_chunks=context_chunks,
+                    allow_first_chunk_fallback=False,
+                )
+                if cost_chunk_id:
+                    _push(cost_chunk_id)
+
+        shaped_ids = cls._expand_page_spanning_support_chunk_ids(
+            chunk_ids=[*ordered_ids, *extras],
+            context_chunks=context_chunks,
+        )
+
+        shaped_doc_ids = cls._doc_ids_for_chunk_ids(chunk_ids=shaped_ids, context_chunks=context_chunks)
+        if compare_doc_ids and len(shaped_doc_ids.intersection(compare_doc_ids)) < min(2, len(compare_doc_ids)):
+            flags.append("comparison_support_missing_side")
+        if metadata_doc_ids and not shaped_doc_ids.intersection(metadata_doc_ids):
+            flags.append("named_metadata_title_missing")
+        if costs_query:
+            context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+            if not any(
+                re.search(r"\bcosts?\b|\bno order as to costs\b", str(context_by_id[chunk_id].text or ""), re.IGNORECASE)
+                for chunk_id in shaped_ids
+                if chunk_id in context_by_id
+            ):
+                flags.append("outcome_costs_support_missing")
+
+        return shaped_ids, flags
 
     @classmethod
     def _citations_from_chunk_ids(
