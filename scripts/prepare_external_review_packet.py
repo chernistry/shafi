@@ -16,8 +16,6 @@ class PacketFile:
 
 PACKET_FILES: tuple[PacketFile, ...] = (
     PacketFile(PROJECT_ROOT / ".sdd" / "upload" / "00_external_review_prompt_2026-03-12.md", "00_external_review_prompt_2026-03-12.md"),
-    PacketFile(PROJECT_ROOT / ".sdd" / "upload" / "01_current_state_summary_2026-03-12.md", "01_current_state_summary_2026-03-12.md"),
-    PacketFile(PROJECT_ROOT / ".sdd" / "upload" / "02_local_model_and_aux_hypotheses_2026-03-12.md", "02_local_model_and_aux_hypotheses_2026-03-12.md"),
     PacketFile(PROJECT_ROOT / ".sdd" / "archive" / "scraped_challenge_terms.md", "scraped_challenge_terms.md"),
     PacketFile(PROJECT_ROOT / ".sdd" / "researches" / "competition_supervisor_2026-03-12.md", "competition_supervisor_2026-03-12.md"),
     PacketFile(PROJECT_ROOT / ".sdd" / "researches" / "leaderboard_geometry_2026-03-12_18-45.md", "leaderboard_geometry_2026-03-12_18-45.md"),
