@@ -115,6 +115,8 @@ class DocumentParser:
                     section_path=f"page:{idx + 1}",
                     text=page_text,
                     level=0,
+                    page_number=idx + 1,
+                    page_type="page",
                 )
                 for idx, page_text in enumerate(pdf_pages)
                 if page_text.strip()
@@ -401,6 +403,7 @@ class DocumentParser:
                     section_path=" > ".join(heading_path) if heading_path else current_heading,
                     text=section_text,
                     level=current_level,
+                    heading_text=current_heading or None,
                 )
             )
 
@@ -437,5 +440,6 @@ class DocumentParser:
                 section_path="",
                 text=fallback_text,
                 level=0,
+                heading_text=None,
             )
         ]

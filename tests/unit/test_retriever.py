@@ -6,7 +6,7 @@ from httpx import Headers
 from qdrant_client import models
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-from rag_challenge.models import DocType
+from rag_challenge.models import DocType, RetrievedChunk
 
 
 @pytest.fixture
@@ -59,6 +59,7 @@ def mock_store():
         )
         points.append(point)
     store.client.query_points = AsyncMock(return_value=SimpleNamespace(points=points))
+    store.client.scroll = AsyncMock(return_value=([], None))
     return store
 
 
@@ -185,6 +186,243 @@ def test_expand_doc_ref_variants_adds_yearless_title_variants():
 
     assert "Employment Law 2019" in variants
     assert "Employment Law" in variants
+
+
+def test_apply_query_rescoring_prefers_page_two_anchor():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    chunks = [
+        RetrievedChunk(
+            chunk_id="title-page",
+            doc_id="case-1",
+            doc_title="Case 1",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="Introductory title page text.",
+            score=0.7,
+            page_number=1,
+            page_type="title_anchor",
+        ),
+        RetrievedChunk(
+            chunk_id="page-two",
+            doc_id="case-1",
+            doc_title="Case 1",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="Claim No. ENF-316-2023/2",
+            score=0.45,
+            page_number=2,
+            page_type="page2_anchor",
+        ),
+    ]
+
+    rescored = HybridRetriever._apply_query_rescoring(
+        query="According to page 2 of the judgment, from which claim number did the appeal originate?",
+        chunks=chunks,
+        extracted_refs=[],
+    )
+
+    assert [chunk.chunk_id for chunk in rescored] == ["page-two", "title-page"]
+
+
+def test_apply_query_rescoring_prefers_monetary_claim_pages_over_title_anchors():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    chunks = [
+        RetrievedChunk(
+            chunk_id="title-page-a",
+            doc_id="case-a",
+            doc_title="SCT 169/2025 Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="Obasi v Oreana [2025] DIFC SCT 169",
+            score=0.75,
+            page_number=1,
+            page_type="title_anchor",
+            has_caption_terms=True,
+        ),
+        RetrievedChunk(
+            chunk_id="claim-amount-a",
+            doc_id="case-a",
+            doc_title="SCT 169/2025 Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="The claim amount is AED 210,000 and the appeal is refused.",
+            score=0.42,
+            page_number=2,
+            page_type="heading_window",
+            has_order_terms=True,
+        ),
+        RetrievedChunk(
+            chunk_id="claim-amount-b",
+            doc_id="case-b",
+            doc_title="SCT 295/2025 Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:5",
+            text="The financial limit of AED 174,790 is stated in the Claim Form.",
+            score=0.4,
+            page_number=5,
+        ),
+    ]
+
+    rescored = HybridRetriever._apply_query_rescoring(
+        query="Identify the case with the higher monetary claim: SCT 169/2025 or SCT 295/2025?",
+        chunks=chunks,
+        extracted_refs=["SCT 169/2025", "SCT 295/2025"],
+    )
+
+    assert [chunk.chunk_id for chunk in rescored][:2] == ["claim-amount-a", "claim-amount-b"]
+
+
+def test_anchor_rescue_target_page_skips_generic_page_one_rescue_for_monetary_claim_compare():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    target = HybridRetriever._anchor_rescue_target_page(
+        query="Identify the case with the higher monetary claim: SCT 169/2025 or SCT 295/2025?",
+        extracted_refs=["SCT 169/2025", "SCT 295/2025"],
+    )
+
+    assert target is None
+
+
+@pytest.mark.asyncio
+async def test_retrieve_rescues_page_one_anchor_for_multi_doc_party_compare(mock_settings, mock_embedder):
+    from rag_challenge.core.retriever import HybridRetriever
+
+    store = MagicMock()
+    store.collection_name = "legal_chunks"
+    store.client = AsyncMock()
+    store.client.query_points = AsyncMock(
+        return_value=SimpleNamespace(
+            points=[
+                SimpleNamespace(
+                    id="p-late",
+                    score=0.92,
+                    payload={
+                        "chunk_id": "late-page",
+                        "doc_id": "doc-a",
+                        "doc_title": "CA 005/2025 Example",
+                        "doc_type": "case_law",
+                        "section_path": "page:8",
+                        "chunk_text": "Later merits discussion.",
+                        "doc_summary": "Summary",
+                        "page_number": 8,
+                    },
+                ),
+                SimpleNamespace(
+                    id="p-title-b",
+                    score=0.91,
+                    payload={
+                        "chunk_id": "title-b",
+                        "doc_id": "doc-b",
+                        "doc_title": "CFI 067/2025 Example",
+                        "doc_type": "case_law",
+                        "section_path": "page:1",
+                        "chunk_text": "BETWEEN Coinmena Claimant and Foloosi Defendant",
+                        "doc_summary": "Summary",
+                        "page_number": 1,
+                        "page_type": "title_anchor",
+                        "has_caption_terms": True,
+                    },
+                ),
+            ]
+        )
+    )
+    store.client.scroll = AsyncMock(
+        return_value=(
+            [
+                SimpleNamespace(
+                    id="p-title-a",
+                    payload={
+                        "chunk_id": "title-a",
+                        "doc_id": "doc-a",
+                        "doc_title": "CA 005/2025 Example",
+                        "doc_type": "case_law",
+                        "section_path": "page:1",
+                        "chunk_text": "BETWEEN LXT Claimant and SIR Defendant",
+                        "doc_summary": "Summary",
+                        "page_number": 1,
+                        "page_type": "caption_anchor",
+                        "has_caption_terms": True,
+                    },
+                )
+            ],
+            None,
+        )
+    )
+
+    retriever = HybridRetriever(store=store, embedder=mock_embedder)
+    chunks = await retriever.retrieve(
+        "From the title pages of all documents in case CA 005/2025 and case CFI 067/2025, identify whether any individual or company is named as a main party in both cases.",
+        doc_refs=["CA 005/2025", "CFI 067/2025"],
+    )
+
+    chunk_ids = [chunk.chunk_id for chunk in chunks]
+    assert "title-a" in chunk_ids
+    assert chunk_ids.index("title-a") < chunk_ids.index("late-page")
+    store.client.scroll.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_retrieve_rescues_page_two_anchor_when_query_explicitly_requests_page_two(mock_settings, mock_embedder):
+    from rag_challenge.core.retriever import HybridRetriever
+
+    store = MagicMock()
+    store.collection_name = "legal_chunks"
+    store.client = AsyncMock()
+    store.client.query_points = AsyncMock(
+        return_value=SimpleNamespace(
+            points=[
+                SimpleNamespace(
+                    id="p-page-one",
+                    score=0.88,
+                    payload={
+                        "chunk_id": "page-one",
+                        "doc_id": "doc-a",
+                        "doc_title": "CA 009/2024 Example",
+                        "doc_type": "case_law",
+                        "section_path": "page:1",
+                        "chunk_text": "Claim No. ENF 316/2023",
+                        "doc_summary": "Summary",
+                        "page_number": 1,
+                        "page_type": "caption_anchor",
+                        "has_caption_terms": True,
+                    },
+                )
+            ]
+        )
+    )
+    store.client.scroll = AsyncMock(
+        return_value=(
+            [
+                SimpleNamespace(
+                    id="p-page-two",
+                    payload={
+                        "chunk_id": "page-two",
+                        "doc_id": "doc-a",
+                        "doc_title": "CA 009/2024 Example",
+                        "doc_type": "case_law",
+                        "section_path": "page:2",
+                        "chunk_text": "Urgent Application in Claim No. ENF-316-2023/2",
+                        "doc_summary": "Summary",
+                        "page_number": 2,
+                        "page_type": "page2_anchor",
+                        "has_order_terms": True,
+                    },
+                )
+            ],
+            None,
+        )
+    )
+
+    retriever = HybridRetriever(store=store, embedder=mock_embedder)
+    chunks = await retriever.retrieve(
+        "According to page 2 of the judgment, from which claim number did the appeal originate?",
+        doc_refs=["CA 009/2024"],
+    )
+
+    assert [chunk.chunk_id for chunk in chunks][:2] == ["page-two", "page-one"]
+    store.client.scroll.assert_awaited_once()
 
 
 @pytest.mark.asyncio

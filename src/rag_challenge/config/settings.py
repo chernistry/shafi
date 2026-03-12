@@ -276,7 +276,7 @@ class IngestionSettings(BaseSettings):
     sac_summary_max_tokens: int = 150
     sac_summary_min_tokens: int = 80
     upsert_batch_size: int = 200
-    ingest_version: str = "v2"
+    ingest_version: str = "v3_anchor_retrieval"
     sac_concurrency: int = 4
     sac_doc_excerpt_chars: int = 3000
     parser_pdf_text_min_chars: int = 400

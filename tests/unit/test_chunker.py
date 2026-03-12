@@ -179,6 +179,57 @@ def test_count_tokens(mock_chunker_settings):
     assert chunker.count_tokens("hello world") > 0
 
 
+def test_chunker_adds_anchor_microchunks_for_pdf_pages(mock_chunker_settings):
+    from rag_challenge.ingestion.chunker import LegalChunker
+
+    chunker = LegalChunker()
+    sections = [
+        DocumentSection(
+            heading="Page 1",
+            section_path="page:1",
+            text=(
+                "BETWEEN\n"
+                "Architeriors Interior Design (L.L.C)\n"
+                "Applicant\n"
+                "and\n"
+                "Coinmena B.S.C. (C)\n"
+                "Respondent\n\n"
+                "Article 5 Definitions\n"
+                "This Law may be cited as the Operating Law 2018.\n"
+            ),
+            level=0,
+            page_number=1,
+            page_type="page",
+        ),
+        DocumentSection(
+            heading="Page 2",
+            section_path="page:2",
+            text=(
+                "Claim No. ENF-316-2023/2\n"
+                "IT IS HEREBY ORDERED THAT the appeal is dismissed with costs.\n"
+            ),
+            level=0,
+            page_number=2,
+            page_type="page",
+        ),
+    ]
+
+    chunks = chunker.chunk_document(_make_doc("", sections=sections))
+
+    page_types = {chunk.page_type for chunk in chunks if chunk.page_type}
+    assert "title_anchor" in page_types
+    assert "caption_anchor" in page_types
+    assert "page2_anchor" in page_types
+    assert "heading_window" in page_types
+
+    title_anchor = next(chunk for chunk in chunks if chunk.page_type == "title_anchor")
+    page2_anchor = next(chunk for chunk in chunks if chunk.page_type == "page2_anchor")
+    assert title_anchor.page_number == 1
+    assert page2_anchor.page_number == 2
+    assert "Operating Law 2018" in title_anchor.doc_refs
+    assert page2_anchor.has_order_terms is True
+
+
 @pytest.mark.asyncio
 async def test_sac_generate_doc_summary_and_augment(mock_sac_settings):
     from rag_challenge.ingestion.sac import SACGenerator

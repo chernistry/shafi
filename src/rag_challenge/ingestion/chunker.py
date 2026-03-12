@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import tiktoken
 
@@ -14,6 +14,19 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
+
+
+class _ChunkDerivedMetadata(TypedDict):
+    citations: list[str]
+    page_number: int | None
+    page_type: str | None
+    heading_text: str | None
+    doc_refs: list[str]
+    law_no: str | None
+    law_year: str | None
+    article_refs: list[str]
+    has_caption_terms: bool
+    has_order_terms: bool
 
 # Legacy citation patterns (kept for compatibility / non-DIFC sources).
 _LEGACY_CITATION_RE = re.compile(
@@ -46,6 +59,29 @@ _ARTICLE_RE = re.compile(r"\barticle\s+\d+(?:\s*\([^)]*\))*", re.IGNORECASE)
 _SCHEDULE_RE = re.compile(r"\bschedule\s+(\d+)\b", re.IGNORECASE)
 
 _DEFINED_TERM_RE = re.compile(r'"([A-Z][^"]{2,80})"')
+_PAGE_SECTION_RE = re.compile(r"page:(\d+)", re.IGNORECASE)
+_CAPTION_TERMS_RE = re.compile(
+    r"\b(applicant|respondent|appellant|claimant|defendant|plaintiff|petitioner|between)\b",
+    re.IGNORECASE,
+)
+_ORDER_TERMS_RE = re.compile(
+    r"\b(it is hereby ordered that|ordered that|judgment|judgement|order|costs|dismissed|granted|refused|allowed)\b",
+    re.IGNORECASE,
+)
+_HEADING_WINDOW_LINE_RE = re.compile(
+    r"^(?:"
+    r"article\s+\d+(?:\s*\([^)]*\))*.*"
+    r"|schedule\s+\d+.*"
+    r"|definitions?.*"
+    r"|judg(?:e)?ment.*"
+    r"|order.*"
+    r"|it is hereby ordered that.*"
+    r"|between:?$"
+    r"|before\s+h\.?e\.?.*"
+    r")$",
+    re.IGNORECASE,
+)
+_LAW_NO_CITATION_RE = re.compile(r"^Law No\.\s*(\d+)\s+of\s+(\d{4})$", re.IGNORECASE)
 
 _ACRONYMS = {
     "DIFC",
@@ -275,6 +311,19 @@ class LegalChunker:
         chunks: list[Chunk] = []
         for provided in doc.provided_chunks:
             citations = _dedupe_preserve_order([*doc_citations, *list(provided.citations)])
+            section = DocumentSection(
+                heading=provided.section_path or "",
+                section_path=provided.section_path,
+                text=provided.text,
+                level=1 if provided.section_path else 0,
+                page_number=self._page_num_from_section_path(provided.section_path),
+                heading_text=provided.section_path or None,
+            )
+            metadata = self._build_metadata_fields(
+                text=provided.text,
+                section=section,
+                doc_citations=citations,
+            )
             chunks.append(
                 Chunk(
                     chunk_id=provided.chunk_id,
@@ -288,6 +337,15 @@ class LegalChunker:
                     doc_summary="",
                     citations=citations,
                     anchors=list(provided.anchors),
+                    page_number=metadata["page_number"],
+                    page_type=metadata["page_type"],
+                    heading_text=metadata["heading_text"],
+                    doc_refs=metadata["doc_refs"],
+                    law_no=metadata["law_no"],
+                    law_year=metadata["law_year"],
+                    article_refs=metadata["article_refs"],
+                    has_caption_terms=metadata["has_caption_terms"],
+                    has_order_terms=metadata["has_order_terms"],
                     token_count=self.count_tokens(provided.text),
                 )
             )
@@ -301,6 +359,14 @@ class LegalChunker:
             output.extend(
                 self._split_text(
                     text=section.text,
+                    doc=doc,
+                    section=section,
+                    section_idx=section_idx,
+                    doc_citations=doc_citations,
+                )
+            )
+            output.extend(
+                self._build_anchor_chunks(
                     doc=doc,
                     section=section,
                     section_idx=section_idx,
@@ -360,7 +426,7 @@ class LegalChunker:
                             doc=doc,
                             section=section,
                             section_idx=section_idx,
-                            chunk_idx=chunk_idx,
+                            chunk_key=chunk_idx,
                             doc_citations=doc_citations,
                         )
                     )
@@ -375,7 +441,7 @@ class LegalChunker:
                             doc=doc,
                             section=section,
                             section_idx=section_idx,
-                            chunk_idx=chunk_idx,
+                            chunk_key=chunk_idx,
                             doc_citations=doc_citations,
                         )
                     )
@@ -389,7 +455,7 @@ class LegalChunker:
                         doc=doc,
                         section=section,
                         section_idx=section_idx,
-                        chunk_idx=chunk_idx,
+                        chunk_key=chunk_idx,
                         doc_citations=doc_citations,
                     )
                 )
@@ -406,7 +472,7 @@ class LegalChunker:
                     doc=doc,
                     section=section,
                     section_idx=section_idx,
-                    chunk_idx=chunk_idx,
+                    chunk_key=chunk_idx,
                     doc_citations=doc_citations,
                 )
             )
@@ -461,13 +527,23 @@ class LegalChunker:
         doc: ParsedDocument,
         section: DocumentSection,
         section_idx: int,
-        chunk_idx: int,
+        chunk_key: int | str,
         doc_citations: list[str],
+        page_number: int | None = None,
+        page_type: str | None = None,
+        heading_text: str | None = None,
     ) -> Chunk:
         normalized_text = text.strip()
         text_hash = hashlib.sha256(normalized_text.encode("utf-8")).hexdigest()[:8]
-        chunk_id = f"{doc.doc_id}:{section_idx}:{chunk_idx}:{text_hash}"
-        citations = _dedupe_preserve_order([*doc_citations, *extract_citations(normalized_text)])
+        chunk_id = f"{doc.doc_id}:{section_idx}:{chunk_key}:{text_hash}"
+        metadata = self._build_metadata_fields(
+            text=normalized_text,
+            section=section,
+            doc_citations=doc_citations,
+            page_number=page_number,
+            page_type=page_type,
+            heading_text=heading_text,
+        )
         anchors = [match.group(1) for match in _DEFINED_TERM_RE.finditer(normalized_text)]
 
         return Chunk(
@@ -480,10 +556,177 @@ class LegalChunker:
             chunk_text=normalized_text,
             chunk_text_for_embedding=normalized_text,
             doc_summary="",
-            citations=citations,
+            citations=metadata["citations"],
             anchors=anchors,
+            page_number=metadata["page_number"],
+            page_type=metadata["page_type"],
+            heading_text=metadata["heading_text"],
+            doc_refs=metadata["doc_refs"],
+            law_no=metadata["law_no"],
+            law_year=metadata["law_year"],
+            article_refs=metadata["article_refs"],
+            has_caption_terms=metadata["has_caption_terms"],
+            has_order_terms=metadata["has_order_terms"],
             token_count=self.count_tokens(normalized_text),
         )
+
+    def _build_anchor_chunks(
+        self,
+        *,
+        doc: ParsedDocument,
+        section: DocumentSection,
+        section_idx: int,
+        doc_citations: list[str],
+    ) -> list[Chunk]:
+        page_number = section.page_number
+        if page_number is None:
+            page_number = self._page_num_from_section_path(section.section_path)
+        if page_number is None or not section.text.strip():
+            return []
+
+        chunks: list[Chunk] = []
+        seen_keys: set[tuple[str, str]] = set()
+
+        def append_anchor(
+            *,
+            text: str,
+            chunk_key: str,
+            page_type: str,
+            heading_text: str | None = None,
+        ) -> None:
+            normalized = re.sub(r"\s+", " ", text).strip()
+            if not normalized:
+                return
+            dedupe_key = (page_type, normalized.casefold())
+            if dedupe_key in seen_keys:
+                return
+            seen_keys.add(dedupe_key)
+            chunks.append(
+                self._make_chunk(
+                    text=normalized,
+                    doc=doc,
+                    section=section,
+                    section_idx=section_idx,
+                    chunk_key=chunk_key,
+                    doc_citations=doc_citations,
+                    page_number=page_number,
+                    page_type=page_type,
+                    heading_text=heading_text,
+                )
+            )
+
+        first_window = self._take_first_tokens(section.text, token_budget=220)
+        if page_number == 1 and first_window:
+            append_anchor(text=first_window, chunk_key="title-anchor", page_type="title_anchor")
+            caption_window = self._extract_caption_anchor(section.text)
+            if caption_window:
+                append_anchor(text=caption_window, chunk_key="caption-anchor", page_type="caption_anchor")
+        if page_number == 2 and first_window:
+            append_anchor(text=first_window, chunk_key="page2-anchor", page_type="page2_anchor")
+
+        for anchor_idx, (heading, window_text) in enumerate(self._extract_heading_windows(section.text)):
+            append_anchor(
+                text=window_text,
+                chunk_key=f"heading-window-{anchor_idx}",
+                page_type="heading_window",
+                heading_text=heading,
+            )
+
+        return chunks
+
+    def _build_metadata_fields(
+        self,
+        *,
+        text: str,
+        section: DocumentSection,
+        doc_citations: list[str],
+        page_number: int | None = None,
+        page_type: str | None = None,
+        heading_text: str | None = None,
+    ) -> _ChunkDerivedMetadata:
+        citations = _dedupe_preserve_order([*doc_citations, *extract_citations(text)])
+        resolved_page_number = page_number
+        if resolved_page_number is None:
+            resolved_page_number = section.page_number
+        if resolved_page_number is None:
+            resolved_page_number = self._page_num_from_section_path(section.section_path)
+
+        resolved_page_type = page_type or section.page_type
+        resolved_heading = (heading_text or section.heading_text or section.heading or "").strip() or None
+        if resolved_heading and re.fullmatch(r"page\s+\d+", resolved_heading, flags=re.IGNORECASE):
+            resolved_heading = None
+        law_no, law_year = self._extract_law_fields(citations)
+        article_refs = [citation for citation in citations if citation.startswith(("Article ", "Schedule "))]
+        return {
+            "citations": citations,
+            "page_number": resolved_page_number,
+            "page_type": resolved_page_type,
+            "heading_text": resolved_heading,
+            "doc_refs": citations,
+            "law_no": law_no,
+            "law_year": law_year,
+            "article_refs": article_refs,
+            "has_caption_terms": bool(_CAPTION_TERMS_RE.search(text)),
+            "has_order_terms": bool(_ORDER_TERMS_RE.search(text)),
+        }
+
+    @staticmethod
+    def _page_num_from_section_path(section_path: str | None) -> int | None:
+        match = _PAGE_SECTION_RE.search(section_path or "")
+        if match is None:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _extract_law_fields(citations: Sequence[str]) -> tuple[str | None, str | None]:
+        for citation in citations:
+            match = _LAW_NO_CITATION_RE.match(citation.strip())
+            if match is not None:
+                return match.group(1), match.group(2)
+        return None, None
+
+    def _take_first_tokens(self, text: str, *, token_budget: int) -> str:
+        token_ids = self._encoding.encode(text)
+        if not token_ids:
+            return ""
+        return self._encoding.decode(token_ids[: max(1, token_budget)]).strip()
+
+    def _extract_caption_anchor(self, text: str) -> str:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return ""
+        snippet_lines = lines[: min(18, len(lines))]
+        snippet = "\n".join(snippet_lines).strip()
+        if not snippet or not _CAPTION_TERMS_RE.search(snippet):
+            return ""
+        return self._take_first_tokens(snippet, token_budget=220)
+
+    def _extract_heading_windows(self, text: str) -> list[tuple[str, str]]:
+        lines = text.splitlines()
+        if not lines:
+            return []
+
+        windows: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for idx, raw_line in enumerate(lines):
+            line = raw_line.strip()
+            if not line or not _HEADING_WINDOW_LINE_RE.match(line):
+                continue
+            key = re.sub(r"\s+", " ", line).strip().casefold()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            window_lines = [candidate.strip() for candidate in lines[idx : min(len(lines), idx + 7)] if candidate.strip()]
+            window_text = self._take_first_tokens("\n".join(window_lines), token_budget=220)
+            if not window_text:
+                continue
+            windows.append((line, window_text))
+            if len(windows) >= 3:
+                break
+        return windows
 
     @staticmethod
     def _extract_doc_citations(doc: ParsedDocument) -> list[str]:

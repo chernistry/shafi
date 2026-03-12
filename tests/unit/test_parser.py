@@ -222,3 +222,24 @@ def test_parse_pdf_docling_enables_ocr(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert text == "# OCR markdown"
     assert captured["do_ocr"] is True
     assert captured["format_options"] is True
+
+
+def test_parse_pdf_sections_include_page_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    parser = DocumentParser(pdf_text_min_chars=10, pdf_text_min_words=1)
+    file_path = tmp_path / "sample.pdf"
+    file_path.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(
+        parser,
+        "_read_pdf",
+        lambda _path: (
+            "First page text\n\nSecond page text",
+            ["First page text", "Second page text"],
+        ),
+    )
+
+    doc = parser.parse_file(file_path)
+
+    assert [section.page_number for section in doc.sections] == [1, 2]
+    assert [section.page_type for section in doc.sections] == ["page", "page"]
+    assert [section.section_path for section in doc.sections] == ["page:1", "page:2"]

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 _DIFC_CASE_RE = re.compile(r"^(CFI|CA|SCT|ENF|DEC|TCD|ARB)\s+0*(\d{1,4})/(\d{4})$", re.IGNORECASE)
 _LAW_NO_RE = re.compile(r"^Law\s+No\.?\s*(\d+)\s+of\s+(\d{4})$", re.IGNORECASE)
 _TITLE_WITH_YEAR_RE = re.compile(r"^(?P<title>.+?)\s+(?P<year>19\d{2}|20\d{2})$", re.IGNORECASE)
+_MONEY_VALUE_RE = re.compile(r"\b(?:aed|usd|gbp|eur)\s*[\d,]+(?:\.\d+)?\b", re.IGNORECASE)
 
 
 class RetrieverError(RuntimeError):
@@ -217,6 +218,16 @@ class HybridRetriever:
                 result = await self._query_hybrid(prefetch=prefetch, fusion=fusion, limit=limit)
             chunks = self._map_results(result)
 
+        chunks = self._apply_query_rescoring(
+            query=query,
+            chunks=chunks,
+            extracted_refs=extracted_refs,
+        )
+        chunks = await self._inject_anchor_rescue_chunks(
+            query=query,
+            chunks=chunks,
+            extracted_refs=extracted_refs,
+        )
         self._last_retrieved_ids = [chunk.chunk_id for chunk in chunks]
         logger.info(
             "Hybrid retrieval returned %d chunks (dense=%d sparse=%d top_k=%d doc_ref_filter=%s sparse_only=%s)",
@@ -228,6 +239,371 @@ class HybridRetriever:
             sparse_only,
         )
         return chunks
+
+    async def _inject_anchor_rescue_chunks(
+        self,
+        *,
+        query: str,
+        chunks: list[RetrievedChunk],
+        extracted_refs: list[str],
+    ) -> list[RetrievedChunk]:
+        target_page = self._anchor_rescue_target_page(query=query, extracted_refs=extracted_refs)
+        if target_page is None or not chunks:
+            return chunks
+
+        multi_doc = len(extracted_refs) >= 2 or self._is_multi_doc_party_compare_query(query=query)
+        max_docs = 3 if multi_doc else 1
+        doc_ids = self._anchor_rescue_doc_ids(chunks=chunks, max_docs=max_docs)
+        if not doc_ids:
+            return chunks
+
+        existing_chunk_ids = {chunk.chunk_id for chunk in chunks}
+        rescued: list[RetrievedChunk] = []
+        for doc_id in doc_ids:
+            if self._doc_has_target_anchor(chunks=chunks, doc_id=doc_id, target_page=target_page):
+                continue
+            chunk = await self._fetch_best_anchor_chunk_for_doc(
+                doc_id=doc_id,
+                target_page=target_page,
+                query=query,
+                existing_chunks=chunks,
+            )
+            if chunk is None or chunk.chunk_id in existing_chunk_ids:
+                continue
+            existing_chunk_ids.add(chunk.chunk_id)
+            rescued.append(chunk)
+
+        if not rescued:
+            return chunks
+        return self._apply_query_rescoring(
+            query=query,
+            chunks=[*chunks, *rescued],
+            extracted_refs=extracted_refs,
+        )
+
+    @classmethod
+    def _anchor_rescue_target_page(cls, *, query: str, extracted_refs: list[str]) -> int | None:
+        q = re.sub(r"\s+", " ", query).strip().casefold()
+        if not q:
+            return None
+        if "page 2" in q or "second page" in q:
+            return 2
+
+        explicit_anchor = any(term in q for term in ("title page", "cover page", "first page", "header", "caption"))
+        metadata_anchor = any(
+            term in q
+            for term in (
+                "claim number",
+                "claimant",
+                "defendant",
+                "party",
+                "parties",
+                "main party",
+                "judge",
+                "date of issue",
+                "issue date",
+                "appellant",
+                "respondent",
+                "applicant",
+            )
+        )
+        if explicit_anchor or metadata_anchor or cls._is_multi_doc_party_compare_query(query=query):
+            return 1
+        return None
+
+    @staticmethod
+    def _is_multi_doc_party_compare_query(*, query: str) -> bool:
+        q = re.sub(r"\s+", " ", query).strip().casefold()
+        if not q:
+            return False
+        return (
+            "both cases" in q
+            or "across all documents" in q
+            or "common to both" in q
+            or "appears as a main party" in q
+            or "named as a main party" in q
+            or "main party to both" in q
+        )
+
+    @staticmethod
+    def _anchor_rescue_doc_ids(*, chunks: list[RetrievedChunk], max_docs: int) -> list[str]:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for chunk in chunks:
+            doc_id = str(chunk.doc_id or "").strip()
+            if not doc_id or doc_id in seen:
+                continue
+            seen.add(doc_id)
+            ordered.append(doc_id)
+            if len(ordered) >= max(1, max_docs):
+                break
+        return ordered
+
+    @staticmethod
+    def _doc_has_target_anchor(
+        *,
+        chunks: list[RetrievedChunk],
+        doc_id: str,
+        target_page: int,
+    ) -> bool:
+        for chunk in chunks:
+            if str(chunk.doc_id or "").strip() != doc_id:
+                continue
+            if chunk.page_number == target_page:
+                return True
+            if target_page == 1 and str(chunk.page_type or "").strip().lower() in {"title_anchor", "caption_anchor"}:
+                return True
+            if target_page == 2 and str(chunk.page_type or "").strip().lower() == "page2_anchor":
+                return True
+        return False
+
+    async def _fetch_best_anchor_chunk_for_doc(
+        self,
+        *,
+        doc_id: str,
+        target_page: int,
+        query: str,
+        existing_chunks: list[RetrievedChunk],
+    ) -> RetrievedChunk | None:
+        try:
+            result = await self._store.client.scroll(
+                collection_name=self._store.collection_name,
+                scroll_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id)),
+                        models.FieldCondition(key="page_number", match=models.MatchValue(value=target_page)),
+                    ]
+                ),
+                limit=16,
+                with_payload=self._payload_selector(),
+                with_vectors=False,
+            )
+        except Exception:
+            logger.debug("Anchor rescue scroll failed for doc_id=%s page=%s", doc_id, target_page, exc_info=True)
+            return None
+
+        points_obj = result[0]
+        candidates = self._map_results(points_obj)
+        if not candidates:
+            return None
+
+        best_score = max(float(chunk.score) for chunk in existing_chunks if str(chunk.doc_id or "").strip() == doc_id) if any(
+            str(chunk.doc_id or "").strip() == doc_id for chunk in existing_chunks
+        ) else 0.0
+
+        best_candidate: tuple[int, float, RetrievedChunk] | None = None
+        for candidate in candidates:
+            score = self._anchor_rescue_candidate_score(query=query, chunk=candidate, target_page=target_page)
+            if score <= 0:
+                continue
+            retrieval_score = float(candidate.score)
+            current = (score, retrieval_score, candidate)
+            if best_candidate is None or current[:2] > best_candidate[:2]:
+                best_candidate = current
+        if best_candidate is None:
+            return None
+
+        adjusted_score = best_score + 0.25 + (best_candidate[0] / 10_000.0)
+        return best_candidate[2].model_copy(update={"score": adjusted_score})
+
+    @staticmethod
+    def _anchor_rescue_candidate_score(*, query: str, chunk: RetrievedChunk, target_page: int) -> int:
+        q = re.sub(r"\s+", " ", query).strip().casefold()
+        page_type = str(chunk.page_type or "").strip().casefold()
+        page_num = chunk.page_number
+        if page_num != target_page:
+            return 0
+
+        score = 100
+        if target_page == 1:
+            if page_type == "caption_anchor":
+                score += 120
+            elif page_type == "title_anchor":
+                score += 100
+            if chunk.has_caption_terms:
+                score += 40
+            if any(term in q for term in ("header", "caption", "claimant", "defendant", "party", "parties", "main party")):
+                score += 40
+        elif target_page == 2:
+            if page_type == "page2_anchor":
+                score += 120
+            if chunk.has_order_terms:
+                score += 30
+        return score
+
+    @classmethod
+    def _apply_query_rescoring(
+        cls,
+        *,
+        query: str,
+        chunks: list[RetrievedChunk],
+        extracted_refs: list[str],
+    ) -> list[RetrievedChunk]:
+        if not chunks:
+            return []
+        rescored: list[tuple[float, int, RetrievedChunk]] = []
+        for index, chunk in enumerate(chunks):
+            adjusted = float(chunk.score) + cls._metadata_bonus(
+                query=query,
+                chunk=chunk,
+                extracted_refs=extracted_refs,
+            )
+            rescored.append((adjusted, index, chunk.model_copy(update={"score": adjusted})))
+        rescored.sort(key=lambda item: (-item[0], item[1]))
+        return [item[2] for item in rescored]
+
+    @classmethod
+    def _metadata_bonus(cls, *, query: str, chunk: RetrievedChunk, extracted_refs: list[str]) -> float:
+        q = re.sub(r"\s+", " ", query).strip().casefold()
+        if not q:
+            return 0.0
+
+        page_number = chunk.page_number if chunk.page_number is not None else cls._page_number_from_section(chunk.section_path)
+        page_type = (chunk.page_type or "").strip().casefold()
+        heading_text = (chunk.heading_text or "").strip().casefold()
+        doc_title = (chunk.doc_title or "").strip().casefold()
+        doc_refs = {ref.casefold() for ref in chunk.doc_refs if ref.strip()}
+        article_refs = {ref.casefold() for ref in chunk.article_refs if ref.strip()}
+        bonus = 0.0
+
+        if extracted_refs:
+            matched_refs = 0
+            for ref in extracted_refs:
+                norm_ref = ref.casefold()
+                if norm_ref in doc_title or norm_ref in doc_refs:
+                    matched_refs += 1
+            bonus += min(0.75, matched_refs * 0.25)
+
+        wants_page_two = "page 2" in q or "second page" in q
+        wants_title_anchor = any(term in q for term in ("title page", "cover page", "first page"))
+        wants_metadata_anchor = any(
+            term in q
+            for term in (
+                "claim number",
+                "party",
+                "parties",
+                "judge",
+                "date of issue",
+                "issue date",
+                "applicant",
+                "respondent",
+                "appellant",
+                "claimant",
+            )
+        )
+        wants_monetary_anchor = any(
+            term in q
+            for term in (
+                "monetary claim",
+                "higher monetary claim",
+                "lower monetary claim",
+                "higher claim",
+                "lower claim",
+                "claim amount",
+                "financial limit",
+            )
+        )
+        wants_outcome_anchor = any(term in q for term in ("outcome", "result", "costs", "it is hereby ordered", "order"))
+        wants_heading_anchor = "article " in q or "schedule " in q or "definitions" in q
+        chunk_text = chunk.text.casefold()
+        has_monetary_signal = bool(_MONEY_VALUE_RE.search(chunk.text)) or any(
+            term in chunk_text for term in ("financial limit", "claim form", "claim amount", "aed ")
+        )
+
+        if wants_page_two and page_number == 2:
+            bonus += 0.8
+            if page_type == "page2_anchor":
+                bonus += 0.35
+
+        if wants_title_anchor and page_number == 1:
+            bonus += 0.35
+        if wants_title_anchor and page_type in {"title_anchor", "caption_anchor"}:
+            bonus += 0.65
+
+        if wants_metadata_anchor and page_number == 1:
+            bonus += 0.2
+        if wants_metadata_anchor and page_type in {"title_anchor", "caption_anchor"}:
+            bonus += 0.55
+        if wants_metadata_anchor and chunk.has_caption_terms:
+            bonus += 0.2
+
+        if wants_heading_anchor:
+            heading_hits = 0
+            if "article " in q and ("article " in heading_text or any(ref.startswith("article ") for ref in article_refs)):
+                heading_hits += 1
+            if "schedule " in q and ("schedule " in heading_text or any(ref.startswith("schedule ") for ref in article_refs)):
+                heading_hits += 1
+            if "definitions" in q and "definition" in heading_text:
+                heading_hits += 1
+            if heading_hits:
+                bonus += 0.25 * heading_hits
+                if page_type == "heading_window":
+                    bonus += 0.25
+
+        if wants_outcome_anchor:
+            if chunk.has_order_terms:
+                bonus += 0.55
+            if page_type == "heading_window":
+                bonus += 0.2
+
+        if wants_monetary_anchor:
+            if has_monetary_signal:
+                bonus += 0.6
+                if page_number is not None and page_number > 1:
+                    bonus += 0.1
+            elif page_type in {"title_anchor", "caption_anchor"} or page_number == 1:
+                bonus -= 0.2
+
+        if len(extracted_refs) >= 2 and wants_metadata_anchor and page_type in {"title_anchor", "caption_anchor", "page2_anchor"}:
+            bonus += 0.15
+
+        return bonus
+
+    @staticmethod
+    def _page_number_from_section(section_path: str | None) -> int | None:
+        match = re.search(r"page:(\d+)", section_path or "", flags=re.IGNORECASE)
+        if match is None:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _coerce_optional_str(value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _coerce_optional_int(value: object) -> int | None:
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return None
+            try:
+                return int(text)
+            except ValueError:
+                return None
+        try:
+            return int(str(value).strip())
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _coerce_str_list(value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [text for item in cast("list[object]", value) if (text := str(item).strip())]
 
     async def _query_hybrid(
         self,
@@ -556,6 +932,15 @@ class HybridRetriever:
                 "doc_summary",
                 "citations",
                 "anchors",
+                "page_number",
+                "page_type",
+                "heading_text",
+                "doc_refs",
+                "law_no",
+                "law_year",
+                "article_refs",
+                "has_caption_terms",
+                "has_order_terms",
             ]
         )
 
@@ -590,6 +975,15 @@ class HybridRetriever:
                 section_path=str(payload.get("section_path") or ""),
                 text=str(payload.get("chunk_text") or ""),
                 score=score,
+                page_number=HybridRetriever._coerce_optional_int(payload.get("page_number")),
+                page_type=HybridRetriever._coerce_optional_str(payload.get("page_type")),
+                heading_text=HybridRetriever._coerce_optional_str(payload.get("heading_text")),
+                doc_refs=HybridRetriever._coerce_str_list(payload.get("doc_refs")),
+                law_no=HybridRetriever._coerce_optional_str(payload.get("law_no")),
+                law_year=HybridRetriever._coerce_optional_str(payload.get("law_year")),
+                article_refs=HybridRetriever._coerce_str_list(payload.get("article_refs")),
+                has_caption_terms=bool(payload.get("has_caption_terms") or False),
+                has_order_terms=bool(payload.get("has_order_terms") or False),
                 doc_summary=str(payload.get("doc_summary") or ""),
             )
         except Exception:

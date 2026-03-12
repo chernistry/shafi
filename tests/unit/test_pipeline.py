@@ -50,6 +50,13 @@ def _make_retrieved_chunk(
     text: str,
     score: float,
     doc_summary: str = "",
+    page_number: int | None = None,
+    page_type: str | None = None,
+    heading_text: str | None = None,
+    doc_refs: list[str] | None = None,
+    article_refs: list[str] | None = None,
+    has_caption_terms: bool = False,
+    has_order_terms: bool = False,
 ) -> RetrievedChunk:
     return RetrievedChunk(
         chunk_id=chunk_id,
@@ -59,6 +66,13 @@ def _make_retrieved_chunk(
         section_path=section_path,
         text=text,
         score=score,
+        page_number=page_number,
+        page_type=page_type,
+        heading_text=heading_text,
+        doc_refs=list(doc_refs or []),
+        article_refs=list(article_refs or []),
+        has_caption_terms=has_caption_terms,
+        has_order_terms=has_order_terms,
         doc_summary=doc_summary,
     )
 
@@ -226,6 +240,47 @@ async def test_retrieve_single_title_strict_query_uses_targeted_title_lookup(pip
     retrieved = result["retrieved"]
     assert [chunk.chunk_id for chunk in retrieved] == ["employment-amendment:notice"]
     assert result["must_include_chunk_ids"] == ["employment-amendment:notice"]
+
+
+@pytest.mark.asyncio
+async def test_retrieve_injects_page_two_anchor_into_must_include(pipeline_builder) -> None:
+    pipeline_builder._retriever.retrieve = AsyncMock(
+        return_value=[
+            _make_retrieved_chunk(
+                chunk_id="case:title",
+                doc_id="case",
+                doc_title="Case",
+                section_path="page:1",
+                text="Header text",
+                score=0.9,
+                page_number=1,
+                page_type="title_anchor",
+            ),
+            _make_retrieved_chunk(
+                chunk_id="case:page2",
+                doc_id="case",
+                doc_title="Case",
+                section_path="page:2",
+                text="Claim No. ENF-316-2023/2",
+                score=0.5,
+                page_number=2,
+                page_type="page2_anchor",
+            ),
+        ]
+    )
+
+    result = await pipeline_builder._retrieve(
+        {
+            "query": "According to page 2 of the judgment, from which claim number did the appeal originate?",
+            "request_id": "page2-anchor",
+            "question_id": "page2-anchor",
+            "answer_type": "name",
+            "collector": TelemetryCollector(request_id="page2-anchor"),
+            "doc_refs": [],
+        }
+    )
+
+    assert "case:page2" in result["must_include_chunk_ids"]
 
 
 @pytest.mark.asyncio
@@ -849,6 +904,69 @@ def test_apply_support_shape_policy_keeps_both_sides_for_strict_case_compare() -
     )
 
     assert set(shaped_ids) == {"case-a:title", "case-a:page2", "case-b:title", "case-b:page2"}
+    assert flags == []
+
+
+def test_apply_support_shape_policy_keeps_both_sides_for_monetary_claim_compare() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="sct-169:title",
+            doc_id="sct-169-2025",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="SCT 169/2025 Obasi v Oreana. Claim amount AED 50,000.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct-169:claim",
+            doc_id="sct-169-2025",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:3",
+            text="The claim amount is AED 50,000.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct-295:title",
+            doc_id="sct-295-2025",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="SCT 295/2025 Olexa v Odon. Claim amount AED 25,000.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct-295:claim",
+            doc_id="sct-295-2025",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="The claim amount is AED 25,000.",
+            retrieval_score=0.93,
+            rerank_score=0.93,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="name",
+        answer="Obasi v Oreana",
+        query="Identify the case with the higher monetary claim: SCT 169/2025 or SCT 295/2025?",
+        context_chunks=context_chunks,
+        cited_ids=["sct-169:title"],
+        support_ids=[],
+    )
+
+    assert set(shaped_ids) == {"sct-169:title", "sct-169:claim", "sct-295:title", "sct-295:claim"}
     assert flags == []
 
 
@@ -2836,6 +2954,86 @@ async def test_retrieve_multi_ref_name_issue_date_keeps_issue_pages(mock_setting
     assert "sct169:page2" in result["must_include_chunk_ids"]
     assert "sct295:page2" in result["must_include_chunk_ids"]
     assert {"sct169:page2", "sct295:page2"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
+
+
+@pytest.mark.asyncio
+async def test_retrieve_multi_ref_name_monetary_claim_keeps_amount_pages(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retriever = MagicMock()
+    retriever.retrieve = AsyncMock(
+        side_effect=[
+            [
+                _make_retrieved_chunk(
+                    chunk_id="sct169:title",
+                    doc_id="sct-169",
+                    doc_title="SCT 169/2025 Obasi v Oreana",
+                    section_path="page:1",
+                    text="Obasi v Oreana [2025] DIFC SCT 169",
+                    score=0.97,
+                    page_number=1,
+                    page_type="caption_anchor",
+                    has_caption_terms=True,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="sct169:claim",
+                    doc_id="sct-169",
+                    doc_title="SCT 169/2025 Obasi v Oreana",
+                    section_path="page:2",
+                    text="The Claimant filed a Claim seeking payment from the Defendant in the amount of AED 391,123.45.",
+                    score=0.81,
+                    page_number=2,
+                    page_type="heading_window",
+                    has_order_terms=True,
+                ),
+            ],
+            [
+                _make_retrieved_chunk(
+                    chunk_id="sct295:title",
+                    doc_id="sct-295",
+                    doc_title="SCT 295/2025 Olexa v Odon",
+                    section_path="page:1",
+                    text="Olexa v Odon [2025] DIFC SCT 295",
+                    score=0.96,
+                    page_number=1,
+                    page_type="caption_anchor",
+                    has_caption_terms=True,
+                ),
+                _make_retrieved_chunk(
+                    chunk_id="sct295:claim",
+                    doc_id="sct-295",
+                    doc_title="SCT 295/2025 Olexa v Odon",
+                    section_path="page:5",
+                    text="The financial limit of AED 174,790 in the Claim Form was confirmed by the Court.",
+                    score=0.78,
+                    page_number=5,
+                    page_type="heading_window",
+                ),
+            ],
+        ]
+    )
+
+    builder = RAGPipelineBuilder(
+        retriever=retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="money-compare")
+
+    result = await builder._retrieve(
+        {
+            "query": "Identify the case with the higher monetary claim: SCT 169/2025 or SCT 295/2025?",
+            "collector": collector,
+            "answer_type": "name",
+            "doc_refs": ["SCT 169/2025", "SCT 295/2025"],
+        }
+    )
+
+    assert retriever.retrieve.await_count == 2
+    assert "sct169:claim" in result["must_include_chunk_ids"]
+    assert "sct295:claim" in result["must_include_chunk_ids"]
+    assert {"sct169:claim", "sct295:claim"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
 
 
 def test_ensure_named_commencement_context_keeps_title_and_commencement_chunks(mock_settings):

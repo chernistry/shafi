@@ -45,6 +45,15 @@ class ChunkMetadata(BaseModel):
     section_path: str = ""
     citations: list[str] = Field(default_factory=list)
     anchors: list[str] = Field(default_factory=list)
+    page_number: int | None = None
+    page_type: str | None = None
+    heading_text: str | None = None
+    doc_refs: list[str] = Field(default_factory=list)
+    law_no: str | None = None
+    law_year: str | None = None
+    article_refs: list[str] = Field(default_factory=list)
+    has_caption_terms: bool = False
+    has_order_terms: bool = False
     ingest_version: str = ""
     chunk_text: str = ""
     doc_summary: str = ""
@@ -62,6 +71,15 @@ class RetrievedChunk(BaseModel):
     section_path: str = ""
     text: str
     score: float
+    page_number: int | None = None
+    page_type: str | None = None
+    heading_text: str | None = None
+    doc_refs: list[str] = Field(default_factory=list)
+    law_no: str | None = None
+    law_year: str | None = None
+    article_refs: list[str] = Field(default_factory=list)
+    has_caption_terms: bool = False
+    has_order_terms: bool = False
     doc_summary: str = ""
 
 
@@ -78,6 +96,15 @@ class RankedChunk(BaseModel):
     text: str
     retrieval_score: float
     rerank_score: float
+    page_number: int | None = None
+    page_type: str | None = None
+    heading_text: str | None = None
+    doc_refs: list[str] = Field(default_factory=list)
+    law_no: str | None = None
+    law_year: str | None = None
+    article_refs: list[str] = Field(default_factory=list)
+    has_caption_terms: bool = False
+    has_order_terms: bool = False
     doc_summary: str = ""
 
 
@@ -170,6 +197,9 @@ class DocumentSection(BaseModel):
     section_path: str = ""
     text: str = ""
     level: int = 0
+    page_number: int | None = None
+    page_type: str | None = None
+    heading_text: str | None = None
 
 
 class ProvidedChunk(BaseModel):
@@ -224,6 +254,15 @@ class Chunk(BaseModel):
     doc_summary: str = ""
     citations: list[str] = Field(default_factory=list)
     anchors: list[str] = Field(default_factory=list)
+    page_number: int | None = None
+    page_type: str | None = None
+    heading_text: str | None = None
+    doc_refs: list[str] = Field(default_factory=list)
+    law_no: str | None = None
+    law_year: str | None = None
+    article_refs: list[str] = Field(default_factory=list)
+    has_caption_terms: bool = False
+    has_order_terms: bool = False
     token_count: int = 0
 
 

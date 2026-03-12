@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections import OrderedDict
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from qdrant_client.models import SparseVector
@@ -31,7 +32,7 @@ class BM25SparseEncoder:
         threads: int | None = None,
     ) -> None:
         self._model_name = model_name
-        self._cache_dir = cache_dir or None
+        self._cache_dir = self._resolve_cache_dir(cache_dir)
         self._threads = threads
         self._model = self._create_model()
 
@@ -51,6 +52,38 @@ class BM25SparseEncoder:
             threads=self._threads,
             lazy_load=True,
         )
+
+    @staticmethod
+    def _resolve_cache_dir(cache_dir: str | None) -> str:
+        raw = (cache_dir or "").strip()
+        # Keep fastembed cache inside the workspace by default so local runs stay writable
+        # and deterministic instead of falling back to container-specific homes like /home/appuser.
+        preferred = Path(raw).expanduser() if raw else BM25SparseEncoder._workspace_cache_dir()
+        try:
+            return BM25SparseEncoder._prepare_cache_dir(preferred)
+        except OSError as exc:
+            fallback = BM25SparseEncoder._workspace_cache_dir()
+            if fallback == preferred:
+                raise SparseEncoderError(f"Failed creating BM25 cache dir at {preferred}: {exc}") from exc
+            logger.warning(
+                "Preferred BM25 cache dir %s is unavailable; falling back to workspace cache %s",
+                preferred,
+                fallback,
+            )
+            try:
+                return BM25SparseEncoder._prepare_cache_dir(fallback)
+            except OSError as fallback_exc:  # pragma: no cover - genuine filesystem failure
+                raise SparseEncoderError(f"Failed creating BM25 fallback cache dir at {fallback}: {fallback_exc}") from fallback_exc
+
+    @staticmethod
+    def _workspace_cache_dir() -> Path:
+        return Path.cwd() / ".cache" / "fastembed"
+
+    @staticmethod
+    def _prepare_cache_dir(path: Path) -> str:
+        resolved = path.resolve()
+        resolved.mkdir(parents=True, exist_ok=True)
+        return str(resolved)
 
     def encode_documents(self, texts: Sequence[str]) -> list[SparseVector]:
         if not texts:

@@ -25,6 +25,12 @@ def _case_chunk(
     )
 
 
+def test_normalize_name_preserves_dotted_corporate_suffixes() -> None:
+    assert StrictAnswerer._normalize_name("Architeriors Interior Design (L.L.C).") == "Architeriors Interior Design (L.L.C)"
+    assert StrictAnswerer._normalize_name("Coinmena B.S.C. (C)") == "Coinmena B.S.C. (C)"
+    assert StrictAnswerer._normalize_name("Union Properties P.J.S.C.") == "Union Properties P.J.S.C"
+
+
 def test_answer_name_returns_case_ref_for_issue_date_comparison() -> None:
     answerer = StrictAnswerer()
     chunks = [
@@ -90,6 +96,43 @@ def test_answer_name_returns_case_ref_for_higher_monetary_claim() -> None:
     assert result is not None
     assert result.answer == "SCT 169/2025"
     assert result.cited_chunk_ids == ["sct169:0", "sct295:0"]
+
+
+def test_answer_name_extracts_origin_claim_number_from_page_two_anchor() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        _case_chunk(
+            chunk_id="ca009:1",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Oskar v Oron",
+            page=1,
+            text=(
+                "Claim No. CA 009/2024\n"
+                "This appeal concerns earlier proceedings in Claim No. ENF 316/2023."
+            ),
+        ),
+        _case_chunk(
+            chunk_id="ca009:2",
+            doc_id="ca009",
+            doc_title="CA 009/2024 Oskar v Oron",
+            page=2,
+            text=(
+                "UPON the hearing of the Appellant's appeal against the Order dated 17 May 2024, "
+                "granting the relief sought by the Respondents in their Urgent Application of 1 April 2024 "
+                'in Claim No. ENF-316-2023/2, (the "Application").'
+            ),
+        ),
+    ]
+
+    result = answerer.answer(
+        answer_type="name",
+        query="According to page 2 of the judgment, from which specific claim number did the appeal in CA 009/2024 originate?",
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "ENF-316-2023/2"
+    assert result.cited_chunk_ids == ["ca009:2"]
 
 
 def test_answer_boolean_detects_common_judge_across_multiple_case_documents() -> None:

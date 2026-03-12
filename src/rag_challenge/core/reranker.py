@@ -265,6 +265,15 @@ class RerankerClient:
                 text=chunk.text,
                 retrieval_score=chunk.score,
                 rerank_score=float(score),
+                page_number=chunk.page_number,
+                page_type=chunk.page_type,
+                heading_text=chunk.heading_text,
+                doc_refs=list(chunk.doc_refs),
+                law_no=chunk.law_no,
+                law_year=chunk.law_year,
+                article_refs=list(chunk.article_refs),
+                has_caption_terms=chunk.has_caption_terms,
+                has_order_terms=chunk.has_order_terms,
                 doc_summary=chunk.doc_summary,
             )
             for chunk, score in zip(chunks, scores, strict=True)
@@ -285,6 +294,15 @@ class RerankerClient:
                 text=chunk.text,
                 retrieval_score=chunk.score,
                 rerank_score=chunk.score,
+                page_number=chunk.page_number,
+                page_type=chunk.page_type,
+                heading_text=chunk.heading_text,
+                doc_refs=list(chunk.doc_refs),
+                law_no=chunk.law_no,
+                law_year=chunk.law_year,
+                article_refs=list(chunk.article_refs),
+                has_caption_terms=chunk.has_caption_terms,
+                has_order_terms=chunk.has_order_terms,
                 doc_summary=chunk.doc_summary,
             )
             for chunk in sorted_chunks[: max(0, top_n)]

@@ -33,6 +33,7 @@ _ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _SLASH_DATE_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b")
 _TEXTUAL_DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b")
 _YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
+_MONEY_VALUE_RE = re.compile(r"\b(?:aed|usd|gbp|eur)\s*[\d,]+(?:\.\d+)?\b", re.IGNORECASE)
 _CITE_RE = re.compile(r"\(cite:\s*([^)]+)\)")
 _CASE_REF_PREFIX_RE = re.compile(
     r"^(?:case\s+)?(?:CFI|CA|SCT|ENF|DEC|TCD|ARB)\s+\d{1,4}/\d{4}\s*[:\-,.]?\s*",
@@ -304,6 +305,29 @@ def _is_case_issue_date_name_compare_query(query: str, *, answer_type: str) -> b
         or "issued first" in q
         or "issued earlier" in q
         or ("issued" in q and "earlier" in q)
+    )
+
+
+def _is_case_monetary_claim_compare_query(query: str, *, answer_type: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if answer_type.strip().lower() != "name":
+        return False
+    case_ref_count = len(_DIFC_CASE_ID_RE.findall(query or ""))
+    if case_ref_count != 2:
+        return False
+    if "claim" not in q:
+        return False
+    return any(
+        phrase in q
+        for phrase in (
+            "higher monetary claim",
+            "lower monetary claim",
+            "greater monetary claim",
+            "largest monetary claim",
+            "smallest monetary claim",
+            "higher claim",
+            "lower claim",
+        )
     )
 
 
@@ -828,6 +852,21 @@ class RAGPipelineBuilder:
                                 ):
                                     seed = (
                                         self._select_case_issue_date_seed_chunk_id(row)
+                                        or (
+                                            self._select_case_monetary_claim_seed_chunk_id(row)
+                                            if _is_case_monetary_claim_compare_query(
+                                                state["query"], answer_type=state["answer_type"]
+                                            )
+                                            else None
+                                        )
+                                        or self._select_seed_chunk_id(row, seed_terms)
+                                        or row[0].chunk_id
+                                    )
+                                elif _is_case_monetary_claim_compare_query(
+                                    state["query"], answer_type=state["answer_type"]
+                                ):
+                                    seed = (
+                                        self._select_case_monetary_claim_seed_chunk_id(row)
                                         or self._select_seed_chunk_id(row, seed_terms)
                                         or row[0].chunk_id
                                     )
@@ -1456,6 +1495,16 @@ class RAGPipelineBuilder:
                     retrieved_ids = {chunk.chunk_id for chunk in retrieved}
                     must_include_chunk_ids = [chunk_id for chunk_id in must_include_chunk_ids if chunk_id in retrieved_ids]
 
+        anchor_must_include = self._select_anchor_must_include_chunk_ids(
+            query=state["query"],
+            answer_type=answer_type,
+            doc_refs=doc_refs,
+            retrieved=retrieved,
+        )
+        if anchor_must_include:
+            must_include_chunk_ids.extend(anchor_must_include)
+            must_include_chunk_ids = self._dedupe_chunk_ids(must_include_chunk_ids)
+
         collector.set_retrieved_ids([chunk.chunk_id for chunk in retrieved])
         collector.set_models(embed=self._settings.embedding.model)
         logger.info(
@@ -1659,6 +1708,121 @@ class RAGPipelineBuilder:
                 best = candidate
         return best[3] if best is not None else None
 
+    def _select_anchor_must_include_chunk_ids(
+        self,
+        *,
+        query: str,
+        answer_type: str,
+        doc_refs: Sequence[str],
+        retrieved: Sequence[RetrievedChunk],
+    ) -> list[str]:
+        if not retrieved:
+            return []
+
+        q_lower = re.sub(r"\s+", " ", query).strip().lower()
+        needs_page_two = "page 2" in q_lower or "second page" in q_lower
+        needs_title_or_caption = any(
+            term in q_lower
+            for term in (
+                "title page",
+                "cover page",
+                "first page",
+                "claim number",
+                "date of issue",
+                "issue date",
+                "party",
+                "parties",
+                "judge",
+                "applicant",
+                "respondent",
+                "appellant",
+                "claimant",
+            )
+        )
+        needs_outcome_anchor = (
+            answer_type == "free_text" and _is_case_outcome_query(query)
+        ) or any(term in q_lower for term in ("it is hereby ordered", "order", "costs"))
+        if not needs_page_two and not needs_title_or_caption and not needs_outcome_anchor:
+            return []
+
+        multi_doc = (
+            len([ref for ref in doc_refs if str(ref).strip()]) >= 2
+            or _is_common_judge_compare_query(query)
+            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+            or "same party" in q_lower
+            or ("judge" in q_lower and "both" in q_lower)
+        )
+        max_docs = 3 if multi_doc else 1
+
+        best_by_doc: dict[str, tuple[int, float, str]] = {}
+        best_global: tuple[int, float, str] | None = None
+
+        for chunk in retrieved[: min(len(retrieved), 24)]:
+            score = self._anchor_candidate_score(
+                chunk=chunk,
+                needs_page_two=needs_page_two,
+                needs_title_or_caption=needs_title_or_caption,
+                needs_outcome_anchor=needs_outcome_anchor,
+            )
+            if score <= 0:
+                continue
+            retrieval_score = float(getattr(chunk, "score", 0.0) or 0.0)
+            doc_id = str(getattr(chunk, "doc_id", "") or "").strip() or chunk.chunk_id
+            current = best_by_doc.get(doc_id)
+            candidate = (score, retrieval_score, chunk.chunk_id)
+            if current is None or candidate > current:
+                best_by_doc[doc_id] = candidate
+            if best_global is None or candidate > best_global:
+                best_global = candidate
+
+        if multi_doc:
+            ordered = sorted(best_by_doc.values(), reverse=True)
+            return [chunk_id for _score, _retrieval_score, chunk_id in ordered[:max_docs]]
+        if best_global is not None:
+            return [best_global[2]]
+        return []
+
+    @classmethod
+    def _anchor_candidate_score(
+        cls,
+        *,
+        chunk: RetrievedChunk,
+        needs_page_two: bool,
+        needs_title_or_caption: bool,
+        needs_outcome_anchor: bool,
+    ) -> int:
+        page_type = str(getattr(chunk, "page_type", "") or "").strip().lower()
+        page_num = getattr(chunk, "page_number", None)
+        if page_num is None:
+            page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+
+        score = 0
+        if needs_page_two and page_num == 2:
+            score += 600
+            if page_type == "page2_anchor":
+                score += 180
+
+        if needs_title_or_caption and page_num == 1:
+            score += 140
+            if page_type == "title_anchor":
+                score += 220
+            if page_type == "caption_anchor":
+                score += 260
+            if bool(getattr(chunk, "has_caption_terms", False)):
+                score += 80
+
+        if needs_outcome_anchor:
+            if bool(getattr(chunk, "has_order_terms", False)):
+                score += 240
+            if page_type == "heading_window":
+                score += 180
+
+        if score <= 0:
+            return 0
+        if page_num in {1, 2}:
+            score += 40
+        return score
+
     @classmethod
     def _boolean_year_seed_chunk_score(cls, *, ref: str, chunk: RetrievedChunk | RankedChunk) -> int:
         score = cls._boolean_year_compare_chunk_score(ref=ref, chunk=chunk)
@@ -1809,6 +1973,69 @@ class RAGPipelineBuilder:
             score = self._case_issue_date_seed_chunk_score(chunk=chunk)
             if score > best_score:
                 best_score = score
+                best_chunk_id = chunk.chunk_id
+        return best_chunk_id or None
+
+    @classmethod
+    def _case_monetary_claim_seed_chunk_score(cls, *, chunk: RetrievedChunk | RankedChunk) -> int:
+        text = re.sub(r"\s+", " ", str(getattr(chunk, "text", "") or "")).strip().casefold()
+        if not text:
+            return 0
+
+        page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+        page_type = str(getattr(chunk, "page_type", "") or "").strip().casefold()
+        has_money = bool(_MONEY_VALUE_RE.search(text)) or any(
+            marker in text for marker in ("financial limit", "claim form", "claim amount", "amount of aed", "aed ")
+        )
+        if not has_money:
+            return 0
+
+        score = 180
+        if page_num > 1:
+            score += 120
+        elif page_num == 1:
+            score -= 40
+
+        if page_type == "heading_window":
+            score += 60
+        if page_type in {"title_anchor", "caption_anchor"}:
+            score -= 120
+
+        if any(
+            marker in text
+            for marker in (
+                "claim amount",
+                "claim form",
+                "financial limit",
+                "claimant filed a claim",
+                "claimant seeks payment",
+                "seeking payment",
+                "judgment sum",
+                "amount of aed",
+            )
+        ):
+            score += 220
+        if "claim" in text:
+            score += 60
+        if "penalty" in text and "claim" not in text:
+            score -= 160
+        if "costs" in text and "claim" not in text:
+            score -= 80
+        if "order" in text and "claim" not in text:
+            score -= 40
+        return max(score, 0)
+
+    def _select_case_monetary_claim_seed_chunk_id(self, chunks: Sequence[RetrievedChunk]) -> str | None:
+        best_chunk_id = ""
+        best_key: tuple[int, int, float] | None = None
+        for chunk in chunks:
+            score = self._case_monetary_claim_seed_chunk_score(chunk=chunk)
+            if score <= 0:
+                continue
+            page_num = self._page_num(str(getattr(chunk, "section_path", "") or ""))
+            candidate = (score, -max(page_num, 0), float(chunk.score))
+            if best_key is None or candidate > best_key:
+                best_key = candidate
                 best_chunk_id = chunk.chunk_id
         return best_chunk_id or None
 
@@ -2476,6 +2703,15 @@ class RAGPipelineBuilder:
                     retrieval_score=float(raw.score),
                     # These injected chunks didn't go through the reranker; use retrieval score as a stable proxy.
                     rerank_score=float(raw.score),
+                    page_number=raw.page_number,
+                    page_type=raw.page_type,
+                    heading_text=raw.heading_text,
+                    doc_refs=list(raw.doc_refs),
+                    law_no=raw.law_no,
+                    law_year=raw.law_year,
+                    article_refs=list(raw.article_refs),
+                    has_caption_terms=raw.has_caption_terms,
+                    has_order_terms=raw.has_order_terms,
                     doc_summary=raw.doc_summary,
                 )
             selected.append(chunk)
@@ -2529,6 +2765,15 @@ class RAGPipelineBuilder:
                         text=page_one.text,
                         retrieval_score=float(page_one.score),
                         rerank_score=float(page_one.score),
+                        page_number=page_one.page_number,
+                        page_type=page_one.page_type,
+                        heading_text=page_one.heading_text,
+                        doc_refs=list(page_one.doc_refs),
+                        law_no=page_one.law_no,
+                        law_year=page_one.law_year,
+                        article_refs=list(page_one.article_refs),
+                        has_caption_terms=page_one.has_caption_terms,
+                        has_order_terms=page_one.has_order_terms,
                         doc_summary=page_one.doc_summary,
                     )
                 )
@@ -2555,6 +2800,15 @@ class RAGPipelineBuilder:
             text=chunk.text,
             retrieval_score=float(chunk.score),
             rerank_score=float(chunk.score),
+            page_number=chunk.page_number,
+            page_type=chunk.page_type,
+            heading_text=chunk.heading_text,
+            doc_refs=list(chunk.doc_refs),
+            law_no=chunk.law_no,
+            law_year=chunk.law_year,
+            article_refs=list(chunk.article_refs),
+            has_caption_terms=chunk.has_caption_terms,
+            has_order_terms=chunk.has_order_terms,
             doc_summary=chunk.doc_summary,
         )
 
@@ -4553,6 +4807,15 @@ class RAGPipelineBuilder:
                 text=chunk.text,
                 retrieval_score=chunk.score,
                 rerank_score=chunk.score,
+                page_number=chunk.page_number,
+                page_type=chunk.page_type,
+                heading_text=chunk.heading_text,
+                doc_refs=list(chunk.doc_refs),
+                law_no=chunk.law_no,
+                law_year=chunk.law_year,
+                article_refs=list(chunk.article_refs),
+                has_caption_terms=chunk.has_caption_terms,
+                has_order_terms=chunk.has_order_terms,
                 doc_summary=chunk.doc_summary,
             )
             for chunk in sorted_chunks[: max(0, int(top_n))]
@@ -5368,6 +5631,15 @@ class RAGPipelineBuilder:
                     text=chunk.text,
                     retrieval_score=float(chunk.score),
                     rerank_score=float(chunk.score),
+                    page_number=chunk.page_number,
+                    page_type=chunk.page_type,
+                    heading_text=chunk.heading_text,
+                    doc_refs=list(chunk.doc_refs),
+                    law_no=chunk.law_no,
+                    law_year=chunk.law_year,
+                    article_refs=list(chunk.article_refs),
+                    has_caption_terms=chunk.has_caption_terms,
+                    has_order_terms=chunk.has_order_terms,
                     doc_summary=chunk.doc_summary,
                 )
             )
@@ -6045,6 +6317,7 @@ class RAGPipelineBuilder:
         compare_shape = len(compare_refs) >= 2 and kind in {"boolean", "name", "number", "date"} and (
             kind == "boolean"
             or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+            or _is_case_monetary_claim_compare_query(query, answer_type=answer_type)
             or "same year" in q_lower
             or "administ" in q_lower
             or "same party" in q_lower
