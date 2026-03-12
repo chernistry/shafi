@@ -5918,6 +5918,28 @@ class RAGPipelineBuilder:
         return doc_ids
 
     @classmethod
+    def _context_family_chunk_ids(
+        cls,
+        *,
+        doc_ids: set[str],
+        context_chunks: Sequence[RankedChunk],
+    ) -> list[str]:
+        if not doc_ids:
+            return []
+        ordered: list[str] = []
+        seen_pages: set[tuple[str, str]] = set()
+        for chunk in context_chunks:
+            doc_id = str(getattr(chunk, "doc_id", "") or chunk.chunk_id).strip()
+            if doc_id not in doc_ids:
+                continue
+            page_key = (doc_id, str(getattr(chunk, "section_path", "") or "").strip())
+            if page_key in seen_pages:
+                continue
+            seen_pages.add(page_key)
+            ordered.append(chunk.chunk_id)
+        return ordered
+
+    @classmethod
     def _is_named_metadata_support_query(cls, query: str) -> bool:
         q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
         if not q or _is_broad_enumeration_query(query):
@@ -5941,6 +5963,39 @@ class RAGPipelineBuilder:
                 "who made",
             )
         )
+
+    @classmethod
+    def _named_metadata_requires_support_union(cls, query: str) -> bool:
+        q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if not cls._is_named_metadata_support_query(query):
+            return False
+
+        atoms = 0
+        if any(term in q for term in ("citation title", "what is the title")):
+            atoms += 1
+        if any(term in q for term in ("official law number", "official difc law number")):
+            atoms += 1
+        if any(term in q for term in ("updated", "consolidated version", "published")):
+            atoms += 1
+        if any(term in q for term in ("enact", "effective date", "commencement")):
+            atoms += 1
+        if "administ" in q:
+            atoms += 1
+        if "made by" in q or "who made" in q:
+            atoms += 1
+
+        if "and any regulations made under it" in q:
+            return False
+
+        multiple_named_refs = (
+            " and " in q
+            and (
+                len(_LAW_NO_REF_RE.findall(query or "")) >= 2
+                or len(_extract_question_title_refs(query)) >= 2
+                or len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
+            )
+        )
+        return atoms >= 2 or (atoms >= 1 and multiple_named_refs)
 
     @classmethod
     def _apply_support_shape_policy(
@@ -6012,8 +6067,13 @@ class RAGPipelineBuilder:
                 compare_doc_ids.update(
                     cls._doc_ids_for_chunk_ids(chunk_ids=[title_chunk_id], context_chunks=context_chunks)
                 )
+            for chunk_id in cls._context_family_chunk_ids(
+                doc_ids=compare_doc_ids,
+                context_chunks=context_chunks,
+            ):
+                _push(chunk_id)
 
-        metadata_query = cls._is_named_metadata_support_query(query)
+        metadata_query = cls._named_metadata_requires_support_union(query)
         metadata_doc_ids: set[str] = set()
         if metadata_query:
             for ref in cls._support_question_refs(query)[:4]:
@@ -6024,6 +6084,11 @@ class RAGPipelineBuilder:
                 metadata_doc_ids.update(
                     cls._doc_ids_for_chunk_ids(chunk_ids=[title_chunk_id], context_chunks=context_chunks)
                 )
+            for chunk_id in cls._context_family_chunk_ids(
+                doc_ids=metadata_doc_ids,
+                context_chunks=context_chunks,
+            ):
+                _push(chunk_id)
 
         costs_query = kind == "free_text" and _is_case_outcome_query(query) and (
             "cost" in q_lower or "final ruling" in q_lower

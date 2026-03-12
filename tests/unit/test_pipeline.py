@@ -805,6 +805,17 @@ def test_apply_support_shape_policy_keeps_both_sides_for_strict_case_compare() -
             doc_summary="",
         ),
         RankedChunk(
+            chunk_id="case-a:page2",
+            doc_id="cfi-010-2024",
+            doc_title="CFI 010/2024 Alpha v Beta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="Supporting procedural details for CFI 010/2024.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+        RankedChunk(
             chunk_id="case-b:title",
             doc_id="cfi-016-2025",
             doc_title="CFI 016/2025 Gamma v Delta",
@@ -813,6 +824,17 @@ def test_apply_support_shape_policy_keeps_both_sides_for_strict_case_compare() -
             text="CFI 016/2025 Gamma v Delta. Date of Issue: 4 February 2025.",
             retrieval_score=0.95,
             rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="case-b:page2",
+            doc_id="cfi-016-2025",
+            doc_title="CFI 016/2025 Gamma v Delta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="Supporting procedural details for CFI 016/2025.",
+            retrieval_score=0.93,
+            rerank_score=0.93,
             doc_summary="",
         ),
     ]
@@ -826,11 +848,11 @@ def test_apply_support_shape_policy_keeps_both_sides_for_strict_case_compare() -
         support_ids=[],
     )
 
-    assert set(shaped_ids) == {"case-a:title", "case-b:title"}
+    assert set(shaped_ids) == {"case-a:title", "case-a:page2", "case-b:title", "case-b:page2"}
     assert flags == []
 
 
-def test_apply_support_shape_policy_keeps_title_page_for_named_metadata_query() -> None:
+def test_apply_support_shape_policy_keeps_title_page_for_multi_atom_named_metadata_query() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
     context_chunks = [
@@ -846,12 +868,64 @@ def test_apply_support_shape_policy_keeps_title_page_for_named_metadata_query() 
             doc_summary="",
         ),
         RankedChunk(
-            chunk_id="found:admin",
+            chunk_id="found:update",
             doc_id="foundations-law",
             doc_title="Foundations Law 2018",
             doc_type=DocType.STATUTE,
             section_path="page:4",
-            text="The Registrar shall administer this Law and any Regulations made under it.",
+            text="The consolidated version of this Law was updated on 1 July 2024.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="found:enactment",
+            doc_id="foundations-law",
+            doc_title="Foundations Law 2018",
+            doc_type=DocType.STATUTE,
+            section_path="page:2",
+            text="This Law comes into force on the date specified in the Enactment Notice.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="free_text",
+        answer="The title is Foundations Law 2018 and the consolidated version was updated on 1 July 2024.",
+        query="What is the title of the Foundations Law 2018 and when was its consolidated version last updated?",
+        context_chunks=context_chunks,
+        cited_ids=["found:update"],
+        support_ids=["found:update"],
+    )
+
+    assert set(shaped_ids) == {"found:title", "found:update", "found:enactment"}
+    assert flags == []
+
+
+def test_apply_support_shape_policy_does_not_inflate_single_atom_named_metadata_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:title",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text='This Law may be cited as the "Personal Property Law 2005".',
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:maker",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text="This Law is made by the Ruler of Dubai.",
             retrieval_score=0.95,
             rerank_score=0.95,
             doc_summary="",
@@ -860,14 +934,14 @@ def test_apply_support_shape_policy_keeps_title_page_for_named_metadata_query() 
 
     shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
         answer_type="free_text",
-        answer="Registrar administers Foundations Law 2018 and any Regulations made under it.",
-        query="Who administers the Foundations Law 2018 and any Regulations made under it?",
+        answer="This Law was made by the Ruler of Dubai.",
+        query="According to Article 2 of the DIFC Personal Property Law 2005, who made this Law?",
         context_chunks=context_chunks,
-        cited_ids=["found:admin"],
-        support_ids=["found:admin"],
+        cited_ids=["law:maker"],
+        support_ids=["law:maker"],
     )
 
-    assert set(shaped_ids) == {"found:title", "found:admin"}
+    assert shaped_ids == ["law:maker"]
     assert flags == []
 
 

@@ -15,9 +15,13 @@ from rag_challenge.submission.platform import (
     PlatformCaseResult,
     PlatformEvaluationClient,
     PlatformPaths,
+    _build_all_context_pages_challenger_payload,
+    _build_anchor_page_challenger_payload,
     _build_equivalence_canary,
     _build_preflight_summary,
     _build_results_anomaly_report,
+    _build_support_shape_report,
+    _build_truth_audit_report,
     _create_code_archive,
     _extract_http_error_message,
     _is_resources_not_published_error,
@@ -351,11 +355,14 @@ def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> No
         docs_dir=docs_dir,
         questions_path=questions_path,
         submission_path=submission_path,
+        raw_results_path=phase_dir / "raw_results.json",
         code_archive_path=archive_path,
         audit_report_path=phase_dir / "audit.json",
         status_path=phase_dir / "status.json",
         preflight_summary_path=phase_dir / "preflight_summary.json",
         canary_path=phase_dir / "canary.json",
+        truth_audit_path=phase_dir / "truth_audit_scaffold.json",
+        truth_audit_workbook_path=phase_dir / "truth_audit_workbook.md",
     )
 
     results = [
@@ -402,6 +409,8 @@ def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> No
         point_count=42,
         anomaly_report={"anomaly_case_ids": ["q-2"], "anomaly_count": 1},
         canary_report={"answer_drift_count": 0},
+        support_shape_report={"blocking_case_count": 0},
+        truth_audit_report={"deterministic_incomplete_count": 70},
     )
 
     assert summary["phase"] == "warmup"
@@ -416,12 +425,121 @@ def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> No
     assert summary["pdf_count"] == 2
     assert summary["anomaly_report"] == {"anomaly_case_ids": ["q-2"], "anomaly_count": 1}
     assert summary["equivalence_canary"] == {"answer_drift_count": 0}
+    assert summary["support_shape_report"] == {"blocking_case_count": 0}
+    assert summary["truth_audit_report"] == {"deterministic_incomplete_count": 70}
+    assert summary["truth_audit_workbook_path"] == str(phase_dir / "truth_audit_workbook.md")
+    assert summary["raw_results_path"] == str(phase_dir / "raw_results.json")
     assert summary["phase_collection_name"] == "legal_chunks_warmup"
     assert summary["qdrant_point_count"] == 42
     assert isinstance(summary["submission_sha256"], str) and summary["submission_sha256"]
     assert isinstance(summary["code_archive_sha256"], str) and summary["code_archive_sha256"]
     assert isinstance(summary["questions_sha256"], str) and summary["questions_sha256"]
     assert isinstance(summary["documents_zip_sha256"], str) and summary["documents_zip_sha256"]
+
+
+def test_build_anchor_page_challenger_payload_adds_title_and_page_two_anchors() -> None:
+    questions_by_id = {
+        "q-title": SubmissionCase(
+            case_id="q-title",
+            question="According to the title page of case CFI 010/2024, who is the defendant?",
+            answer_type="name",
+        ),
+        "q-page-2": SubmissionCase(
+            case_id="q-page-2",
+            question="According to page 2 of case DEC 001/2025, what is the order number?",
+            answer_type="name",
+        ),
+        "q-compare": SubmissionCase(
+            case_id="q-compare",
+            question="Which case has an earlier Date of Issue: CFI 010/2024 or CFI 016/2025?",
+            answer_type="name",
+        ),
+    }
+    source_payload = {
+        "architecture_summary": "summary",
+        "answers": [
+            {
+                "question_id": "q-title",
+                "answer": "ONORA",
+                "telemetry": {
+                    "retrieval": {"retrieved_chunk_pages": [{"doc_id": "cfi-010-2024", "page_numbers": [3]}]},
+                    "model_name": "strict-extractor",
+                },
+            },
+            {
+                "question_id": "q-page-2",
+                "answer": "DEC 001/2025",
+                "telemetry": {
+                    "retrieval": {"retrieved_chunk_pages": [{"doc_id": "dec-001-2025", "page_numbers": [5]}]},
+                    "model_name": "strict-extractor",
+                },
+            },
+            {
+                "question_id": "q-compare",
+                "answer": "CFI 010/2024",
+                "telemetry": {
+                    "retrieval": {
+                        "retrieved_chunk_pages": [
+                            {"doc_id": "cfi-010-2024", "page_numbers": [8]},
+                            {"doc_id": "cfi-016-2025", "page_numbers": [14]},
+                        ]
+                    },
+                    "model_name": "strict-extractor",
+                },
+            },
+        ],
+    }
+
+    challenger = _build_anchor_page_challenger_payload(
+        source_payload=source_payload,
+        questions_by_id=questions_by_id,
+    )
+    answers = {answer["question_id"]: answer for answer in challenger["answers"]}
+
+    assert answers["q-title"]["telemetry"]["retrieval"]["retrieved_chunk_pages"] == [
+        {"doc_id": "cfi-010-2024", "page_numbers": [1, 3]},
+    ]
+    assert answers["q-page-2"]["telemetry"]["retrieval"]["retrieved_chunk_pages"] == [
+        {"doc_id": "dec-001-2025", "page_numbers": [2, 5]},
+    ]
+    assert answers["q-compare"]["telemetry"]["retrieval"]["retrieved_chunk_pages"] == [
+        {"doc_id": "cfi-010-2024", "page_numbers": [1, 8]},
+        {"doc_id": "cfi-016-2025", "page_numbers": [1, 14]},
+    ]
+
+
+def test_build_all_context_pages_challenger_payload_uses_context_page_ids() -> None:
+    source_payload = {
+        "architecture_summary": "summary",
+        "answers": [
+            {
+                "question_id": "q-1",
+                "answer": "ONORA",
+                "telemetry": {
+                    "retrieval": {"retrieved_chunk_pages": [{"doc_id": "arb-034", "page_numbers": [2]}]},
+                    "model_name": "strict-extractor",
+                },
+            }
+        ],
+    }
+    source_results = [
+        PlatformCaseResult(
+            case=SubmissionCase(case_id="q-1", question="Who is the defendant in case ARB 034/2025?", answer_type="name"),
+            answer_text="ONORA",
+            telemetry={"context_page_ids": ["arb-034_1", "arb-034_2", "arb-034_4"]},
+            total_ms=10,
+        )
+    ]
+
+    challenger = _build_all_context_pages_challenger_payload(
+        source_payload=source_payload,
+        source_results=source_results,
+    )
+    answers = {answer["question_id"]: answer for answer in challenger["answers"]}
+
+    assert answers["q-1"]["telemetry"]["retrieval"]["retrieved_chunk_pages"] == [
+        {"doc_id": "arb-034", "page_numbers": [1, 2, 4]},
+    ]
 
 
 def test_result_anomaly_flags_detect_specific_unsupported_with_support_pages() -> None:
@@ -522,6 +640,77 @@ def test_build_equivalence_canary_reports_answer_and_page_drift() -> None:
     assert report["answer_drift_case_ids"] == ["q-1"]
     assert report["model_drift_case_ids"] == ["q-1"]
     assert report["page_drift_case_ids"] == ["q-1"]
+
+
+def test_build_support_shape_report_collects_blocking_flags() -> None:
+    scaffold = {
+        "records": [
+            {
+                "question_id": "q-ok",
+                "support_shape_flags": [],
+            },
+            {
+                "question_id": "q-compare",
+                "support_shape_flags": ["comparison_missing_side"],
+            },
+            {
+                "question_id": "q-meta",
+                "support_shape_flags": ["metadata_multi_atom_maybe_undercovered"],
+            },
+            {
+                "question_id": "q-info",
+                "support_shape_flags": ["unsupported_with_support_pages"],
+            },
+            {
+                "question_id": "q-outcome",
+                "support_shape_flags": ["case_outcome_disposition_maybe_missing"],
+            },
+        ]
+    }
+
+    report = _build_support_shape_report(scaffold)
+
+    assert report["flagged_case_ids"] == ["q-compare", "q-meta", "q-info", "q-outcome"]
+    assert report["blocking_case_ids"] == ["q-compare", "q-meta", "q-outcome"]
+    assert report["flag_counts"] == {
+        "comparison_missing_side": 1,
+        "metadata_multi_atom_maybe_undercovered": 1,
+        "unsupported_with_support_pages": 1,
+        "case_outcome_disposition_maybe_missing": 1,
+    }
+
+
+def test_build_truth_audit_report_counts_incomplete_deterministic_cases() -> None:
+    scaffold = {
+        "records": [
+            {
+                "question_id": "q-det-complete",
+                "answer_type": "boolean",
+                "manual_verdict": "correct",
+            },
+            {
+                "question_id": "q-det-missing",
+                "answer_type": "name",
+                "manual_verdict": "",
+            },
+            {
+                "question_id": "q-free-missing",
+                "answer_type": "free_text",
+                "manual_verdict": "",
+            },
+        ]
+    }
+
+    report = _build_truth_audit_report(scaffold)
+
+    assert report == {
+        "deterministic_complete_count": 1,
+        "deterministic_incomplete_count": 1,
+        "deterministic_incomplete_case_ids": ["q-det-missing"],
+        "free_text_complete_count": 0,
+        "free_text_incomplete_count": 1,
+        "free_text_incomplete_case_ids": ["q-free-missing"],
+    }
 
 
 def test_resolve_query_concurrency_defaults_to_safe_mode() -> None:

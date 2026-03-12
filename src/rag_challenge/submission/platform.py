@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
+from scripts.build_platform_truth_audit import build_truth_audit_scaffold, render_truth_audit_workbook
 
 from rag_challenge.config import get_settings
 from rag_challenge.config.logging import setup_logging
@@ -92,11 +93,14 @@ class PlatformPaths:
     docs_dir: Path
     questions_path: Path
     submission_path: Path
+    raw_results_path: Path
     code_archive_path: Path
     audit_report_path: Path
     status_path: Path
     preflight_summary_path: Path
     canary_path: Path
+    truth_audit_path: Path
+    truth_audit_workbook_path: Path
 
 
 @dataclass(frozen=True)
@@ -289,11 +293,39 @@ def _resolve_phase_paths() -> PlatformPaths:
         docs_dir=phase_dir / settings.documents_dirname,
         questions_path=phase_dir / settings.questions_filename,
         submission_path=phase_dir / settings.submission_filename,
+        raw_results_path=phase_dir / "raw_results.json",
         code_archive_path=phase_dir / settings.code_archive_filename,
         audit_report_path=phase_dir / "code_archive_audit.json",
         status_path=phase_dir / "submission_status.json",
         preflight_summary_path=phase_dir / "preflight_summary.json",
         canary_path=phase_dir / "equivalence_canary.json",
+        truth_audit_path=phase_dir / "truth_audit_scaffold.json",
+        truth_audit_workbook_path=phase_dir / "truth_audit_workbook.md",
+    )
+
+
+def _with_artifact_suffix(path: Path, suffix: str) -> Path:
+    if not suffix:
+        return path
+    return path.with_name(f"{path.stem}_{suffix}{path.suffix}")
+
+
+def _suffix_platform_paths(paths: PlatformPaths, suffix: str) -> PlatformPaths:
+    if not suffix:
+        return paths
+    return PlatformPaths(
+        phase_dir=paths.phase_dir,
+        docs_dir=paths.docs_dir,
+        questions_path=paths.questions_path,
+        submission_path=_with_artifact_suffix(paths.submission_path, suffix),
+        raw_results_path=_with_artifact_suffix(paths.raw_results_path, suffix),
+        code_archive_path=_with_artifact_suffix(paths.code_archive_path, suffix),
+        audit_report_path=_with_artifact_suffix(paths.audit_report_path, suffix),
+        status_path=_with_artifact_suffix(paths.status_path, suffix),
+        preflight_summary_path=_with_artifact_suffix(paths.preflight_summary_path, suffix),
+        canary_path=_with_artifact_suffix(paths.canary_path, suffix),
+        truth_audit_path=_with_artifact_suffix(paths.truth_audit_path, suffix),
+        truth_audit_workbook_path=_with_artifact_suffix(paths.truth_audit_workbook_path, suffix),
     )
 
 
@@ -511,6 +543,34 @@ def _project_platform_answer(result: PlatformCaseResult) -> dict[str, object]:
     }
 
 
+def _serialize_platform_case_result(result: PlatformCaseResult) -> dict[str, object]:
+    return {
+        "case": {
+            "case_id": result.case.case_id,
+            "question": result.case.question,
+            "answer_type": result.case.answer_type,
+        },
+        "answer_text": result.answer_text,
+        "telemetry": result.telemetry,
+        "total_ms": result.total_ms,
+    }
+
+
+def _deserialize_platform_case_result(payload: dict[str, object]) -> PlatformCaseResult:
+    case_obj = payload.get("case")
+    case_payload = cast("dict[str, object]", case_obj) if isinstance(case_obj, dict) else {}
+    return PlatformCaseResult(
+        case=SubmissionCase(
+            case_id=str(case_payload.get("case_id") or ""),
+            question=str(case_payload.get("question") or ""),
+            answer_type=str(case_payload.get("answer_type") or "free_text"),
+        ),
+        answer_text=str(payload.get("answer_text") or ""),
+        telemetry=cast("dict[str, object]", payload.get("telemetry") or {}),
+        total_ms=as_int(payload.get("total_ms"), 0),
+    )
+
+
 def _projected_answer_signature(result: PlatformCaseResult) -> tuple[SubmissionAnswer, list[str]]:
     payload = _project_platform_answer(result)
     telemetry_obj = payload.get("telemetry")
@@ -697,6 +757,194 @@ def _build_platform_submission_payload(results: list[PlatformCaseResult]) -> dic
     }
 
 
+def _load_questions_by_id(path: Path) -> dict[str, SubmissionCase]:
+    return {case.case_id: case for case in load_cases(path)}
+
+
+def _load_platform_submission_payload(path: Path) -> dict[str, object]:
+    payload_obj: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload_obj, dict):
+        raise ValueError(f"Submission payload must be an object: {path}")
+    payload = cast("dict[str, object]", payload_obj)
+    answers_obj = payload.get("answers")
+    if not isinstance(answers_obj, list):
+        raise ValueError(f"Submission payload must contain answers[]: {path}")
+    return payload
+
+
+def _load_raw_results(path: Path) -> list[PlatformCaseResult]:
+    payload_obj: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload_obj, list):
+        raise ValueError(f"Raw results payload must be a list: {path}")
+    results: list[PlatformCaseResult] = []
+    for item in cast("list[object]", payload_obj):
+        if not isinstance(item, dict):
+            continue
+        results.append(_deserialize_platform_case_result(cast("dict[str, object]", item)))
+    return results
+
+
+def _answer_payload_by_question_id(payload: dict[str, object]) -> dict[str, dict[str, object]]:
+    answers_obj = payload.get("answers")
+    answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
+    return {
+        str(answer.get("question_id") or "").strip(): answer
+        for answer in answers
+        if str(answer.get("question_id") or "").strip()
+    }
+
+
+def _question_anchor_pages(question: str) -> list[int]:
+    normalized = re.sub(r"\s+", " ", (question or "").strip()).lower()
+    if not normalized:
+        return []
+    if "title page" in normalized or "cover page" in normalized or "title/cover page" in normalized:
+        return [1]
+    if "first page" in normalized:
+        return [1]
+    if "second page" in normalized:
+        return [2]
+    if match := re.search(r"\bpage\s+(\d+)\b", normalized):
+        return [int(match.group(1))]
+    return []
+
+
+def _is_anchor_comparison_question(question: str, answer_type: str) -> bool:
+    normalized = re.sub(r"\s+", " ", (question or "").strip()).lower()
+    if answer_type.strip().lower() not in {"boolean", "name", "names", "date", "number"}:
+        return False
+    if len(_CASE_REF_RE.findall(question or "")) < 2:
+        return False
+    return any(term in normalized for term in ("party", "claimant", "defendant", "judge", "presided", "date of issue", "issued"))
+
+
+def _anchor_page_restitution_refs(
+    *,
+    refs: list[dict[str, object]],
+    question: str,
+    answer_type: str,
+) -> list[dict[str, object]]:
+    anchor_pages = set(_question_anchor_pages(question))
+    if _is_anchor_comparison_question(question, answer_type):
+        anchor_pages.add(1)
+    if not anchor_pages:
+        return refs
+
+    by_doc: dict[str, set[int]] = {}
+    for ref in refs:
+        doc_id = str(ref.get("doc_id") or "").strip()
+        page_numbers_obj = ref.get("page_numbers")
+        if not doc_id or not isinstance(page_numbers_obj, list):
+            continue
+        page_numbers = {
+            int(page)
+            for page in cast("list[object]", page_numbers_obj)
+            if isinstance(page, int | float)
+        }
+        if not page_numbers:
+            continue
+        by_doc.setdefault(doc_id, set()).update(page_numbers)
+
+    for page in anchor_pages:
+        for doc_id in list(by_doc.keys()):
+            by_doc[doc_id].add(page)
+
+    return [
+        {"doc_id": doc_id, "page_numbers": sorted(page_numbers)}
+        for doc_id, page_numbers in sorted(by_doc.items())
+    ]
+
+
+def _rebuild_results_from_submission_payload(
+    *,
+    questions_by_id: dict[str, SubmissionCase],
+    payload: dict[str, object],
+) -> list[PlatformCaseResult]:
+    answers_obj = payload.get("answers")
+    answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
+    results: list[PlatformCaseResult] = []
+    for answer in answers:
+        question_id = str(answer.get("question_id") or "").strip()
+        case = questions_by_id.get(question_id)
+        if case is None:
+            continue
+        telemetry_obj = answer.get("telemetry")
+        telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
+        retrieval_obj = telemetry.get("retrieval")
+        retrieval = cast("dict[str, object]", retrieval_obj) if isinstance(retrieval_obj, dict) else {}
+        refs_obj = retrieval.get("retrieved_chunk_pages")
+        refs = cast("list[dict[str, object]]", refs_obj) if isinstance(refs_obj, list) else []
+        answer_value = cast("SubmissionAnswer", answer.get("answer"))
+        answer_text = "null" if answer_value is None else (answer_value if isinstance(answer_value, str) else json.dumps(answer_value, ensure_ascii=False))
+        results.append(
+            PlatformCaseResult(
+                case=case,
+                answer_text=answer_text,
+                telemetry={
+                    "model_llm": str(telemetry.get("model_name") or ""),
+                    "used_page_ids": _flatten_retrieval_refs(refs),
+                },
+                total_ms=0,
+            )
+        )
+    return results
+
+
+def _build_anchor_page_challenger_payload(
+    *,
+    source_payload: dict[str, object],
+    questions_by_id: dict[str, SubmissionCase],
+) -> dict[str, object]:
+    challenger = json.loads(json.dumps(source_payload))
+    answers_by_id = _answer_payload_by_question_id(challenger)
+    for question_id, answer in answers_by_id.items():
+        case = questions_by_id.get(question_id)
+        if case is None:
+            continue
+        telemetry_obj = answer.get("telemetry")
+        telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
+        retrieval_obj = telemetry.get("retrieval")
+        retrieval = cast("dict[str, object]", retrieval_obj) if isinstance(retrieval_obj, dict) else {}
+        refs_obj = retrieval.get("retrieved_chunk_pages")
+        refs = cast("list[dict[str, object]]", refs_obj) if isinstance(refs_obj, list) else []
+        retrieval["retrieved_chunk_pages"] = _anchor_page_restitution_refs(
+            refs=refs,
+            question=case.question,
+            answer_type=case.answer_type,
+        )
+        telemetry["retrieval"] = retrieval
+        answer["telemetry"] = telemetry
+    return challenger
+
+
+def _build_all_context_pages_challenger_payload(
+    *,
+    source_payload: dict[str, object],
+    source_results: list[PlatformCaseResult],
+) -> dict[str, object]:
+    challenger = json.loads(json.dumps(source_payload))
+    answers_by_id = _answer_payload_by_question_id(challenger)
+    results_by_id = {result.case.case_id: result for result in source_results}
+    for question_id, answer in answers_by_id.items():
+        result = results_by_id.get(question_id)
+        if result is None:
+            continue
+        context_page_ids = coerce_str_list(result.telemetry.get("context_page_ids"))
+        if not context_page_ids:
+            raise ValueError(
+                "support-only challenger 'all-context-pages' requires raw results with context_page_ids "
+                f"for question_id={question_id}"
+            )
+        telemetry_obj = answer.get("telemetry")
+        telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
+        retrieval_obj = telemetry.get("retrieval")
+        retrieval = cast("dict[str, object]", retrieval_obj) if isinstance(retrieval_obj, dict) else {}
+        retrieval["retrieved_chunk_pages"] = _page_ids_to_retrieval_refs(context_page_ids)
+        telemetry["retrieval"] = retrieval
+        answer["telemetry"] = telemetry
+    return challenger
+
+
 def _resolve_archive_allowlist_path(raw_path: str) -> Path:
     path = Path(raw_path)
     if path.is_absolute():
@@ -846,6 +1094,8 @@ def _build_preflight_summary(
     point_count: int | None,
     anomaly_report: dict[str, object] | None = None,
     canary_report: dict[str, object] | None = None,
+    support_shape_report: dict[str, object] | None = None,
+    truth_audit_report: dict[str, object] | None = None,
 ) -> dict[str, object]:
     answers_obj = payload.get("answers")
     answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
@@ -923,12 +1173,89 @@ def _build_preflight_summary(
         "pdf_count": pdf_count,
         "phase_collection_name": collection_name,
         "qdrant_point_count": point_count,
+        "truth_audit_workbook_path": str(paths.truth_audit_workbook_path),
+        "raw_results_path": str(paths.raw_results_path),
     }
     if anomaly_report:
         summary["anomaly_report"] = anomaly_report
     if canary_report:
         summary["equivalence_canary"] = canary_report
+    if support_shape_report:
+        summary["support_shape_report"] = support_shape_report
+    if truth_audit_report:
+        summary["truth_audit_report"] = truth_audit_report
     return summary
+
+
+def _build_support_shape_report(scaffold: dict[str, object]) -> dict[str, object]:
+    records_obj = scaffold.get("records")
+    records = cast("list[dict[str, object]]", records_obj) if isinstance(records_obj, list) else []
+
+    blocking_flags = {
+        "comparison_missing_side",
+        "multi_slot_support_maybe_undercovered",
+        "metadata_multi_atom_maybe_undercovered",
+        "case_outcome_disposition_maybe_missing",
+    }
+    flagged_case_ids: list[str] = []
+    blocking_case_ids: list[str] = []
+    flags_by_case: dict[str, list[str]] = {}
+    flag_counts: dict[str, int] = {}
+
+    for record in records:
+        case_id = str(record.get("question_id") or "").strip()
+        flags = [str(flag).strip() for flag in cast("list[object]", record.get("support_shape_flags") or []) if str(flag).strip()]
+        if not case_id or not flags:
+            continue
+        flagged_case_ids.append(case_id)
+        flags_by_case[case_id] = flags
+        if any(flag in blocking_flags for flag in flags):
+            blocking_case_ids.append(case_id)
+        for flag in flags:
+            flag_counts[flag] = flag_counts.get(flag, 0) + 1
+
+    return {
+        "flagged_case_ids": flagged_case_ids,
+        "blocking_case_ids": blocking_case_ids,
+        "flagged_case_count": len(flagged_case_ids),
+        "blocking_case_count": len(blocking_case_ids),
+        "flags_by_case": flags_by_case,
+        "flag_counts": flag_counts,
+    }
+
+
+def _build_truth_audit_report(scaffold: dict[str, object]) -> dict[str, object]:
+    records_obj = scaffold.get("records")
+    records = cast("list[dict[str, object]]", records_obj) if isinstance(records_obj, list) else []
+
+    deterministic_incomplete_case_ids: list[str] = []
+    free_text_incomplete_case_ids: list[str] = []
+    deterministic_complete = 0
+    free_text_complete = 0
+
+    for record in records:
+        answer_type = str(record.get("answer_type") or "").strip().lower()
+        case_id = str(record.get("question_id") or "").strip()
+        verdict = str(record.get("manual_verdict") or "").strip()
+        if answer_type == "free_text":
+            if verdict:
+                free_text_complete += 1
+            elif case_id:
+                free_text_incomplete_case_ids.append(case_id)
+        else:
+            if verdict:
+                deterministic_complete += 1
+            elif case_id:
+                deterministic_incomplete_case_ids.append(case_id)
+
+    return {
+        "deterministic_complete_count": deterministic_complete,
+        "deterministic_incomplete_count": len(deterministic_incomplete_case_ids),
+        "deterministic_incomplete_case_ids": deterministic_incomplete_case_ids,
+        "free_text_complete_count": free_text_complete,
+        "free_text_incomplete_count": len(free_text_incomplete_case_ids),
+        "free_text_incomplete_case_ids": free_text_incomplete_case_ids,
+    }
 
 
 async def _download_phase_documents(client: PlatformEvaluationClient, paths: PlatformPaths, *, refresh: bool) -> None:
@@ -1042,7 +1369,7 @@ async def _submit_existing_artifacts(
 async def _async_main(args: argparse.Namespace) -> int:
     settings = get_settings()
     setup_logging(settings.app.log_level, settings.app.log_format)
-    paths = _resolve_phase_paths()
+    paths = _suffix_platform_paths(_resolve_phase_paths(), str(args.artifact_suffix or "").strip())
     collection_name = _phase_collection_name()
     query_concurrency = _resolve_query_concurrency(args.query_concurrency)
     canary_concurrency = int(args.equivalence_canary_concurrency or 0)
@@ -1055,6 +1382,91 @@ async def _async_main(args: argparse.Namespace) -> int:
         logger.info("Prepared curated code archive without touching platform resources")
         logger.info("code_archive=%s", paths.code_archive_path)
         logger.info("audit_report=%s", paths.audit_report_path)
+        return 0
+
+    if args.support_only_challenger:
+        source_submission_path = Path(args.source_submission_path) if args.source_submission_path else paths.submission_path
+        source_questions_path = Path(args.source_questions_path) if args.source_questions_path else paths.questions_path
+        source_raw_results_path = Path(args.source_raw_results_path) if args.source_raw_results_path else paths.raw_results_path
+        if not source_submission_path.exists():
+            raise FileNotFoundError(f"Source submission JSON not found: {source_submission_path}")
+        if not source_questions_path.exists():
+            raise FileNotFoundError(f"Source questions JSON not found: {source_questions_path}")
+
+        source_payload = _load_platform_submission_payload(source_submission_path)
+        questions_by_id = _load_questions_by_id(source_questions_path)
+        if args.support_only_challenger == "anchor-page-restitution":
+            payload = _build_anchor_page_challenger_payload(
+                source_payload=source_payload,
+                questions_by_id=questions_by_id,
+            )
+            results = _rebuild_results_from_submission_payload(
+                questions_by_id=questions_by_id,
+                payload=payload,
+            )
+        elif args.support_only_challenger == "all-context-pages":
+            if not source_raw_results_path.exists():
+                raise FileNotFoundError(
+                    "Source raw results JSON not found for support-only challenger 'all-context-pages': "
+                    f"{source_raw_results_path}"
+                )
+            source_results = _load_raw_results(source_raw_results_path)
+            payload = _build_all_context_pages_challenger_payload(
+                source_payload=source_payload,
+                source_results=source_results,
+            )
+            results = _rebuild_results_from_submission_payload(
+                questions_by_id=questions_by_id,
+                payload=payload,
+            )
+        else:
+            raise ValueError(f"Unsupported support-only challenger: {args.support_only_challenger}")
+
+        paths.phase_dir.mkdir(parents=True, exist_ok=True)
+        paths.submission_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        paths.raw_results_path.write_text(
+            json.dumps([_serialize_platform_case_result(result) for result in results], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        truth_audit_scaffold = build_truth_audit_scaffold(
+            questions_path=source_questions_path,
+            submission_path=paths.submission_path,
+            docs_dir=paths.docs_dir if paths.docs_dir.exists() else None,
+            existing_scaffold_path=paths.truth_audit_path,
+        )
+        paths.truth_audit_path.write_text(
+            json.dumps(truth_audit_scaffold, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        paths.truth_audit_workbook_path.write_text(
+            render_truth_audit_workbook(truth_audit_scaffold),
+            encoding="utf-8",
+        )
+        _write_archive_artifacts(Path.cwd(), paths, archive_allowlist)
+        support_shape_report = _build_support_shape_report(truth_audit_scaffold)
+        truth_audit_report = _build_truth_audit_report(truth_audit_scaffold)
+        preflight_summary = _build_preflight_summary(
+            paths=paths,
+            collection_name=collection_name,
+            payload=payload,
+            results=results,
+            point_count=None,
+            anomaly_report=_build_results_anomaly_report(results),
+            canary_report=None,
+            support_shape_report=support_shape_report,
+            truth_audit_report=truth_audit_report,
+        )
+        paths.preflight_summary_path.write_text(
+            json.dumps(preflight_summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        logger.info("Prepared support-only challenger artifact")
+        logger.info("submission_json=%s", paths.submission_path)
+        logger.info("preflight_summary=%s", paths.preflight_summary_path)
+        logger.info("truth_audit=%s", paths.truth_audit_path)
         return 0
 
     client = PlatformEvaluationClient.from_settings()
@@ -1140,14 +1552,34 @@ async def _async_main(args: argparse.Namespace) -> int:
 
         payload = _build_platform_submission_payload(results)
         paths.phase_dir.mkdir(parents=True, exist_ok=True)
+        paths.raw_results_path.write_text(
+            json.dumps([_serialize_platform_case_result(result) for result in results], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         paths.submission_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        truth_audit_scaffold = build_truth_audit_scaffold(
+            questions_path=paths.questions_path,
+            submission_path=paths.submission_path,
+            docs_dir=paths.docs_dir,
+            existing_scaffold_path=paths.truth_audit_path,
+        )
+        paths.truth_audit_path.write_text(
+            json.dumps(truth_audit_scaffold, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        paths.truth_audit_workbook_path.write_text(
+            render_truth_audit_workbook(truth_audit_scaffold),
             encoding="utf-8",
         )
         _write_archive_artifacts(Path.cwd(), paths, archive_allowlist)
         point_count = await _qdrant_collection_point_count(collection_name)
         anomaly_report = _build_results_anomaly_report(results)
         anomaly_report["repair_report"] = anomaly_repairs
+        support_shape_report = _build_support_shape_report(truth_audit_scaffold)
+        truth_audit_report = _build_truth_audit_report(truth_audit_scaffold)
         preflight_summary = _build_preflight_summary(
             paths=paths,
             collection_name=collection_name,
@@ -1156,6 +1588,8 @@ async def _async_main(args: argparse.Namespace) -> int:
             point_count=point_count,
             anomaly_report=anomaly_report,
             canary_report=canary_report,
+            support_shape_report=support_shape_report,
+            truth_audit_report=truth_audit_report,
         )
         paths.preflight_summary_path.write_text(
             json.dumps(preflight_summary, ensure_ascii=False, indent=2),
@@ -1168,9 +1602,26 @@ async def _async_main(args: argparse.Namespace) -> int:
             logger.info("code_archive=%s", paths.code_archive_path)
             logger.info("audit_report=%s", paths.audit_report_path)
             logger.info("preflight_summary=%s", paths.preflight_summary_path)
+            logger.info("truth_audit=%s", paths.truth_audit_path)
+            logger.info("truth_audit_workbook=%s", paths.truth_audit_workbook_path)
             if canary_report is not None:
                 logger.info("equivalence_canary=%s", paths.canary_path)
             return 0
+
+        if as_int(support_shape_report.get("blocking_case_count")) > 0:
+            logger.error(
+                "Blocking support-shape violations detected in artifact: %s",
+                ", ".join(cast("list[str]", support_shape_report.get("blocking_case_ids") or [])),
+            )
+            logger.error("Inspect truth audit and preflight summary before submitting.")
+            return 3
+        if as_int(truth_audit_report.get("deterministic_incomplete_count")) > 0:
+            logger.error(
+                "Deterministic truth audit incomplete for %d cases; refusing submit until audit is filled.",
+                as_int(truth_audit_report.get("deterministic_incomplete_count")),
+            )
+            logger.error("Inspect truth audit scaffold and complete manual_verdict / failure_class fields first.")
+            return 3
 
         submit_response = await client.submit_submission(paths.submission_path, paths.code_archive_path)
         final_status = submit_response
@@ -1198,6 +1649,15 @@ def main(argv: list[str] | None = None) -> int:
         description="Build a platform-native submission package for the competition platform.",
     )
     parser.add_argument("--archive-only", action="store_true", help="Build and audit only the curated code archive.")
+    parser.add_argument(
+        "--support-only-challenger",
+        choices=("anchor-page-restitution", "all-context-pages"),
+        help="Build a support-only challenger artifact from an existing submission without changing answers.",
+    )
+    parser.add_argument("--source-submission-path", help="Source platform submission JSON for --support-only-challenger.")
+    parser.add_argument("--source-questions-path", help="Source questions JSON for --support-only-challenger.")
+    parser.add_argument("--source-raw-results-path", help="Source raw_results.json for support-only challengers that need context_page_ids.")
+    parser.add_argument("--artifact-suffix", help="Optional suffix for generated artifact filenames.")
     parser.add_argument("--refresh-downloads", action="store_true", help="Redownload questions/documents for the active phase.")
     parser.add_argument("--skip-ingest", action="store_true", help="Reuse the existing phase-specific Qdrant collection.")
     parser.add_argument("--submit", action="store_true", help="Upload submission.json and code_archive.zip to the platform.")
