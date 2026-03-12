@@ -4,19 +4,23 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, cast
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+SRC_ROOT = REPO_ROOT / "src"
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
 try:
     from build_counterfactual_candidate import _build_preflight, _load_json_dict, _load_json_list, _merge_records
-    from evaluate_candidate_debug_signal import (
-        _build_compare_markdown,
-        _evaluate_artifact,
-        _load_questions,
-        _load_raw_results,
-        _select_qids,
-    )
     from run_experiment_gate import (
         _answer_changed_count,
         _page_p95,
@@ -31,13 +35,6 @@ except ModuleNotFoundError:  # pragma: no cover
         _load_json_list,
         _merge_records,
     )
-    from scripts.evaluate_candidate_debug_signal import (
-        _build_compare_markdown,
-        _evaluate_artifact,
-        _load_questions,
-        _load_raw_results,
-        _select_qids,
-    )
     from scripts.run_experiment_gate import (
         _answer_changed_count,
         _page_p95,
@@ -47,6 +44,38 @@ except ModuleNotFoundError:  # pragma: no cover
     from scripts.search_bounded_support_subsets import _summarize_scores
 
 JsonDict = dict[str, Any]
+
+
+def _load_debug_helpers() -> tuple[
+    Any,
+    Any,
+    Any,
+    Any,
+    Any,
+]:
+    try:
+        from evaluate_candidate_debug_signal import (
+            _build_compare_markdown,
+            _evaluate_artifact,
+            _load_questions,
+            _load_raw_results,
+            _select_qids,
+        )
+    except ModuleNotFoundError:  # pragma: no cover
+        from scripts.evaluate_candidate_debug_signal import (
+            _build_compare_markdown,
+            _evaluate_artifact,
+            _load_questions,
+            _load_raw_results,
+            _select_qids,
+        )
+    return (
+        _build_compare_markdown,
+        _evaluate_artifact,
+        _load_questions,
+        _load_raw_results,
+        _select_qids,
+    )
 
 
 @dataclass(frozen=True)
@@ -193,7 +222,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=15)
     parser.add_argument("--judge-top-k", type=int, default=8)
     parser.add_argument("--judge-scope", choices=("all", "free_text", "none"), default="all")
+    parser.add_argument("--include-qid", action="append", default=[])
+    parser.add_argument("--include-qids-file", type=Path, default=None)
+    parser.add_argument("--exclude-qid", action="append", default=[])
+    parser.add_argument("--exclude-qids-file", type=Path, default=None)
     return parser.parse_args()
+
+
+def _load_qid_set(*, values: list[str], file_path: Path | None) -> set[str]:
+    out: set[str] = {str(value).strip() for value in values if str(value).strip()}
+    if file_path is not None:
+        for line in file_path.read_text(encoding="utf-8").splitlines():
+            text = line.strip()
+            if text and not text.startswith("#"):
+                out.add(text)
+    return out
 
 
 async def _async_main(args: argparse.Namespace) -> None:
@@ -213,6 +256,12 @@ async def _async_main(args: argparse.Namespace) -> None:
         baseline_submission=baseline_submission_by_id,
         page_submission=page_source_submission_by_id,
     )
+    include_qids = _load_qid_set(values=args.include_qid, file_path=args.include_qids_file.resolve() if args.include_qids_file else None)
+    exclude_qids = _load_qid_set(values=args.exclude_qid, file_path=args.exclude_qids_file.resolve() if args.exclude_qids_file else None)
+    if include_qids:
+        eligible_qids = [qid for qid in eligible_qids if qid in include_qids]
+    if exclude_qids:
+        eligible_qids = [qid for qid in eligible_qids if qid not in exclude_qids]
     baseline_raw_by_id = _raw_records_by_qid(baseline_raw_results_payload)
     baseline_all, baseline_trusted = _summarize_scores(baseline_raw_by_id, benchmark_path=args.benchmark.resolve())
     baseline_page_p95 = _page_p95(args.baseline_preflight.resolve()) or 0
@@ -279,22 +328,29 @@ async def _async_main(args: argparse.Namespace) -> None:
     ranked = sorted(results, key=_candidate_sort_key, reverse=True)
     judged_qids: set[str] = set()
     top_to_judge = ranked[: max(0, args.judge_top_k)]
-    if args.judge_scope != "none":
-        questions = _load_questions(args.questions.resolve())
-        baseline_cases = _load_raw_results(args.baseline_raw_results.resolve(), questions=questions)
+    if args.judge_scope != "none" and args.judge_top_k > 0:
+        (
+            build_compare_markdown,
+            evaluate_artifact,
+            load_questions,
+            load_raw_results,
+            select_qids,
+        ) = _load_debug_helpers()
+        questions = load_questions(args.questions.resolve())
+        baseline_cases = load_raw_results(args.baseline_raw_results.resolve(), questions=questions)
         for row in top_to_judge:
             qid = row.question_id
             merged_submission, merged_raw_results, _merged_preflight = artifacts_by_qid[qid]
             merged_raw_path = out_dir / f"raw_results_single_swap_{qid}.json"
             merged_raw_path.write_text(json.dumps(merged_raw_results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            candidate_cases = _load_raw_results(merged_raw_path, questions=questions)
-            selected_qids = _select_qids(
+            candidate_cases = load_raw_results(merged_raw_path, questions=questions)
+            selected_qids = select_qids(
                 baseline_cases=baseline_cases,
                 candidate_cases=candidate_cases,
                 scope="changed",
                 include_qids={qid},
             )
-            baseline_eval = await _evaluate_artifact(
+            baseline_eval = await evaluate_artifact(
                 label=f"{args.baseline_label}_{qid}",
                 cases_by_qid=baseline_cases,
                 selected_qids=selected_qids,
@@ -302,7 +358,7 @@ async def _async_main(args: argparse.Namespace) -> None:
                 docs_dir=args.docs_dir.resolve(),
                 out_dir=out_dir,
             )
-            candidate_eval = await _evaluate_artifact(
+            candidate_eval = await evaluate_artifact(
                 label=f"single_swap_{qid}",
                 cases_by_qid=candidate_cases,
                 selected_qids=selected_qids,
@@ -312,7 +368,7 @@ async def _async_main(args: argparse.Namespace) -> None:
             )
             compare_md = out_dir / f"candidate_debug_compare_single_swap_{qid}_vs_{args.baseline_label}.md"
             compare_md.write_text(
-                _build_compare_markdown(
+                build_compare_markdown(
                     baseline=baseline_eval,
                     candidate=candidate_eval,
                     selected_qids=selected_qids,
@@ -357,6 +413,8 @@ async def _async_main(args: argparse.Namespace) -> None:
         "page_source_label": args.page_source_label,
         "candidates_scanned": len(results),
         "judge_top_k": args.judge_top_k,
+        "include_qids": sorted(include_qids),
+        "exclude_qids": sorted(exclude_qids),
         "results": [asdict(row) for row in ranked],
         "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
     }
