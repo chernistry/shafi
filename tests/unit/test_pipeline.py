@@ -3036,6 +3036,87 @@ async def test_retrieve_multi_ref_name_monetary_claim_keeps_amount_pages(mock_se
     assert {"sct169:claim", "sct295:claim"}.issubset({chunk.chunk_id for chunk in result["retrieved"]})
 
 
+def test_select_anchor_must_include_keeps_party_overlap_title_pages(pipeline_builder) -> None:
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="ca:page1",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Example v Example",
+            section_path="page:1",
+            text="Claim No. CA 004/2025 Example Holdings Ltd v Example Services Ltd",
+            score=0.91,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="ca:page7",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Example v Example",
+            section_path="page:7",
+            text="Later page without party anchor signal.",
+            score=0.98,
+            page_number=7,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct:page1",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Example v Example",
+            section_path="page:1",
+            text="SCT 295/2025 Example Holdings Ltd v Another Defendant",
+            score=0.9,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+    ]
+
+    result = pipeline_builder._select_anchor_must_include_chunk_ids(
+        query="Do cases CA 004/2025 and SCT 295/2025 involve any of the same legal entities or individuals as parties?",
+        answer_type="boolean",
+        doc_refs=["CA 004/2025", "SCT 295/2025"],
+        retrieved=retrieved,
+    )
+
+    assert "ca:page1" in result
+    assert "sct:page1" in result
+
+
+def test_select_anchor_must_include_ignores_single_doc_claim_number_metadata_query(pipeline_builder) -> None:
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="case:title",
+            doc_id="case",
+            doc_title="CA 004/2025 Example v Example",
+            section_path="page:1",
+            text="Claim No. CA 004/2025",
+            score=0.91,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="case:claim",
+            doc_id="case",
+            doc_title="CA 004/2025 Example v Example",
+            section_path="page:2",
+            text="The claim number is CA 004/2025.",
+            score=0.89,
+            page_number=2,
+            page_type="page2_anchor",
+        ),
+    ]
+
+    result = pipeline_builder._select_anchor_must_include_chunk_ids(
+        query="What is the claim number in case CA 004/2025?",
+        answer_type="name",
+        doc_refs=["CA 004/2025"],
+        retrieved=retrieved,
+    )
+
+    assert result == []
+
+
 def test_ensure_named_commencement_context_keeps_title_and_commencement_chunks(mock_settings):
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 

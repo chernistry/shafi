@@ -331,6 +331,36 @@ def _is_case_monetary_claim_compare_query(query: str, *, answer_type: str) -> bo
     )
 
 
+def _is_case_party_overlap_compare_query(query: str, *, answer_type: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if answer_type.strip().lower() not in {"boolean", "name"}:
+        return False
+    if len(_DIFC_CASE_ID_RE.findall(query or "")) < 2:
+        return False
+    if any(
+        phrase in q
+        for phrase in (
+            "same legal",
+            "same parties",
+            "same party",
+            "same entities",
+            "main party common to both",
+            "main party to both",
+            "appeared in both",
+            "appears in both",
+            "appears as a main party in both",
+            "named as a main party in both",
+            "as parties",
+        )
+    ):
+        return True
+    has_party_subject = any(
+        token in q for token in ("party", "parties", "claimant", "defendant", "entity", "entities", "individual")
+    )
+    has_overlap_signal = any(token in q for token in ("common", "same", "appeared", "appears", "named", "both"))
+    return has_party_subject and has_overlap_signal
+
+
 def _is_interpretation_sections_common_elements_query(query: str) -> bool:
     q = re.sub(r"\s+", " ", (query or "").strip()).lower()
     return _is_common_elements_query(query) and "interpretation section" in q
@@ -1721,36 +1751,25 @@ class RAGPipelineBuilder:
 
         q_lower = re.sub(r"\s+", " ", query).strip().lower()
         needs_page_two = "page 2" in q_lower or "second page" in q_lower
-        needs_title_or_caption = any(
+        needs_explicit_title_or_caption = any(
             term in q_lower
-            for term in (
-                "title page",
-                "cover page",
-                "first page",
-                "claim number",
-                "date of issue",
-                "issue date",
-                "party",
-                "parties",
-                "judge",
-                "applicant",
-                "respondent",
-                "appellant",
-                "claimant",
-            )
+            for term in ("title page", "cover page", "first page", "header", "caption")
+        )
+        needs_case_compare_anchor = (
+            _is_common_judge_compare_query(query)
+            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+            or _is_case_monetary_claim_compare_query(query, answer_type=answer_type)
+            or _is_case_party_overlap_compare_query(query, answer_type=answer_type)
         )
         needs_outcome_anchor = (
             answer_type == "free_text" and _is_case_outcome_query(query)
         ) or any(term in q_lower for term in ("it is hereby ordered", "order", "costs"))
-        if not needs_page_two and not needs_title_or_caption and not needs_outcome_anchor:
+        if not needs_page_two and not needs_explicit_title_or_caption and not needs_case_compare_anchor and not needs_outcome_anchor:
             return []
 
         multi_doc = (
             len([ref for ref in doc_refs if str(ref).strip()]) >= 2
-            or _is_common_judge_compare_query(query)
-            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
-            or "same party" in q_lower
-            or ("judge" in q_lower and "both" in q_lower)
+            or needs_case_compare_anchor
         )
         max_docs = 3 if multi_doc else 1
 
@@ -1761,7 +1780,7 @@ class RAGPipelineBuilder:
             score = self._anchor_candidate_score(
                 chunk=chunk,
                 needs_page_two=needs_page_two,
-                needs_title_or_caption=needs_title_or_caption,
+                needs_title_or_caption=needs_explicit_title_or_caption or needs_case_compare_anchor,
                 needs_outcome_anchor=needs_outcome_anchor,
             )
             if score <= 0:
