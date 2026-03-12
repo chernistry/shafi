@@ -1092,10 +1092,7 @@ def _build_all_context_pages_challenger_payload(
             continue
         context_page_ids = coerce_str_list(result.telemetry.get("context_page_ids"))
         if not context_page_ids:
-            raise ValueError(
-                "support-only challenger 'all-context-pages' requires raw results with context_page_ids "
-                f"for question_id={question_id}"
-            )
+            continue
         telemetry_obj = answer.get("telemetry")
         telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
         retrieval_obj = telemetry.get("retrieval")

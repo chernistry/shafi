@@ -49,7 +49,7 @@ _CASE_REF_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 _CASE_SPLIT_RE = re.compile(r"\s*(?:-v-|\bv(?:\.|ersus)?\b)\s*", re.IGNORECASE)
-_CORP_DOTS_RE = re.compile(r"\b([A-Z])\.")
+_CORP_DOTS_RE = re.compile(r"\b([A-Z])\.")  # KEPT for backward compat; no longer used in _normalize_name
 _CURRENCY_PREFIX_RE = re.compile(
     r"(?:(AED|USD|EUR|GBP)\b|US\$|\$)\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(million|billion)?",
     re.IGNORECASE,
@@ -1051,8 +1051,6 @@ class StrictAnswerer:
         if not text:
             return ""
         text = _CASE_REF_PREFIX_RE.sub("", text).strip()
-        # Normalize dotted corporate suffixes, e.g., "P.J.S.C." -> "PJSC"
-        text = _CORP_DOTS_RE.sub(r"\1", text)
         return text.rstrip(" .;")
 
     @staticmethod
