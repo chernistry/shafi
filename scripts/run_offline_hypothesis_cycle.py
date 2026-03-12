@@ -26,6 +26,7 @@ def _write_cycle_summary(
     gate_report: Path,
     answer_drift_report: Path | None,
     anchor_slice_report: Path | None,
+    benchmark_delta_report: Path | None,
     scoring_report: Path | None,
     supervisor_report: Path,
     exactness_queue_report: Path,
@@ -38,6 +39,7 @@ def _write_cycle_summary(
         "gate_report": str(gate_report),
         "answer_drift_report": str(answer_drift_report) if answer_drift_report is not None else None,
         "anchor_slice_report": str(anchor_slice_report) if anchor_slice_report is not None else None,
+        "benchmark_delta_report": str(benchmark_delta_report) if benchmark_delta_report is not None else None,
         "scoring_report": str(scoring_report) if scoring_report is not None else None,
         "supervisor_report": str(supervisor_report),
         "exactness_queue_report": str(exactness_queue_report),
@@ -207,6 +209,28 @@ def main() -> int:
         anchor_slice_cmd.extend(["--qid", qid])
     _run(anchor_slice_cmd, cwd=root, env=env)
 
+    benchmark_delta_report = research_dir / f"benchmark_delta_{args.artifact_suffix}_vs_{args.baseline_label}.md"
+    benchmark_delta_json = research_dir / f"benchmark_delta_{args.artifact_suffix}_vs_{args.baseline_label}.json"
+    benchmark_delta_cmd = [
+        sys.executable,
+        "scripts/analyze_benchmark_delta.py",
+        "--baseline-label",
+        args.baseline_label,
+        "--candidate-label",
+        args.artifact_suffix,
+        "--baseline-raw-results",
+        args.baseline_raw_results,
+        "--candidate-raw-results",
+        str(candidate_raw_results),
+        "--benchmark",
+        args.benchmark,
+        "--out",
+        str(benchmark_delta_report),
+        "--json-out",
+        str(benchmark_delta_json),
+    ]
+    _run(benchmark_delta_cmd, cwd=root, env=env)
+
     exactness_queue_report = research_dir / "exactness_review_queue_2026-03-12.md"
     exactness_queue_cmd = [
         sys.executable,
@@ -305,6 +329,7 @@ def main() -> int:
         gate_report=gate_report,
         answer_drift_report=answer_drift_report,
         anchor_slice_report=anchor_slice_report,
+        benchmark_delta_report=benchmark_delta_report,
         scoring_report=scoring_report,
         supervisor_report=supervisor_report,
         exactness_queue_report=exactness_queue_report,

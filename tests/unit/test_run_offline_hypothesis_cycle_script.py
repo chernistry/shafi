@@ -18,7 +18,9 @@ def test_write_cycle_summary_marks_no_submit_policy(tmp_path: Path) -> None:
         candidate_preflight=tmp_path / "preflight_candidate.json",
         candidate_raw_results=tmp_path / "raw_candidate.json",
         gate_report=tmp_path / "gate.md",
+        answer_drift_report=tmp_path / "answer_drift.md",
         anchor_slice_report=tmp_path / "anchor.md",
+        benchmark_delta_report=tmp_path / "benchmark_delta.md",
         scoring_report=tmp_path / "score.md",
         supervisor_report=tmp_path / "supervisor.md",
         exactness_queue_report=tmp_path / "queue.md",
@@ -27,5 +29,6 @@ def test_write_cycle_summary_marks_no_submit_policy(tmp_path: Path) -> None:
     payload = json.loads(out.read_text())
     assert payload["artifact_suffix"] == "candidate"
     assert payload["anchor_slice_report"].endswith("anchor.md")
+    assert payload["benchmark_delta_report"].endswith("benchmark_delta.md")
     assert payload["scoring_report"].endswith("score.md")
     assert payload["submission_policy"] == "NO_SUBMIT_WITHOUT_USER_APPROVAL"
