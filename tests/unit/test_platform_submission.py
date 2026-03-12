@@ -15,11 +15,16 @@ from rag_challenge.submission.platform import (
     PlatformCaseResult,
     PlatformEvaluationClient,
     PlatformPaths,
+    _build_equivalence_canary,
     _build_preflight_summary,
+    _build_results_anomaly_report,
     _create_code_archive,
     _extract_http_error_message,
     _is_resources_not_published_error,
     _project_platform_answer,
+    _repair_anomalous_results,
+    _resolve_query_concurrency,
+    _result_anomaly_flags,
     _run_questions,
     _scan_text_for_secrets,
     _submit_existing_artifacts,
@@ -95,6 +100,54 @@ def test_project_platform_answer_normalizes_date_and_caps_free_text_sentences() 
 
     assert date_payload["answer"] == "2025-03-11"
     assert free_text_payload["answer"] == "Alpha. Beta. Gamma."
+
+
+def test_project_platform_answer_keeps_specific_free_text_clauses() -> None:
+    consolidated_result = PlatformCaseResult(
+        case=SubmissionCase(case_id="q-cons", question="Q?", answer_type="free_text"),
+        answer_text=(
+            "The consolidated version of Law on the Application of Civil and Commercial Laws in the DIFC 2004 "
+            "was published in November 2024 (cite: ff746f7b583490a80ba104361c0a82a1ebbf7ed9097cd03dc49d744cb5057761:0:0:9a3fdb82)."
+        ),
+        telemetry={
+            "ttft_ms": 100,
+            "time_per_output_token_ms": 10,
+            "total_ms": 150,
+            "used_page_ids": ["ff746f7b583490a80ba104361c0a82a1ebbf7ed9097cd03dc49d744cb5057761_1"],
+            "prompt_tokens": 5,
+            "completion_tokens": 8,
+            "model_llm": "structured-extractor",
+        },
+        total_ms=150,
+    )
+    foundations_result = PlatformCaseResult(
+        case=SubmissionCase(case_id="q-found", question="Q?", answer_type="free_text"),
+        answer_text=(
+            "Registrar administers Foundations Law, DIFC Law No. 3 of 2018 and any Regulations made under it "
+            "(cite: 22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434:3:0:c7e85219)"
+        ),
+        telemetry={
+            "ttft_ms": 100,
+            "time_per_output_token_ms": 10,
+            "total_ms": 150,
+            "used_page_ids": ["22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_4"],
+            "prompt_tokens": 5,
+            "completion_tokens": 8,
+            "model_llm": "structured-extractor",
+        },
+        total_ms=150,
+    )
+
+    consolidated_payload = _project_platform_answer(consolidated_result)
+    foundations_payload = _project_platform_answer(foundations_result)
+
+    assert consolidated_payload["answer"] == (
+        "The consolidated version of Law on the Application of Civil and Commercial Laws in the DIFC 2004 "
+        "was published in November 2024."
+    )
+    assert foundations_payload["answer"] == (
+        "Registrar administers Foundations Law, DIFC Law No. 3 of 2018 and any Regulations made under it"
+    )
 
 
 def test_create_code_archive_only_includes_allowlisted_files(tmp_path: Path) -> None:
@@ -302,6 +355,7 @@ def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> No
         audit_report_path=phase_dir / "audit.json",
         status_path=phase_dir / "status.json",
         preflight_summary_path=phase_dir / "preflight_summary.json",
+        canary_path=phase_dir / "canary.json",
     )
 
     results = [
@@ -346,6 +400,8 @@ def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> No
         payload=payload,
         results=results,
         point_count=42,
+        anomaly_report={"anomaly_case_ids": ["q-2"], "anomaly_count": 1},
+        canary_report={"answer_drift_count": 0},
     )
 
     assert summary["phase"] == "warmup"
@@ -358,12 +414,164 @@ def test_build_preflight_summary_reports_counts_and_hashes(tmp_path: Path) -> No
     assert summary["free_text_sentence_distribution"] == {"min": 2, "p50": 2, "p95": 2, "max": 2}
     assert summary["model_name_empty_count"] == 1
     assert summary["pdf_count"] == 2
+    assert summary["anomaly_report"] == {"anomaly_case_ids": ["q-2"], "anomaly_count": 1}
+    assert summary["equivalence_canary"] == {"answer_drift_count": 0}
     assert summary["phase_collection_name"] == "legal_chunks_warmup"
     assert summary["qdrant_point_count"] == 42
     assert isinstance(summary["submission_sha256"], str) and summary["submission_sha256"]
     assert isinstance(summary["code_archive_sha256"], str) and summary["code_archive_sha256"]
     assert isinstance(summary["questions_sha256"], str) and summary["questions_sha256"]
     assert isinstance(summary["documents_zip_sha256"], str) and summary["documents_zip_sha256"]
+
+
+def test_result_anomaly_flags_detect_specific_unsupported_with_support_pages() -> None:
+    result = PlatformCaseResult(
+        case=SubmissionCase(
+            case_id="q-foundations",
+            question="Who administers the Foundations Law?",
+            answer_type="free_text",
+        ),
+        answer_text="There is no information on this question in the provided documents.",
+        telemetry={
+            "used_page_ids": ["doca_4"],
+            "retrieved_page_ids": ["doca_4"],
+            "doc_refs": ["Foundations Law 2018"],
+        },
+        total_ms=10,
+    )
+
+    flags = _result_anomaly_flags(result)
+
+    assert flags == [
+        "specific_question_unsupported",
+        "unsupported_with_support_pages",
+        "unsupported_with_retrieved_pages",
+        "unsupported_with_doc_refs",
+    ]
+
+
+def test_result_anomaly_flags_detect_projection_induced_unsupported() -> None:
+    result = PlatformCaseResult(
+        case=SubmissionCase(
+            case_id="q-published",
+            question="When was the consolidated version of the Law on the Application of Civil and Commercial Laws in the DIFC published?",
+            answer_type="free_text",
+        ),
+        answer_text="",
+        telemetry={
+            "used_page_ids": ["doca_1", "doca_2", "doca_3"],
+            "retrieved_page_ids": ["doca_1", "doca_2", "doca_3"],
+        },
+        total_ms=10,
+    )
+
+    flags = _result_anomaly_flags(result)
+
+    assert flags == [
+        "specific_question_unsupported",
+        "unsupported_with_support_pages",
+        "unsupported_with_retrieved_pages",
+    ]
+
+
+def test_build_results_anomaly_report_collects_case_ids() -> None:
+    clean = PlatformCaseResult(
+        case=SubmissionCase(case_id="q-ok", question="What is the law number?", answer_type="number"),
+        answer_text="7",
+        telemetry={"used_page_ids": ["doc_1"]},
+        total_ms=10,
+    )
+    anomalous = PlatformCaseResult(
+        case=SubmissionCase(case_id="q-bad", question="Who administers the Foundations Law?", answer_type="free_text"),
+        answer_text="There is no information on this question in the provided documents.",
+        telemetry={"used_page_ids": ["doc_4"]},
+        total_ms=10,
+    )
+
+    report = _build_results_anomaly_report([clean, anomalous])
+
+    assert report["anomaly_case_ids"] == ["q-bad"]
+    assert report["anomaly_count"] == 1
+
+
+def test_build_equivalence_canary_reports_answer_and_page_drift() -> None:
+    base = [
+        PlatformCaseResult(
+            case=SubmissionCase(case_id="q-1", question="Q1?", answer_type="boolean"),
+            answer_text="Yes",
+            telemetry={"used_page_ids": ["doca_1"], "model_llm": "strict-extractor"},
+            total_ms=10,
+        )
+    ]
+    candidate = [
+        PlatformCaseResult(
+            case=SubmissionCase(case_id="q-1", question="Q1?", answer_type="boolean"),
+            answer_text="No",
+            telemetry={"used_page_ids": ["doca_2"], "model_llm": "gpt-4.1-mini"},
+            total_ms=10,
+        )
+    ]
+
+    report = _build_equivalence_canary(
+        baseline_results=base,
+        candidate_results=candidate,
+        baseline_concurrency=1,
+        candidate_concurrency=2,
+    )
+
+    assert report["answer_drift_case_ids"] == ["q-1"]
+    assert report["model_drift_case_ids"] == ["q-1"]
+    assert report["page_drift_case_ids"] == ["q-1"]
+
+
+def test_resolve_query_concurrency_defaults_to_safe_mode() -> None:
+    assert _resolve_query_concurrency(None) == 1
+    assert _resolve_query_concurrency(1) == 1
+    assert _resolve_query_concurrency(3) == 3
+
+
+@pytest.mark.asyncio
+async def test_repair_anomalous_results_replaces_fixed_rerun(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DummyRuntime:
+        async def close(self) -> None:
+            return None
+
+    async def fake_runtime_factory() -> DummyRuntime:
+        return DummyRuntime()
+
+    async def fake_run_case_direct(
+        case: SubmissionCase,
+        runtime: DummyRuntime,
+        *,
+        fail_fast: bool,
+    ) -> PlatformCaseResult:
+        assert case.case_id == "q-bad"
+        return PlatformCaseResult(
+            case=case,
+            answer_text="The Foundations Law is administered by the Registrar.",
+            telemetry={"used_page_ids": ["doca_4"]},
+            total_ms=11,
+        )
+
+    monkeypatch.setattr("rag_challenge.submission.platform._run_case_direct", fake_run_case_direct)
+
+    anomalous = PlatformCaseResult(
+        case=SubmissionCase(case_id="q-bad", question="Who administers the Foundations Law?", answer_type="free_text"),
+        answer_text="There is no information on this question in the provided documents.",
+        telemetry={"used_page_ids": ["doca_4"]},
+        total_ms=10,
+    )
+
+    repaired, report = await _repair_anomalous_results(
+        [anomalous],
+        fail_fast=False,
+        runtime_factory=fake_runtime_factory,
+    )
+
+    assert repaired[0].answer_text == "The Foundations Law is administered by the Registrar."
+    assert report["repaired_case_ids"] == ["q-bad"]
 
 
 @pytest.mark.asyncio

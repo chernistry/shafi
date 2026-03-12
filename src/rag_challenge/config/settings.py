@@ -325,7 +325,7 @@ class PlatformSettings(BaseSettings):
     code_archive_filename: str = "code_archive.zip"
     archive_allowlist_path: str = "src/rag_challenge/submission/archive_allowlist.json"
     collection_prefix: str = "legal_chunks_platform"
-    query_concurrency: int = 2
+    query_concurrency: int = 1
     poll_interval_s: float = 10.0
     poll_timeout_s: float = 1800.0
     architecture_summary: str = (

@@ -23,7 +23,8 @@ _TEXTUAL_DAY_FIRST_DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b")
 _TEXTUAL_MONTH_FIRST_DATE_RE = re.compile(r"\b[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}\b")
 _SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+")
 _SENTENCE_END_RE = re.compile(r"[.!?](?:['\")\]]+)?$")
-_DANGLING_LIST_MARKER_RE = re.compile(r"(?:^|[; ])\d+\.$")
+_DANGLING_LIST_MARKER_RE = re.compile(r"(?:^|;\s*)\d+\.$")
+_NON_TERMINAL_ABBREVIATION_RE = re.compile(r"\b(?:No|Art|Sec|Mr|Ms|Mrs|Dr)\.$", re.IGNORECASE)
 _FREE_TEXT_LIMIT = 280
 
 SubmissionAnswer = bool | str | int | float | list[str] | None
@@ -288,8 +289,18 @@ def split_submission_sentences(text: str) -> list[str]:
     if not raw_parts:
         return []
 
+    merged_parts: list[str] = []
+    current = raw_parts[0]
+    for part in raw_parts[1:]:
+        if _NON_TERMINAL_ABBREVIATION_RE.search(current):
+            current = f"{current} {part}".strip()
+            continue
+        merged_parts.append(current)
+        current = part
+    merged_parts.append(current)
+
     sentences: list[str] = []
-    for idx, part in enumerate(raw_parts):
+    for idx, part in enumerate(merged_parts):
         if _SENTENCE_END_RE.search(part):
             sentences.append(part)
             continue

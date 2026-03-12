@@ -206,6 +206,31 @@ def test_normalize_free_text_answer_drops_ellipsis_truncated_tail() -> None:
     assert normalized == "Common Reporting Standard Law: records must be retained for six years after reporting."
 
 
+def test_normalize_free_text_answer_keeps_year_ending_sentence() -> None:
+    answer = (
+        "The consolidated version of Law on the Application of Civil and Commercial Laws in the DIFC 2004 "
+        "was published in November 2024 (cite: ff746f7b583490a80ba104361c0a82a1ebbf7ed9097cd03dc49d744cb5057761:0:0:9a3fdb82)."
+    )
+
+    normalized = _normalize_free_text_answer(answer)
+
+    assert normalized == (
+        "The consolidated version of Law on the Application of Civil and Commercial Laws in the DIFC 2004 "
+        "was published in November 2024."
+    )
+
+
+def test_normalize_free_text_answer_keeps_law_no_clause() -> None:
+    answer = (
+        "Registrar administers Foundations Law, DIFC Law No. 3 of 2018 and any Regulations made under it "
+        "(cite: 22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434:3:0:c7e85219)"
+    )
+
+    normalized = _normalize_free_text_answer(answer)
+
+    assert normalized == "Registrar administers Foundations Law, DIFC Law No. 3 of 2018 and any Regulations made under it"
+
+
 @pytest.mark.asyncio
 async def test_submission_outputs_null_and_clears_refs_for_strict_unanswerable() -> None:
     telemetry = {

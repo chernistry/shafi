@@ -34,6 +34,7 @@ from rag_challenge.submission.common import (
     as_int,
     classify_unanswerable_answer,
     coerce_answer_type,
+    coerce_str_list,
     count_submission_sentences,
     load_cases,
     normalize_date_answer,
@@ -51,6 +52,7 @@ _PLATFORM_RATE_LIMIT_MAX_ATTEMPTS = 4
 _PLATFORM_RATE_LIMIT_BASE_DELAY_S = 5.0
 _PLATFORM_RATE_LIMIT_MAX_DELAY_S = 60.0
 _PAGE_ID_RE = re.compile(r"^(?P<doc_id>.+)_(?P<page>\d+)$")
+_CASE_REF_RE = re.compile(r"\b(?:CFI|CA|SCT|ENF|DEC|TCD|ARB)\s*[-\s]*0*\d{1,4}\s*[/-]\s*\d{4}\b", re.IGNORECASE)
 _SECRET_VALUE_PATTERNS = (
     re.compile(r"\bmcs_[A-Za-z0-9]{24,}\b"),
     re.compile(r"\biuak_v1_[A-Za-z0-9_\-]{24,}\b"),
@@ -94,6 +96,7 @@ class PlatformPaths:
     audit_report_path: Path
     status_path: Path
     preflight_summary_path: Path
+    canary_path: Path
 
 
 @dataclass(frozen=True)
@@ -290,12 +293,17 @@ def _resolve_phase_paths() -> PlatformPaths:
         audit_report_path=phase_dir / "code_archive_audit.json",
         status_path=phase_dir / "submission_status.json",
         preflight_summary_path=phase_dir / "preflight_summary.json",
+        canary_path=phase_dir / "equivalence_canary.json",
     )
 
 
 def _phase_collection_name() -> str:
     settings = get_settings()
     return f"{settings.platform.collection_prefix}_{settings.platform.phase}"
+
+
+def _resolve_query_concurrency(override: int | None) -> int:
+    return max(1, int(override)) if override is not None else 1
 
 
 @contextmanager
@@ -422,6 +430,20 @@ def _page_ids_to_retrieval_refs(page_ids: list[str]) -> list[dict[str, object]]:
     ]
 
 
+def _flatten_retrieval_refs(refs: list[dict[str, object]]) -> list[str]:
+    flattened: list[str] = []
+    for ref in refs:
+        doc_id = str(ref.get("doc_id") or "").strip()
+        page_numbers_obj = ref.get("page_numbers")
+        if not doc_id or not isinstance(page_numbers_obj, list):
+            continue
+        page_numbers = cast("list[object]", page_numbers_obj)
+        for page in page_numbers:
+            if isinstance(page, int | float):
+                flattened.append(f"{doc_id}_{int(page)}")
+    return flattened
+
+
 def _validate_projected_answer(answer: SubmissionAnswer, answer_type: str) -> None:
     answer_type_key = answer_type.strip().lower()
     if answer is None:
@@ -486,6 +508,184 @@ def _project_platform_answer(result: PlatformCaseResult) -> dict[str, object]:
             },
             "model_name": str(telemetry.get("model_llm") or ""),
         },
+    }
+
+
+def _projected_answer_signature(result: PlatformCaseResult) -> tuple[SubmissionAnswer, list[str]]:
+    payload = _project_platform_answer(result)
+    telemetry_obj = payload.get("telemetry")
+    telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
+    retrieval_obj = telemetry.get("retrieval")
+    retrieval = cast("dict[str, object]", retrieval_obj) if isinstance(retrieval_obj, dict) else {}
+    refs_obj = retrieval.get("retrieved_chunk_pages")
+    refs = cast("list[dict[str, object]]", refs_obj) if isinstance(refs_obj, list) else []
+    return cast("SubmissionAnswer", payload.get("answer")), _flatten_retrieval_refs(refs)
+
+
+def _is_specific_question(question: str, answer_type: str) -> bool:
+    q = re.sub(r"\s+", " ", (question or "").strip()).lower()
+    if not q:
+        return False
+    if _CASE_REF_RE.search(q):
+        return True
+    if any(token in q for token in ("article ", "section ", "schedule ", "page ", "law no.", "law no ", "regulations")):
+        return True
+    if any(
+        phrase in q
+        for phrase in (
+            "who administers",
+            "when was the consolidated version",
+            "who is the defendant",
+            "what is the law number",
+            "what was the result of the application",
+            "what was the outcome of the specific order",
+            "how did the court of appeal rule",
+            "what is the effective date",
+        )
+    ):
+        return True
+    return answer_type.strip().lower() in {"boolean", "date", "name", "names", "number"}
+
+
+def _result_anomaly_flags(result: PlatformCaseResult) -> list[str]:
+    flags: list[str] = []
+    answer_type = result.case.answer_type.strip().lower()
+    projected_answer, projected_pages = _projected_answer_signature(result)
+    answer_text = projected_answer if isinstance(projected_answer, str) else ("null" if projected_answer is None else str(projected_answer))
+    telemetry = result.telemetry
+    is_unanswerable_strict, is_unanswerable_free_text = classify_unanswerable_answer(answer_text, answer_type)
+    if not (is_unanswerable_strict or is_unanswerable_free_text):
+        return flags
+
+    if _is_specific_question(result.case.question, answer_type):
+        flags.append("specific_question_unsupported")
+
+    raw_used_pages = select_submission_used_pages(telemetry)
+    if projected_pages or raw_used_pages:
+        flags.append("unsupported_with_support_pages")
+
+    retrieved_pages = coerce_str_list(telemetry.get("retrieved_page_ids"))
+    if retrieved_pages:
+        flags.append("unsupported_with_retrieved_pages")
+
+    doc_refs = coerce_str_list(telemetry.get("doc_refs"))
+    if doc_refs:
+        flags.append("unsupported_with_doc_refs")
+
+    return flags
+
+
+def _build_results_anomaly_report(results: list[PlatformCaseResult]) -> dict[str, object]:
+    anomaly_case_ids: list[str] = []
+    anomaly_flags_by_case: dict[str, list[str]] = {}
+    for result in results:
+        flags = _result_anomaly_flags(result)
+        if not flags:
+            continue
+        anomaly_case_ids.append(result.case.case_id)
+        anomaly_flags_by_case[result.case.case_id] = flags
+    return {
+        "anomaly_case_ids": anomaly_case_ids,
+        "anomaly_flags_by_case": anomaly_flags_by_case,
+        "anomaly_count": len(anomaly_case_ids),
+    }
+
+
+async def _repair_anomalous_results(
+    results: list[PlatformCaseResult],
+    *,
+    fail_fast: bool,
+    runtime_factory: PipelineRuntimeFactory = _build_pipeline_runtime,
+) -> tuple[list[PlatformCaseResult], dict[str, object]]:
+    updated = list(results)
+    repaired_case_ids: list[str] = []
+    unchanged_case_ids: list[str] = []
+    skipped_case_ids: list[str] = []
+
+    for index, result in enumerate(results):
+        flags = _result_anomaly_flags(result)
+        if not flags:
+            continue
+
+        try:
+            runtime = await runtime_factory()
+            try:
+                rerun = await _run_case_direct(result.case, runtime, fail_fast=fail_fast)
+            finally:
+                await runtime.close()
+        except Exception:
+            logger.exception("Anomaly rerun failed for question_id=%s", result.case.case_id)
+            if fail_fast:
+                raise
+            skipped_case_ids.append(result.case.case_id)
+            continue
+
+        rerun_flags = _result_anomaly_flags(rerun)
+        old_answer, old_pages = _projected_answer_signature(result)
+        new_answer, new_pages = _projected_answer_signature(rerun)
+        old_answer_text = old_answer if isinstance(old_answer, str) else ("null" if old_answer is None else str(old_answer))
+        new_answer_text = new_answer if isinstance(new_answer, str) else ("null" if new_answer is None else str(new_answer))
+        improved = (not rerun_flags and bool(new_answer_text.strip())) or (
+            new_answer_text != old_answer_text and new_pages != old_pages
+        )
+
+        if improved:
+            updated[index] = rerun
+            repaired_case_ids.append(result.case.case_id)
+            logger.info(
+                "Anomaly rerun replaced result for question_id=%s; flags=%s -> %s",
+                result.case.case_id,
+                flags,
+                rerun_flags,
+            )
+        else:
+            unchanged_case_ids.append(result.case.case_id)
+
+    return updated, {
+        "repaired_case_ids": repaired_case_ids,
+        "unchanged_case_ids": unchanged_case_ids,
+        "skipped_case_ids": skipped_case_ids,
+    }
+
+
+def _build_equivalence_canary(
+    *,
+    baseline_results: list[PlatformCaseResult],
+    candidate_results: list[PlatformCaseResult],
+    baseline_concurrency: int,
+    candidate_concurrency: int,
+) -> dict[str, object]:
+    baseline_by_id = {result.case.case_id: result for result in baseline_results}
+    candidate_by_id = {result.case.case_id: result for result in candidate_results}
+
+    answer_drift: list[str] = []
+    model_drift: list[str] = []
+    page_drift: list[str] = []
+    missing_case_ids: list[str] = []
+
+    for case_id, baseline in baseline_by_id.items():
+        candidate = candidate_by_id.get(case_id)
+        if candidate is None:
+            missing_case_ids.append(case_id)
+            continue
+        if baseline.answer_text.strip() != candidate.answer_text.strip():
+            answer_drift.append(case_id)
+        if str(baseline.telemetry.get("model_llm") or "").strip() != str(candidate.telemetry.get("model_llm") or "").strip():
+            model_drift.append(case_id)
+        if select_submission_used_pages(baseline.telemetry) != select_submission_used_pages(candidate.telemetry):
+            page_drift.append(case_id)
+
+    return {
+        "baseline_concurrency": baseline_concurrency,
+        "candidate_concurrency": candidate_concurrency,
+        "total_cases": len(baseline_results),
+        "answer_drift_case_ids": answer_drift,
+        "model_drift_case_ids": model_drift,
+        "page_drift_case_ids": page_drift,
+        "missing_case_ids": missing_case_ids,
+        "answer_drift_count": len(answer_drift),
+        "model_drift_count": len(model_drift),
+        "page_drift_count": len(page_drift),
     }
 
 
@@ -644,6 +844,8 @@ def _build_preflight_summary(
     payload: dict[str, object],
     results: list[PlatformCaseResult],
     point_count: int | None,
+    anomaly_report: dict[str, object] | None = None,
+    canary_report: dict[str, object] | None = None,
 ) -> dict[str, object]:
     answers_obj = payload.get("answers")
     answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
@@ -722,6 +924,10 @@ def _build_preflight_summary(
         "phase_collection_name": collection_name,
         "qdrant_point_count": point_count,
     }
+    if anomaly_report:
+        summary["anomaly_report"] = anomaly_report
+    if canary_report:
+        summary["equivalence_canary"] = canary_report
     return summary
 
 
@@ -838,6 +1044,8 @@ async def _async_main(args: argparse.Namespace) -> int:
     setup_logging(settings.app.log_level, settings.app.log_format)
     paths = _resolve_phase_paths()
     collection_name = _phase_collection_name()
+    query_concurrency = _resolve_query_concurrency(args.query_concurrency)
+    canary_concurrency = int(args.equivalence_canary_concurrency or 0)
     archive_allowlist = _load_archive_allowlist(
         _resolve_archive_allowlist_path(settings.platform.archive_allowlist_path)
     )
@@ -901,9 +1109,34 @@ async def _async_main(args: argparse.Namespace) -> int:
             cases = load_cases(paths.questions_path)
             results = await _run_questions(
                 cases,
-                concurrency=int(settings.platform.query_concurrency),
+                concurrency=query_concurrency,
                 fail_fast=bool(args.fail_fast),
             )
+            results, anomaly_repairs = await _repair_anomalous_results(
+                results,
+                fail_fast=bool(args.fail_fast),
+            )
+
+            canary_report: dict[str, object] | None = None
+            if canary_concurrency > 0 and canary_concurrency != query_concurrency:
+                canary_results = await _run_questions(
+                    cases,
+                    concurrency=canary_concurrency,
+                    fail_fast=bool(args.fail_fast),
+                )
+                canary_report = _build_equivalence_canary(
+                    baseline_results=results,
+                    candidate_results=canary_results,
+                    baseline_concurrency=query_concurrency,
+                    candidate_concurrency=canary_concurrency,
+                )
+                paths.phase_dir.mkdir(parents=True, exist_ok=True)
+                paths.canary_path.write_text(
+                    json.dumps(canary_report, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            else:
+                canary_report = None
 
         payload = _build_platform_submission_payload(results)
         paths.phase_dir.mkdir(parents=True, exist_ok=True)
@@ -913,12 +1146,16 @@ async def _async_main(args: argparse.Namespace) -> int:
         )
         _write_archive_artifacts(Path.cwd(), paths, archive_allowlist)
         point_count = await _qdrant_collection_point_count(collection_name)
+        anomaly_report = _build_results_anomaly_report(results)
+        anomaly_report["repair_report"] = anomaly_repairs
         preflight_summary = _build_preflight_summary(
             paths=paths,
             collection_name=collection_name,
             payload=payload,
             results=results,
             point_count=point_count,
+            anomaly_report=anomaly_report,
+            canary_report=canary_report,
         )
         paths.preflight_summary_path.write_text(
             json.dumps(preflight_summary, ensure_ascii=False, indent=2),
@@ -931,6 +1168,8 @@ async def _async_main(args: argparse.Namespace) -> int:
             logger.info("code_archive=%s", paths.code_archive_path)
             logger.info("audit_report=%s", paths.audit_report_path)
             logger.info("preflight_summary=%s", paths.preflight_summary_path)
+            if canary_report is not None:
+                logger.info("equivalence_canary=%s", paths.canary_path)
             return 0
 
         submit_response = await client.submit_submission(paths.submission_path, paths.code_archive_path)
@@ -965,6 +1204,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--submit-existing", action="store_true", help="Upload an existing submission.json and code archive without downloading, ingesting, or querying.")
     parser.add_argument("--submission-path", help="Path to an existing submission.json for --submit-existing.")
     parser.add_argument("--code-archive-path", help="Path to an existing code archive for --submit-existing.")
+    parser.add_argument("--query-concurrency", type=int, help="Override question execution concurrency for artifact generation.")
+    parser.add_argument("--equivalence-canary-concurrency", type=int, help="Optional secondary concurrency to compare against the primary artifact build.")
     parser.add_argument("--poll", action="store_true", help="Poll submission status until completion or timeout.")
     parser.add_argument("--fail-fast", action="store_true", help="Stop on the first question execution failure.")
     args = parser.parse_args(argv)
