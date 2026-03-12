@@ -30,9 +30,18 @@ _MANUAL_FIELDS = (
     "manual_verdict",
     "expected_answer",
     "minimal_required_support_pages",
+    "manual_exactness_labels",
     "failure_class",
     "notes",
 )
+_MANUAL_EXACTNESS_LABELS = (
+    "semantic_correct",
+    "platform_exact_risk",
+    "anchor_missing",
+    "suffix_risk",
+    "page_specific_exact_risk",
+)
+_MANUAL_EXACTNESS_LABEL_SET = frozenset(_MANUAL_EXACTNESS_LABELS)
 
 _WORKBOOK_PREVIEW_LIMIT = 3
 
@@ -247,11 +256,27 @@ def _load_existing_manual_fields(path: Path | None) -> dict[str, JsonObject]:
         if not question_id:
             continue
         preserved[question_id] = {
-            field: record.get(field)
+            field: (
+                _normalize_manual_exactness_labels(record.get(field))
+                if field == "manual_exactness_labels"
+                else record.get(field)
+            )
             for field in _MANUAL_FIELDS
             if field in record
         }
     return preserved
+
+
+def _normalize_manual_exactness_labels(raw_labels: object) -> list[str]:
+    if not isinstance(raw_labels, list):
+        return []
+    labels: list[str] = []
+    for raw_label in cast("list[object]", raw_labels):
+        label = str(raw_label or "").strip()
+        if not label or label not in _MANUAL_EXACTNESS_LABEL_SET or label in labels:
+            continue
+        labels.append(label)
+    return labels
 
 
 def _normalize_preview_text(text: str, *, limit: int = 220) -> str:
@@ -390,9 +415,9 @@ def _exactness_review_flags(
         if isinstance(page, int | float)
     }
     candidate_pages = {
-        int(candidate.get("page"))
+        int(page)
         for candidate in exact_span_candidates
-        if isinstance(candidate.get("page"), int | float)
+        if isinstance((page := candidate.get("page")), int | float)
     }
 
     if anchor_pages and not (anchor_pages & candidate_pages):
@@ -405,9 +430,13 @@ def _exactness_review_flags(
         elif not any(normalized_answer in text for text in candidate_texts):
             flags.append("exact_answer_not_in_candidate_spans")
 
-    if answer_type_key == "name" and normalized_answer and _CASE_REF_RE.search(current_answer_text or ""):
-        if not any(normalized_answer in text for text in candidate_texts):
-            flags.append("case_ref_exactness_risk")
+    if (
+        answer_type_key == "name"
+        and normalized_answer
+        and _CASE_REF_RE.search(current_answer_text or "")
+        and not any(normalized_answer in text for text in candidate_texts)
+    ):
+        flags.append("case_ref_exactness_risk")
 
     return list(dict.fromkeys(flags))
 
@@ -525,6 +554,7 @@ def _build_case_record(
         required_page_anchor=required_page_anchor,
     )
     manual_fields = preserved_manual_fields or {}
+    manual_exactness_labels = _normalize_manual_exactness_labels(manual_fields.get("manual_exactness_labels"))
     review_packet = {
         "question_id": str(question.get("id") or "").strip(),
         "answer_type": answer_type,
@@ -539,6 +569,7 @@ def _build_case_record(
         "support_page_previews": support_page_previews[:6],
         "exact_span_candidates": exact_span_candidates,
         "exactness_review_flags": exactness_review_flags,
+        "manual_exactness_labels": manual_exactness_labels,
     }
 
     return {
@@ -571,6 +602,7 @@ def _build_case_record(
         "manual_verdict": str(manual_fields.get("manual_verdict") or ""),
         "expected_answer": manual_fields.get("expected_answer"),
         "minimal_required_support_pages": cast("list[object]", manual_fields.get("minimal_required_support_pages") or []),
+        "manual_exactness_labels": manual_exactness_labels,
         "failure_class": str(manual_fields.get("failure_class") or ""),
         "notes": str(manual_fields.get("notes") or ""),
         "flags": {
@@ -626,6 +658,7 @@ def build_truth_audit_scaffold(
     support_shape_counts: dict[str, int] = {}
     support_shape_flag_counts: dict[str, int] = {}
     exactness_review_flag_counts: dict[str, int] = {}
+    manual_exactness_label_counts: dict[str, int] = {}
     manual_verdict_counts = {
         "deterministic_complete": 0,
         "deterministic_incomplete": 0,
@@ -641,6 +674,8 @@ def build_truth_audit_scaffold(
             support_shape_flag_counts[flag] = support_shape_flag_counts.get(flag, 0) + 1
         for flag in cast("list[str]", record.get("exactness_review_flags") or []):
             exactness_review_flag_counts[flag] = exactness_review_flag_counts.get(flag, 0) + 1
+        for label in cast("list[str]", record.get("manual_exactness_labels") or []):
+            manual_exactness_label_counts[label] = manual_exactness_label_counts.get(label, 0) + 1
         complete = bool(str(record.get("manual_verdict") or "").strip())
         if str(record.get("answer_type") or "") == "free_text":
             manual_verdict_counts["free_text_complete" if complete else "free_text_incomplete"] += 1
@@ -658,6 +693,7 @@ def build_truth_audit_scaffold(
             "support_shape_class_counts": support_shape_counts,
             "support_shape_flag_counts": support_shape_flag_counts,
             "exactness_review_flag_counts": exactness_review_flag_counts,
+            "manual_exactness_label_counts": manual_exactness_label_counts,
             "manual_verdict_counts": manual_verdict_counts,
         },
         "records": [*deterministic_cases, *free_text_cases],
@@ -688,6 +724,7 @@ def render_truth_audit_workbook(scaffold: dict[str, object]) -> str:
             f"- required_page_anchor: `{record.get('required_page_anchor')}`",
             f"- manual_verdict: `{record.get('manual_verdict', '') or '(blank)'}`",
             f"- expected_answer: `{record.get('expected_answer')}`",
+            f"- manual_exactness_labels: {', '.join(cast('list[str]', record.get('manual_exactness_labels') or [])) or '(none)'}",
             f"- failure_class: `{record.get('failure_class', '') or '(blank)'}`",
             f"- minimal_required_support_pages: {', '.join(str(item) for item in minimal_pages) if minimal_pages else '(blank)'}",
             f"- support_shape_flags: {', '.join(cast('list[str]', record.get('support_shape_flags') or [])) or '(none)'}",

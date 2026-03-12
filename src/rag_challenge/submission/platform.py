@@ -63,6 +63,7 @@ _SECRET_VALUE_PATTERNS = (
 _NONEMPTY_SECRET_ASSIGNMENT_RE = re.compile(
     r"(?m)^[A-Z0-9_]*(?:API_KEY|TOKEN|SECRET)[ \t]*=[ \t]*(?!$|\"\"$|''$|<your-|your-|xxxx|xxxxx).+$"
 )
+_SOURCE_SUBMISSION_FILENAME_RE = re.compile(r"^submission(?P<suffix>.*)\.json$")
 _FORBIDDEN_ARCHIVE_PARTS = {
     ".git",
     ".venv",
@@ -794,6 +795,166 @@ def _answer_payload_by_question_id(payload: dict[str, object]) -> dict[str, dict
     }
 
 
+def _validate_platform_args(args: argparse.Namespace) -> None:
+    if args.support_only_challenger and bool(args.submit):
+        raise ValueError(
+            "--support-only-challenger cannot be combined with --submit; "
+            "inspect the artifact first, then use --submit-existing."
+        )
+
+
+def _load_truth_audit_scaffold(path: Path) -> dict[str, object]:
+    payload_obj: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload_obj, dict):
+        raise ValueError(f"Truth audit scaffold must be an object: {path}")
+    return cast("dict[str, object]", payload_obj)
+
+
+def _infer_source_truth_audit_path(source_submission_path: Path) -> Path:
+    match = _SOURCE_SUBMISSION_FILENAME_RE.fullmatch(source_submission_path.name)
+    if match is None:
+        raise ValueError(
+            "Cannot infer source truth audit scaffold path from submission filename: "
+            f"{source_submission_path}"
+        )
+    suffix = match.group("suffix")
+    return source_submission_path.with_name(f"truth_audit_scaffold{suffix}.json")
+
+
+def _resolve_source_truth_audit_path(
+    source_submission_path: Path,
+    raw_source_truth_audit_path: str | None,
+) -> Path:
+    path = Path(raw_source_truth_audit_path) if raw_source_truth_audit_path else _infer_source_truth_audit_path(source_submission_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Source truth audit scaffold not found: {path}")
+    return path
+
+
+def _canonical_answer_value(answer_value: object) -> str:
+    return json.dumps(answer_value, ensure_ascii=False, sort_keys=True)
+
+
+def _normalized_answer_map(payload: dict[str, object]) -> dict[str, str]:
+    answers_obj = payload.get("answers")
+    answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
+    normalized: dict[str, str] = {}
+    for answer in answers:
+        question_id = str(answer.get("question_id") or "").strip()
+        if not question_id:
+            continue
+        normalized[question_id] = _canonical_answer_value(answer.get("answer"))
+    return normalized
+
+
+def _normalize_retrieved_chunk_pages(refs_obj: object) -> tuple[tuple[str, tuple[int, ...]], ...]:
+    refs = cast("list[dict[str, object]]", refs_obj) if isinstance(refs_obj, list) else []
+    normalized: list[tuple[str, tuple[int, ...]]] = []
+    for ref in refs:
+        doc_id = str(ref.get("doc_id") or "").strip()
+        page_numbers_obj = ref.get("page_numbers")
+        if not doc_id or not isinstance(page_numbers_obj, list):
+            continue
+        page_numbers = sorted(
+            {
+                int(page)
+                for page in cast("list[object]", page_numbers_obj)
+                if isinstance(page, int | float)
+            }
+        )
+        normalized.append((doc_id, tuple(page_numbers)))
+    return tuple(sorted(normalized))
+
+
+def _normalized_retrieval_map(payload: dict[str, object]) -> dict[str, tuple[tuple[str, tuple[int, ...]], ...]]:
+    answers_obj = payload.get("answers")
+    answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
+    normalized: dict[str, tuple[tuple[str, tuple[int, ...]], ...]] = {}
+    for answer in answers:
+        question_id = str(answer.get("question_id") or "").strip()
+        if not question_id:
+            continue
+        telemetry_obj = answer.get("telemetry")
+        telemetry = cast("dict[str, object]", telemetry_obj) if isinstance(telemetry_obj, dict) else {}
+        retrieval_obj = telemetry.get("retrieval")
+        retrieval = cast("dict[str, object]", retrieval_obj) if isinstance(retrieval_obj, dict) else {}
+        normalized[question_id] = _normalize_retrieved_chunk_pages(retrieval.get("retrieved_chunk_pages"))
+    return normalized
+
+
+def _answer_pairs_sha256(payload: dict[str, object]) -> str:
+    normalized_answers = _normalized_answer_map(payload)
+    digest_payload = [[question_id, answer] for question_id, answer in sorted(normalized_answers.items())]
+    return hashlib.sha256(
+        json.dumps(digest_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _count_changed_answers(source_payload: dict[str, object], challenger_payload: dict[str, object]) -> int:
+    source_answers = _normalized_answer_map(source_payload)
+    challenger_answers = _normalized_answer_map(challenger_payload)
+    return sum(
+        1
+        for question_id in sorted(set(source_answers) | set(challenger_answers))
+        if source_answers.get(question_id) != challenger_answers.get(question_id)
+    )
+
+
+def _count_changed_pages(source_payload: dict[str, object], challenger_payload: dict[str, object]) -> int:
+    source_pages = _normalized_retrieval_map(source_payload)
+    challenger_pages = _normalized_retrieval_map(challenger_payload)
+    return sum(
+        1
+        for question_id in sorted(set(source_pages) | set(challenger_pages))
+        if source_pages.get(question_id) != challenger_pages.get(question_id)
+    )
+
+
+def _source_manual_verdict_counts(scaffold: dict[str, object]) -> dict[str, int]:
+    summary_obj = scaffold.get("summary")
+    summary = cast("dict[str, object]", summary_obj) if isinstance(summary_obj, dict) else {}
+    counts_obj = summary.get("manual_verdict_counts")
+    if isinstance(counts_obj, dict):
+        counts = cast("dict[str, object]", counts_obj)
+        return {
+            "deterministic_complete": as_int(counts.get("deterministic_complete")),
+            "deterministic_incomplete": as_int(counts.get("deterministic_incomplete")),
+            "free_text_complete": as_int(counts.get("free_text_complete")),
+            "free_text_incomplete": as_int(counts.get("free_text_incomplete")),
+        }
+
+    report = _build_truth_audit_report(scaffold)
+    return {
+        "deterministic_complete": as_int(report.get("deterministic_complete_count")),
+        "deterministic_incomplete": as_int(report.get("deterministic_incomplete_count")),
+        "free_text_complete": as_int(report.get("free_text_complete_count")),
+        "free_text_incomplete": as_int(report.get("free_text_incomplete_count")),
+    }
+
+
+def _build_support_only_challenger_report(
+    *,
+    mode: str,
+    source_payload: dict[str, object],
+    challenger_payload: dict[str, object],
+    source_submission_path: Path,
+    source_truth_audit_path: Path,
+    source_truth_audit_scaffold: dict[str, object],
+) -> dict[str, object]:
+    answer_changed_count = _count_changed_answers(source_payload, challenger_payload)
+    shared_answer_hash = _answer_pairs_sha256(source_payload)
+    return {
+        "mode": mode,
+        "source_submission_path": str(source_submission_path),
+        "source_truth_audit_path": str(source_truth_audit_path),
+        "source_submission_sha256": _sha256_file(source_submission_path),
+        "same_answers_sha256": shared_answer_hash if answer_changed_count == 0 else "",
+        "answer_changed_count": answer_changed_count,
+        "page_changed_count": _count_changed_pages(source_payload, challenger_payload),
+        "source_manual_verdict_counts": _source_manual_verdict_counts(source_truth_audit_scaffold),
+    }
+
+
 def _question_anchor_pages(question: str) -> list[int]:
     normalized = re.sub(r"\s+", " ", (question or "").strip()).lower()
     if not normalized:
@@ -1096,6 +1257,7 @@ def _build_preflight_summary(
     canary_report: dict[str, object] | None = None,
     support_shape_report: dict[str, object] | None = None,
     truth_audit_report: dict[str, object] | None = None,
+    support_only_challenger_report: dict[str, object] | None = None,
 ) -> dict[str, object]:
     answers_obj = payload.get("answers")
     answers = cast("list[dict[str, object]]", answers_obj) if isinstance(answers_obj, list) else []
@@ -1184,6 +1346,8 @@ def _build_preflight_summary(
         summary["support_shape_report"] = support_shape_report
     if truth_audit_report:
         summary["truth_audit_report"] = truth_audit_report
+    if support_only_challenger_report:
+        summary["support_only_challenger"] = support_only_challenger_report
     return summary
 
 
@@ -1367,6 +1531,7 @@ async def _submit_existing_artifacts(
 
 
 async def _async_main(args: argparse.Namespace) -> int:
+    _validate_platform_args(args)
     settings = get_settings()
     setup_logging(settings.app.log_level, settings.app.log_format)
     paths = _suffix_platform_paths(_resolve_phase_paths(), str(args.artifact_suffix or "").strip())
@@ -1392,8 +1557,10 @@ async def _async_main(args: argparse.Namespace) -> int:
             raise FileNotFoundError(f"Source submission JSON not found: {source_submission_path}")
         if not source_questions_path.exists():
             raise FileNotFoundError(f"Source questions JSON not found: {source_questions_path}")
+        source_truth_audit_path = _resolve_source_truth_audit_path(source_submission_path, args.source_truth_audit_path)
 
         source_payload = _load_platform_submission_payload(source_submission_path)
+        source_truth_audit_scaffold = _load_truth_audit_scaffold(source_truth_audit_path)
         questions_by_id = _load_questions_by_id(source_questions_path)
         if args.support_only_challenger == "anchor-page-restitution":
             payload = _build_anchor_page_challenger_payload(
@@ -1435,7 +1602,7 @@ async def _async_main(args: argparse.Namespace) -> int:
             questions_path=source_questions_path,
             submission_path=paths.submission_path,
             docs_dir=paths.docs_dir if paths.docs_dir.exists() else None,
-            existing_scaffold_path=paths.truth_audit_path,
+            existing_scaffold_path=source_truth_audit_path,
         )
         paths.truth_audit_path.write_text(
             json.dumps(truth_audit_scaffold, ensure_ascii=False, indent=2),
@@ -1448,6 +1615,14 @@ async def _async_main(args: argparse.Namespace) -> int:
         _write_archive_artifacts(Path.cwd(), paths, archive_allowlist)
         support_shape_report = _build_support_shape_report(truth_audit_scaffold)
         truth_audit_report = _build_truth_audit_report(truth_audit_scaffold)
+        support_only_challenger_report = _build_support_only_challenger_report(
+            mode=args.support_only_challenger,
+            source_payload=source_payload,
+            challenger_payload=payload,
+            source_submission_path=source_submission_path,
+            source_truth_audit_path=source_truth_audit_path,
+            source_truth_audit_scaffold=source_truth_audit_scaffold,
+        )
         preflight_summary = _build_preflight_summary(
             paths=paths,
             collection_name=collection_name,
@@ -1458,6 +1633,7 @@ async def _async_main(args: argparse.Namespace) -> int:
             canary_report=None,
             support_shape_report=support_shape_report,
             truth_audit_report=truth_audit_report,
+            support_only_challenger_report=support_only_challenger_report,
         )
         paths.preflight_summary_path.write_text(
             json.dumps(preflight_summary, ensure_ascii=False, indent=2),
@@ -1656,6 +1832,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--source-submission-path", help="Source platform submission JSON for --support-only-challenger.")
     parser.add_argument("--source-questions-path", help="Source questions JSON for --support-only-challenger.")
+    parser.add_argument(
+        "--source-truth-audit-path",
+        help="Source truth_audit_scaffold.json for --support-only-challenger. "
+        "If omitted, infer it from --source-submission-path.",
+    )
     parser.add_argument("--source-raw-results-path", help="Source raw_results.json for support-only challengers that need context_page_ids.")
     parser.add_argument("--artifact-suffix", help="Optional suffix for generated artifact filenames.")
     parser.add_argument("--refresh-downloads", action="store_true", help="Redownload questions/documents for the active phase.")

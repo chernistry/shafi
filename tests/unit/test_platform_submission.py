@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import zipfile
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -15,6 +17,7 @@ from rag_challenge.submission.platform import (
     PlatformCaseResult,
     PlatformEvaluationClient,
     PlatformPaths,
+    _async_main,
     _build_all_context_pages_challenger_payload,
     _build_anchor_page_challenger_payload,
     _build_equivalence_canary,
@@ -28,10 +31,12 @@ from rag_challenge.submission.platform import (
     _project_platform_answer,
     _repair_anomalous_results,
     _resolve_query_concurrency,
+    _resolve_source_truth_audit_path,
     _result_anomaly_flags,
     _run_questions,
     _scan_text_for_secrets,
     _submit_existing_artifacts,
+    _validate_platform_args,
 )
 
 if TYPE_CHECKING:
@@ -540,6 +545,187 @@ def test_build_all_context_pages_challenger_payload_uses_context_page_ids() -> N
     assert answers["q-1"]["telemetry"]["retrieval"]["retrieved_chunk_pages"] == [
         {"doc_id": "arb-034", "page_numbers": [1, 2, 4]},
     ]
+
+
+def test_resolve_source_truth_audit_path_infers_suffixed_scaffold(tmp_path: Path) -> None:
+    source_submission_path = tmp_path / "submission_v3_recovered.json"
+    source_submission_path.write_text("{}", encoding="utf-8")
+    inferred_truth_audit_path = tmp_path / "truth_audit_scaffold_v3_recovered.json"
+    inferred_truth_audit_path.write_text("{}", encoding="utf-8")
+
+    resolved = _resolve_source_truth_audit_path(source_submission_path, None)
+
+    assert resolved == inferred_truth_audit_path
+
+
+def test_resolve_source_truth_audit_path_fails_when_inferred_scaffold_missing(tmp_path: Path) -> None:
+    source_submission_path = tmp_path / "submission_v3_recovered.json"
+    source_submission_path.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="Source truth audit scaffold not found"):
+        _resolve_source_truth_audit_path(source_submission_path, None)
+
+
+def test_validate_platform_args_rejects_support_only_submit_combo() -> None:
+    args = argparse.Namespace(
+        support_only_challenger="anchor-page-restitution",
+        submit=True,
+    )
+
+    with pytest.raises(ValueError, match="cannot be combined with --submit"):
+        _validate_platform_args(args)
+
+
+@pytest.mark.asyncio
+async def test_async_main_support_only_challenger_preserves_source_truth_audit_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    phase_dir = tmp_path / "warmup"
+    paths = PlatformPaths(
+        phase_dir=phase_dir,
+        docs_dir=phase_dir / "documents",
+        questions_path=phase_dir / "questions.json",
+        submission_path=phase_dir / "submission.json",
+        raw_results_path=phase_dir / "raw_results.json",
+        code_archive_path=phase_dir / "code_archive.zip",
+        audit_report_path=phase_dir / "code_archive_audit.json",
+        status_path=phase_dir / "submission_status.json",
+        preflight_summary_path=phase_dir / "preflight_summary.json",
+        canary_path=phase_dir / "equivalence_canary.json",
+        truth_audit_path=phase_dir / "truth_audit_scaffold.json",
+        truth_audit_workbook_path=phase_dir / "truth_audit_workbook.md",
+    )
+    source_submission_path = tmp_path / "submission_v4.json"
+    source_questions_path = tmp_path / "questions.json"
+    source_truth_audit_path = tmp_path / "truth_audit_scaffold_v4.json"
+
+    source_submission_path.write_text(
+        json.dumps(
+            {
+                "answers": [
+                    {
+                        "question_id": "q-title",
+                        "answer": "ONORA",
+                        "telemetry": {
+                            "model_name": "strict-extractor",
+                            "retrieval": {
+                                "retrieved_chunk_pages": [
+                                    {"doc_id": "cfi-010-2024", "page_numbers": [3]},
+                                ]
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    source_questions_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "q-title",
+                    "question": "According to the title page of case CFI 010/2024, who is the defendant?",
+                    "answer_type": "name",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    source_truth_audit_path.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "manual_verdict_counts": {
+                        "deterministic_complete": 1,
+                        "deterministic_incomplete": 0,
+                        "free_text_complete": 0,
+                        "free_text_incomplete": 0,
+                    }
+                },
+                "records": [
+                    {
+                        "question_id": "q-title",
+                        "manual_verdict": "correct",
+                        "expected_answer": "ONORA",
+                        "minimal_required_support_pages": ["cfi-010-2024_1"],
+                        "manual_exactness_labels": ["semantic_correct", "page_specific_exact_risk"],
+                        "failure_class": "support_undercoverage",
+                        "notes": "keep this note",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    settings = SimpleNamespace(
+        app=SimpleNamespace(log_level="INFO", log_format="text"),
+        platform=SimpleNamespace(archive_allowlist_path="unused", phase="warmup"),
+    )
+    monkeypatch.setattr("rag_challenge.submission.platform.get_settings", lambda: settings)
+    monkeypatch.setattr("rag_challenge.submission.platform.setup_logging", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("rag_challenge.submission.platform._resolve_phase_paths", lambda: paths)
+    monkeypatch.setattr("rag_challenge.submission.platform._phase_collection_name", lambda: "legal_chunks_warmup")
+    monkeypatch.setattr(
+        "rag_challenge.submission.platform._load_archive_allowlist",
+        lambda _path: ArchiveAllowlist(include=["src"], exclude_globs=[]),
+    )
+    monkeypatch.setattr(
+        "rag_challenge.submission.platform._write_archive_artifacts",
+        lambda _root, _paths, _allowlist: None,
+    )
+
+    args = argparse.Namespace(
+        archive_only=False,
+        support_only_challenger="anchor-page-restitution",
+        source_submission_path=str(source_submission_path),
+        source_questions_path=str(source_questions_path),
+        source_truth_audit_path=str(source_truth_audit_path),
+        source_raw_results_path=None,
+        artifact_suffix="challenger",
+        refresh_downloads=False,
+        skip_ingest=False,
+        submit=False,
+        submit_existing=False,
+        submission_path=None,
+        code_archive_path=None,
+        query_concurrency=None,
+        equivalence_canary_concurrency=None,
+        poll=False,
+        fail_fast=False,
+    )
+
+    exit_code = await _async_main(args)
+
+    assert exit_code == 0
+    generated_scaffold = json.loads((phase_dir / "truth_audit_scaffold_challenger.json").read_text(encoding="utf-8"))
+    record = generated_scaffold["records"][0]
+    assert record["manual_verdict"] == "correct"
+    assert record["expected_answer"] == "ONORA"
+    assert record["minimal_required_support_pages"] == ["cfi-010-2024_1"]
+    assert record["manual_exactness_labels"] == ["semantic_correct", "page_specific_exact_risk"]
+    assert record["failure_class"] == "support_undercoverage"
+    assert record["notes"] == "keep this note"
+
+    preflight_summary = json.loads((phase_dir / "preflight_summary_challenger.json").read_text(encoding="utf-8"))
+    assert preflight_summary["support_only_challenger"] == {
+        "mode": "anchor-page-restitution",
+        "source_submission_path": str(source_submission_path),
+        "source_truth_audit_path": str(source_truth_audit_path),
+        "source_submission_sha256": preflight_summary["support_only_challenger"]["source_submission_sha256"],
+        "same_answers_sha256": preflight_summary["support_only_challenger"]["same_answers_sha256"],
+        "answer_changed_count": 0,
+        "page_changed_count": 1,
+        "source_manual_verdict_counts": {
+            "deterministic_complete": 1,
+            "deterministic_incomplete": 0,
+            "free_text_complete": 0,
+            "free_text_incomplete": 0,
+        },
+    }
+    assert preflight_summary["support_only_challenger"]["same_answers_sha256"]
 
 
 def test_result_anomaly_flags_detect_specific_unsupported_with_support_pages() -> None:

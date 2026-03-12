@@ -283,6 +283,7 @@ def test_build_truth_audit_scaffold_preserves_manual_fields_and_adds_pdf_preview
                         "manual_verdict": "correct",
                         "expected_answer": "Ruler of Dubai",
                         "minimal_required_support_pages": ["law-doc_1"],
+                        "manual_exactness_labels": ["semantic_correct", "page_specific_exact_risk"],
                         "failure_class": "support_undercoverage",
                         "notes": "keep this note",
                     }
@@ -309,12 +310,18 @@ def test_build_truth_audit_scaffold_preserves_manual_fields_and_adds_pdf_preview
     assert record["manual_verdict"] == "correct"
     assert record["expected_answer"] == "Ruler of Dubai"
     assert record["minimal_required_support_pages"] == ["law-doc_1"]
+    assert record["manual_exactness_labels"] == ["semantic_correct", "page_specific_exact_risk"]
     assert record["failure_class"] == "support_undercoverage"
     assert record["notes"] == "keep this note"
     assert record["support_page_previews"][0]["doc_title"].startswith("DIFC Personal Property Law 2005")
     assert "Ruler of Dubai" in record["support_page_previews"][0]["snippet"]
     assert record["review_packet"]["support_page_previews"][0]["page"] == 1
+    assert record["review_packet"]["manual_exactness_labels"] == ["semantic_correct", "page_specific_exact_risk"]
     assert scaffold["summary"]["manual_verdict_counts"]["free_text_complete"] == 1
+    assert scaffold["summary"]["manual_exactness_label_counts"] == {
+        "semantic_correct": 1,
+        "page_specific_exact_risk": 1,
+    }
 
 
 def test_render_truth_audit_workbook_includes_manual_fields_and_previews(tmp_path: Path) -> None:
@@ -365,4 +372,5 @@ def test_render_truth_audit_workbook_includes_manual_fields_and_previews(tmp_pat
     assert "### q-1" in workbook
     assert "- route_family: `model`" in workbook
     assert "- manual_verdict: `(blank)`" in workbook
+    assert "- manual_exactness_labels: (none)" in workbook
     assert "- support_page_previews:" in workbook
