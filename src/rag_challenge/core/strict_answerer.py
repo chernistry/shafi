@@ -50,6 +50,10 @@ _CASE_REF_PREFIX_RE = re.compile(
 )
 _CASE_SPLIT_RE = re.compile(r"\s*(?:-v-|\bv(?:\.|ersus)?\b)\s*", re.IGNORECASE)
 _CORP_DOTS_RE = re.compile(r"\b([A-Z])\.")  # KEPT for backward compat; no longer used in _normalize_name
+_CLAIM_NO_CAPTURE_RE = re.compile(
+    r"\bClaim No\.?\s*([A-Z0-9][A-Z0-9\s./-]{2,50}?)(?=[,.;)\"]|\s{2,}|$)",
+    re.IGNORECASE,
+)
 _CURRENCY_PREFIX_RE = re.compile(
     r"(?:(AED|USD|EUR|GBP)\b|US\$|\$)\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(million|billion)?",
     re.IGNORECASE,
@@ -742,6 +746,11 @@ class StrictAnswerer:
         if not q:
             return None
 
+        if self._is_claim_number_origin_query(q_lower):
+            claim_number = self._extract_origin_claim_number(query=q, chunks=chunks)
+            if claim_number is not None:
+                return claim_number
+
         # Handle comparative case-ID questions deterministically when possible.
         case_refs = self._extract_case_refs(query)
         if len(case_refs) != 2:
@@ -826,6 +835,12 @@ class StrictAnswerer:
             or ("higher" in query_lower and "monetary amount" in query_lower)
             or ("higher" in query_lower and "amount" in query_lower and "claim" in query_lower)
         )
+
+    @staticmethod
+    def _is_claim_number_origin_query(query_lower: str) -> bool:
+        if "claim number" not in query_lower and "claim no" not in query_lower:
+            return False
+        return any(token in query_lower for token in ("originate", "originated", "arose", "arisen"))
 
     @staticmethod
     def _is_party_overlap_compare_query(query_lower: str) -> bool:
@@ -1461,3 +1476,56 @@ class StrictAnswerer:
                 if cleaned:
                     normalized.add(cleaned)
         return normalized
+
+    @classmethod
+    def _normalize_claim_number(cls, value: str) -> str:
+        cleaned = re.sub(r"\s+", " ", value).strip(" \t\r\n,.;:()[]")
+        cleaned = re.sub(r"\s*/\s*", "/", cleaned)
+        cleaned = re.sub(r"\s*-\s*", "-", cleaned)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        return cleaned
+
+    def _extract_origin_claim_number(self, *, query: str, chunks: Sequence[RankedChunk]) -> StrictAnswerResult | None:
+        query_case_refs = {ref.casefold() for ref in self._extract_case_refs(query)}
+        best: tuple[int, int, int, str, str] | None = None
+
+        for chunk in chunks:
+            text = (chunk.text or "").strip()
+            if not text:
+                continue
+            page_num = self._page_num(chunk.section_path)
+            for match in _CLAIM_NO_CAPTURE_RE.finditer(text):
+                candidate_text = self._normalize_claim_number(match.group(1))
+                if not candidate_text:
+                    continue
+                candidate_lower = candidate_text.casefold()
+                if len(candidate_text) < 6 or not any(ch.isdigit() for ch in candidate_text):
+                    continue
+
+                window = text[max(0, match.start() - 160) : min(len(text), match.end() + 160)].casefold()
+                score = 0
+                if page_num == 2:
+                    score += 600
+                elif page_num == 1:
+                    score += 40
+
+                if "urgent application" in window:
+                    score += 260
+                if "appeal against" in window or "appeal" in window:
+                    score += 160
+                if "order" in window:
+                    score += 80
+                if "/2" in candidate_text:
+                    score += 140
+                if any(ref in candidate_lower for ref in query_case_refs):
+                    score -= 260
+
+                if score <= 0:
+                    continue
+                candidate = (score, -page_num, -match.start(), candidate_text, chunk.chunk_id)
+                if best is None or candidate > best:
+                    best = candidate
+
+        if best is None:
+            return None
+        return StrictAnswerResult(answer=best[3], cited_chunk_ids=[best[4]], confident=True)
