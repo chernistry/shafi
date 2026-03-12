@@ -23,6 +23,10 @@ def _rows(payload: JsonDict) -> list[JsonDict]:
     return [cast("JsonDict", row) for row in rows_list if isinstance(row, dict)]
 
 
+def load_anchor_slice_rows(path: Path) -> list[JsonDict]:
+    return _rows(_load_payload(path))
+
+
 def _as_bool(value: object) -> bool:
     return bool(value) if isinstance(value, bool) else False
 
