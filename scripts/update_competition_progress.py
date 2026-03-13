@@ -674,6 +674,9 @@ def _hydrate_row(
         "platform_like_total_estimate": None,
         "strict_total_estimate": None,
         "paranoid_total_estimate": None,
+        "platform_like_rank_estimate": None,
+        "strict_rank_estimate": None,
+        "paranoid_rank_estimate": None,
         "supervisor_action": spec.get("supervisor_action") or None,
     }
 
@@ -703,9 +706,12 @@ def _hydrate_row(
         row["page_drift"] = candidate_row.get("page_drift")
         row["hidden_g_trusted"] = candidate_row.get("hidden_g_trusted_delta")
         row["hidden_g_all"] = candidate_row.get("hidden_g_all_delta")
-        row["platform_like_total_estimate"] = candidate_row.get("strict_total_estimate")
+        row["platform_like_total_estimate"] = candidate_row.get("platform_like_total_estimate", candidate_row.get("strict_total_estimate"))
         row["strict_total_estimate"] = candidate_row.get("strict_total_estimate")
         row["paranoid_total_estimate"] = candidate_row.get("paranoid_total_estimate")
+        row["platform_like_rank_estimate"] = candidate_row.get("platform_like_rank_estimate")
+        row["strict_rank_estimate"] = candidate_row.get("strict_rank_estimate")
+        row["paranoid_rank_estimate"] = candidate_row.get("paranoid_rank_estimate")
         row["notes"] = (
             f"{row['notes']} [candidate_cycle={candidate_row.get('recommendation')}]".strip()
             if row["notes"]
@@ -748,6 +754,9 @@ def _hydrate_row(
         row["platform_like_total_estimate"] = effective_production_mimic.get("platform_like_total_estimate")
         row["strict_total_estimate"] = effective_production_mimic.get("strict_total_estimate")
         row["paranoid_total_estimate"] = effective_production_mimic.get("paranoid_total_estimate")
+        row["platform_like_rank_estimate"] = effective_production_mimic.get("platform_like_rank_estimate")
+        row["strict_rank_estimate"] = effective_production_mimic.get("strict_rank_estimate")
+        row["paranoid_rank_estimate"] = effective_production_mimic.get("paranoid_rank_estimate")
         if row_production_mimic is None:
             row["supervisor_action"] = supervisor_action or row["supervisor_action"]
 
@@ -794,6 +803,22 @@ def _best_public_row(rows: list[JsonDict]) -> JsonDict | None:
     )
 
 
+def _estimate_rank_for_total(*, total: object, leaderboard_rows: list[object], team_name: str) -> int | None:
+    if total is None or total == "":
+        return None
+    total_value = _as_float(total, default=-1.0)
+    if total_value < 0:
+        return None
+    better = 0
+    for raw in leaderboard_rows:
+        row = cast("JsonDict", raw) if isinstance(raw, dict) else {}
+        if str(row.get("team_name") or "") == team_name:
+            continue
+        if _as_float(row.get("total"), default=-1.0) > total_value + 1e-9:
+            better += 1
+    return better + 1
+
+
 def _summary_block(*, leaderboard_summary: JsonDict, rows: list[JsonDict], supervisor_action: str | None) -> list[str]:
     public_best = _best_public_row(rows)
     offline_best = _best_offline_row(rows)
@@ -816,6 +841,7 @@ def _summary_block(*, leaderboard_summary: JsonDict, rows: list[JsonDict], super
         f"- Current best offline candidate: `{offline_best.get('label') if offline_best else 'unknown'}`"
         + (
             f" paranoid=`{_fmt_float(offline_best.get('paranoid_total_estimate'))}`"
+            f" paranoid_rank=`{_fmt_int(offline_best.get('paranoid_rank_estimate'))}`"
             if offline_best
             else ""
         ),
@@ -871,8 +897,11 @@ def _render_matrix(rows: list[JsonDict], *, leaderboard_summary: JsonDict, super
         "external_total",
         "external_rank",
         "platform_like_total_estimate",
+        "platform_like_rank_estimate",
         "strict_total_estimate",
+        "strict_rank_estimate",
         "paranoid_total_estimate",
+        "paranoid_rank_estimate",
         "supervisor_action",
         "notes",
     ]
@@ -905,8 +934,11 @@ def _render_matrix(rows: list[JsonDict], *, leaderboard_summary: JsonDict, super
             _fmt_float(row.get("external_total")),
             _fmt_int(row.get("external_rank")),
             _fmt_float(row.get("platform_like_total_estimate")),
+            _fmt_int(row.get("platform_like_rank_estimate")),
             _fmt_float(row.get("strict_total_estimate")),
+            _fmt_int(row.get("strict_rank_estimate")),
             _fmt_float(row.get("paranoid_total_estimate")),
+            _fmt_int(row.get("paranoid_rank_estimate")),
             str(row.get("supervisor_action") or "-"),
             str(row.get("notes") or "-").replace("\n", " "),
         ]
@@ -924,7 +956,8 @@ def build_competition_matrix(
     production_mimic_json: Path | None,
     supervisor_runs_json: Path | None,
 ) -> JsonDict:
-    leaderboard_summary = build_leaderboard_summary(load_leaderboard_rows(leaderboard_path), team_name=team_name)
+    leaderboard_rows = load_leaderboard_rows(leaderboard_path)
+    leaderboard_summary = build_leaderboard_summary(leaderboard_rows, team_name=team_name)
     history_rows = _parse_public_history_rows(history_path)
     cycle_index = _load_candidate_cycle_index(candidate_cycle_json)
     cycle_index_cache: dict[str, dict[str, JsonDict]] = {}
@@ -955,6 +988,32 @@ def build_competition_matrix(
         )
         for spec in specs
     ]
+    leaderboard_row_objs: list[object] = [{"team_name": row.team_name, "total": row.total} for row in leaderboard_rows]
+    for row in rows:
+        for total_key, rank_key in (
+            ("platform_like_total_estimate", "platform_like_rank_estimate"),
+            ("strict_total_estimate", "strict_rank_estimate"),
+            ("paranoid_total_estimate", "paranoid_rank_estimate"),
+        ):
+            if row.get(rank_key) is None:
+                row[rank_key] = _estimate_rank_for_total(
+                    total=row.get(total_key),
+                    leaderboard_rows=leaderboard_row_objs,
+                    team_name=team_name,
+                )
+        if (
+            row.get("platform_like_total_estimate") is None
+            and row.get("strict_total_estimate") is None
+            and row.get("paranoid_total_estimate") is None
+        ):
+            estimate_note = (
+                "[estimates=not_applicable_invalid]"
+                if str(row.get("status")) == "invalid"
+                else "[estimates=unsupported_local_envelope]"
+            )
+            notes = str(row.get("notes") or "").strip()
+            if estimate_note not in notes:
+                row["notes"] = f"{notes} {estimate_note}".strip()
     current_total = _as_float(leaderboard_summary.get("total"))
     for row in rows:
         if str(row.get("status")) != "submitted":
