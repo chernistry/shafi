@@ -2694,6 +2694,66 @@ class RAGPipelineBuilder:
         )
 
     @classmethod
+    def _augment_strict_context_chunks(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        context_chunks: Sequence[RankedChunk],
+        retrieved: Sequence[RetrievedChunk],
+    ) -> tuple[list[RankedChunk], bool]:
+        if answer_type.strip().lower() != "name":
+            return list(context_chunks), False
+
+        explicit_ref = QueryClassifier.extract_explicit_page_reference(query)
+        if explicit_ref is None or explicit_ref.requested_page is None or explicit_ref.requested_page <= 0:
+            return list(context_chunks), False
+
+        query_lower = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if "claim number" not in query_lower and "claim no" not in query_lower:
+            return list(context_chunks), False
+        if not any(token in query_lower for token in ("originate", "originated", "arose", "arisen")):
+            return list(context_chunks), False
+
+        requested_page = explicit_ref.requested_page
+
+        def _rescue_score(raw: RetrievedChunk) -> tuple[int, float]:
+            text = re.sub(r"\s+", " ", str(raw.text or "")).strip().casefold()
+            score = 0
+            if cls._page_num(str(raw.section_path or "")) == requested_page:
+                score += 500
+            if "claim no." in text or "claim no " in text:
+                score += 160
+            if "appeal against" in text or "urgent application" in text:
+                score += 140
+            if "origin" in text:
+                score += 40
+            if "/2" in text:
+                score += 80
+            return score, float(raw.score)
+
+        rescue_candidates = [
+            raw for raw in retrieved if cls._page_num(str(raw.section_path or "")) == requested_page
+        ]
+        if not rescue_candidates and requested_page == 2:
+            rescue_candidates = [
+                raw for raw in retrieved if cls._page_num(str(raw.section_path or "")) in {1, 2}
+            ]
+        if not rescue_candidates:
+            return list(context_chunks), False
+
+        augmented = list(context_chunks)
+        seen_chunk_ids = {chunk.chunk_id for chunk in augmented}
+        added = False
+        for raw in sorted(rescue_candidates, key=_rescue_score, reverse=True)[:2]:
+            if raw.chunk_id in seen_chunk_ids:
+                continue
+            augmented.append(cls._raw_to_ranked(raw))
+            seen_chunk_ids.add(raw.chunk_id)
+            added = True
+        return augmented, added
+
+    @classmethod
     def _named_commencement_title_match_score(cls, ref: str, chunk: RetrievedChunk | RankedChunk) -> int:
         normalized_ref = re.sub(r"\s+", " ", ref).strip().casefold()
         if not normalized_ref:
@@ -4051,8 +4111,21 @@ class RAGPipelineBuilder:
         answer = ""
         extracted = False
         strict_cited_ids: list[str] = []
-        context_chunks = state.get("context_chunks", [])
+        context_chunks = list(state.get("context_chunks", []))
+        if answer_type in strict_types:
+            context_chunks, strict_context_augmented = self._augment_strict_context_chunks(
+                query=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                retrieved=list(state.get("retrieved", [])),
+            )
+            if strict_context_augmented:
+                collector.set_context_ids([chunk.chunk_id for chunk in context_chunks])
         context_chunk_ids = [c.chunk_id for c in context_chunks]
+        retrieved_chunks = list(state.get("retrieved", []))
+        if retrieved_chunks:
+            collector.set_retrieved_ids([chunk.chunk_id for chunk in retrieved_chunks])
+        collector.set_context_ids(context_chunk_ids)
         get_context_debug_stats = getattr(self._generator, "get_context_debug_stats", None)
         if callable(get_context_debug_stats):
             context_stats_obj = get_context_debug_stats(
@@ -4449,6 +4522,16 @@ class RAGPipelineBuilder:
             cleanup_named_amendment = getattr(self._generator, "cleanup_named_amendment_answer", None)
             if callable(cleanup_named_amendment):
                 cleaned_obj = cleanup_named_amendment(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_enactment_date = getattr(self._generator, "cleanup_named_enactment_date_answer", None)
+            if callable(cleanup_named_enactment_date):
+                cleaned_obj = cleanup_named_enactment_date(
                     answer,
                     question=state["query"],
                     chunks=context_chunks,
@@ -6207,6 +6290,15 @@ class RAGPipelineBuilder:
             or _is_named_commencement_query(query)
             or _is_named_amendment_query(query)
         )
+        if cls._named_metadata_requires_support_union(query):
+            context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+            used_pages = {
+                cls._page_num(str(getattr(context_by_id.get(chunk_id), "section_path", "") or ""))
+                for chunk_id in ordered_used_ids
+                if chunk_id in context_by_id
+            }
+            if len(used_pages) >= 2:
+                return ordered_used_ids
         if not (compare_like or metadata_like):
             return ordered_used_ids
 

@@ -57,6 +57,22 @@ def _load_canary(path: Path) -> JsonDict:
     return cast("JsonDict", payload)
 
 
+def _runtime_recommendation(
+    *,
+    baseline_concurrency: int,
+    candidate_concurrency: int,
+    answer_drift_count: int,
+    page_drift_count: int,
+    model_drift_count: int,
+    missing_case_count: int,
+) -> str:
+    if answer_drift_count > 0 or page_drift_count > 0 or model_drift_count > 0 or missing_case_count > 0:
+        return "query_concurrency=1"
+    if candidate_concurrency <= max(1, baseline_concurrency):
+        return "query_concurrency=1_stable_only"
+    return "query_concurrency>1_allowed"
+
+
 def _build_report(*, canary: JsonDict, questions: dict[str, JsonDict], truth_audit: dict[str, JsonDict]) -> JsonDict:
     drift_ids = [str(item).strip() for item in _coerce_object_list(canary.get("answer_drift_case_ids")) if str(item).strip()]
     rows: list[JsonDict] = []
@@ -94,10 +110,12 @@ def _build_report(*, canary: JsonDict, questions: dict[str, JsonDict], truth_aud
     model_drift_count = int(canary.get("model_drift_count") or 0)
     missing_case_count = len(_coerce_object_list(canary.get("missing_case_ids")))
     drift_rate = answer_drift_count / total_cases if total_cases > 0 else 0.0
+    baseline_concurrency = int(canary.get("baseline_concurrency") or 0)
+    candidate_concurrency = int(canary.get("candidate_concurrency") or 0)
 
     return {
-        "baseline_concurrency": int(canary.get("baseline_concurrency") or 0),
-        "candidate_concurrency": int(canary.get("candidate_concurrency") or 0),
+        "baseline_concurrency": baseline_concurrency,
+        "candidate_concurrency": candidate_concurrency,
         "total_cases": total_cases,
         "answer_drift_count": answer_drift_count,
         "page_drift_count": page_drift_count,
@@ -108,10 +126,13 @@ def _build_report(*, canary: JsonDict, questions: dict[str, JsonDict], truth_aud
         "by_route_family": dict(route_family_counter),
         "by_support_shape_class": dict(support_shape_counter),
         "drift_cases": rows,
-        "runtime_recommendation": (
-            "query_concurrency=1"
-            if answer_drift_count > 0 or page_drift_count > 0 or model_drift_count > 0 or missing_case_count > 0
-            else "query_concurrency>1_allowed"
+        "runtime_recommendation": _runtime_recommendation(
+            baseline_concurrency=baseline_concurrency,
+            candidate_concurrency=candidate_concurrency,
+            answer_drift_count=answer_drift_count,
+            page_drift_count=page_drift_count,
+            model_drift_count=model_drift_count,
+            missing_case_count=missing_case_count,
         ),
     }
 

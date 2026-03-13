@@ -470,6 +470,14 @@ class RAGGenerator:
                 doc_refs=doc_refs,
             )
 
+        if self._is_named_enactment_date_question(question):
+            return self.cleanup_named_enactment_date_answer(
+                "",
+                question=question,
+                chunks=chunks,
+                doc_refs=doc_refs,
+            )
+
         if "administ" in q and not self._is_broad_enumeration_question(question):
             return self.cleanup_named_administration_answer(
                 "",
@@ -486,7 +494,15 @@ class RAGGenerator:
                 doc_refs=doc_refs,
             )
 
-        if "penalt" in q and not self._is_broad_enumeration_question(question):
+        if self._is_named_liability_question(question):
+            return self.cleanup_named_liability_answer(
+                "",
+                question=question,
+                chunks=chunks,
+                doc_refs=doc_refs,
+            )
+
+        if any(term in q for term in ("penalt", "fine")) and not self._is_broad_enumeration_question(question):
             return self.cleanup_named_penalty_answer(
                 "",
                 question=question,
@@ -1172,6 +1188,21 @@ class RAGGenerator:
         return len(RAGGenerator._question_named_refs(question=question)) >= 1 and "enact" in q and (
             "what law did it amend" in q or "what laws did it amend" in q
         )
+
+    @staticmethod
+    def _is_named_enactment_date_question(question: str) -> bool:
+        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
+        if not q or RAGGenerator._is_broad_enumeration_question(question):
+            return False
+        if len(RAGGenerator._question_named_refs(question=question)) < 1:
+            return False
+        if "enact" not in q:
+            return False
+        if any(term in q for term in ("what law did it amend", "what laws did it amend", "ruler of dubai", "made by the ruler")):
+            return False
+        if any(term in q for term in ("commencement", "come into force", "effective date", "enactment notice")):
+            return False
+        return any(term in q for term in ("on what date", "what date", "date of enactment", "when was"))
 
     @staticmethod
     def _is_interpretative_provisions_enumeration_question(question: str) -> bool:
@@ -2889,6 +2920,106 @@ class RAGGenerator:
         return "\n".join(rebuilt) if rebuilt else cleaned
 
     @classmethod
+    def cleanup_named_enactment_date_answer(
+        cls,
+        answer: str,
+        *,
+        question: str,
+        chunks: Sequence[RankedChunk],
+        doc_refs: Sequence[str] | None = None,
+    ) -> str:
+        cleaned = (answer or "").strip()
+        if not cls._is_named_enactment_date_question(question):
+            return cleaned
+
+        refs = cls._question_named_refs(question=question, extra_refs=doc_refs, prefer_extra_refs=True)
+        if not refs:
+            return cleaned
+
+        doc_order, chunks_by_doc = cls._group_chunks_by_doc(chunks)
+        if not doc_order:
+            return cleaned
+
+        support_by_ref: dict[str, tuple[str, str, list[str]]] = {}
+        for ref in refs:
+            best_support: tuple[str, str, list[str]] | None = None
+            best_score = 0
+            for doc_id in doc_order:
+                doc_chunks = chunks_by_doc.get(doc_id, [])
+                if not doc_chunks:
+                    continue
+                match_score = cls._doc_group_match_score(ref, doc_chunks)
+                if match_score <= 0:
+                    continue
+                label = cls._recover_doc_title_from_chunks(doc_chunks) or ref
+                enactment_date, enactment_chunk_id = cls._extract_enactment_date_support(doc_chunks)
+                if enactment_date and enactment_chunk_id:
+                    candidate = (label, enactment_date, [enactment_chunk_id])
+                    candidate_score = match_score + 120
+                else:
+                    candidate = None
+                    candidate_score = 0
+                    for chunk in doc_chunks:
+                        normalized = re.sub(r"\s+", " ", (chunk.text or "").strip())
+                        if not normalized or _ENACTMENT_NOTICE_REFERENCE_RE.search(normalized) is None:
+                            continue
+                        candidate = (
+                            label,
+                            "the date specified in the Enactment Notice in respect of this Law",
+                            [chunk.chunk_id],
+                        )
+                        candidate_score = match_score + 90
+                        break
+                if candidate is not None and candidate_score > best_score:
+                    best_support = candidate
+                    best_score = candidate_score
+            if best_support is not None:
+                support_by_ref[ref.casefold()] = best_support
+
+        if not support_by_ref and len(doc_order) == 1:
+            only_doc_chunks = chunks_by_doc.get(doc_order[0], [])
+            fallback_ref = refs[0]
+            recovered_title = cls._recover_doc_title_from_chunks(only_doc_chunks) or fallback_ref
+            enactment_date, enactment_chunk_id = cls._extract_enactment_date_support(only_doc_chunks)
+            if enactment_date and enactment_chunk_id:
+                support_by_ref[fallback_ref.casefold()] = (recovered_title, enactment_date, [enactment_chunk_id])
+            else:
+                for chunk in only_doc_chunks:
+                    normalized = re.sub(r"\s+", " ", (chunk.text or "").strip())
+                    if not normalized or _ENACTMENT_NOTICE_REFERENCE_RE.search(normalized) is None:
+                        continue
+                    support_by_ref[fallback_ref.casefold()] = (
+                        recovered_title,
+                        "the date specified in the Enactment Notice in respect of this Law",
+                        [chunk.chunk_id],
+                    )
+                    break
+
+        if not support_by_ref:
+            return cleaned
+
+        if len(refs) == 1:
+            support = support_by_ref.get(refs[0].casefold())
+            if support is None:
+                return cleaned
+            _label, enactment_date, cited_ids = support
+            return f"The date of enactment is {enactment_date} (cite: {', '.join(cited_ids)})"
+
+        rebuilt: list[str] = []
+        for ref in refs:
+            support = support_by_ref.get(ref.casefold())
+            if support is None:
+                rebuilt.append(f"{len(rebuilt) + 1}. {ref}: The provided sources do not specify the date of enactment.")
+                continue
+            label, enactment_date, cited_ids = support
+            rebuilt.append(
+                f"{len(rebuilt) + 1}. {label}: The date of enactment is {enactment_date} "
+                f"(cite: {', '.join(cited_ids)})"
+            )
+
+        return "\n".join(rebuilt) if rebuilt else cleaned
+
+    @classmethod
     def cleanup_named_administration_answer(
         cls,
         answer: str,
@@ -3161,6 +3292,79 @@ class RAGGenerator:
 
         return "\n".join(rebuilt) if len(rebuilt) >= 2 else cleaned
 
+    @staticmethod
+    def _is_named_liability_question(question: str) -> bool:
+        q = re.sub(r"\s+", " ", (question or "").strip()).casefold()
+        if not q or RAGGenerator._is_broad_enumeration_question(question):
+            return False
+        if "what kind of liability" in q or "what liability" in q:
+            return True
+        return ("liabil" in q or "liable" in q) and "partner" in q and "under article" in q
+
+    @classmethod
+    def _extract_liability_support(
+        cls,
+        *,
+        question: str,
+        doc_chunks: Sequence[RankedChunk],
+    ) -> tuple[str, list[str]]:
+        question_lower = re.sub(r"\s+", " ", (question or "").strip()).casefold()
+        subject = "Partners" if "partner" in question_lower else "The relevant parties"
+
+        best_clause = ""
+        best_cited_ids: list[str] = []
+        best_score = 0
+        for chunk in doc_chunks:
+            normalized = re.sub(r"\s+", " ", (chunk.text or "")).strip()
+            if not normalized:
+                continue
+            lowered = normalized.casefold()
+            if "jointly and severally liable" not in lowered and (
+                "jointly" not in lowered or "severally liable" not in lowered
+            ):
+                continue
+
+            score = 200
+            if "partner" in lowered:
+                score += 20
+            if "liab" in lowered:
+                score += 20
+            if cls._page_num(chunk.section_path) <= 2:
+                score += 10
+            if score > best_score:
+                best_score = score
+                best_clause = f"{subject} are jointly and severally liable."
+                best_cited_ids = [chunk.chunk_id]
+
+        return best_clause, best_cited_ids
+
+    @classmethod
+    def cleanup_named_liability_answer(
+        cls,
+        answer: str,
+        *,
+        question: str,
+        chunks: Sequence[RankedChunk],
+        doc_refs: Sequence[str] | None = None,
+    ) -> str:
+        cleaned = (answer or "").strip()
+        if not cls._is_named_liability_question(question):
+            return cleaned
+
+        doc_order, chunks_by_doc = cls._group_chunks_by_doc(chunks)
+        if len(doc_order) != 1:
+            return cleaned
+
+        only_doc_chunks = chunks_by_doc.get(doc_order[0], [])
+        if not only_doc_chunks:
+            return cleaned
+
+        clause, cited_ids = cls._extract_liability_support(question=question, doc_chunks=only_doc_chunks)
+        if not clause or not cited_ids:
+            return cleaned
+
+        return f"{clause} (cite: {', '.join(cited_ids)})"
+
     @classmethod
     def _extract_penalty_support(
         cls,
@@ -3221,11 +3425,11 @@ class RAGGenerator:
     ) -> str:
         cleaned = (answer or "").strip()
         question_lower = (question or "").strip().lower()
-        if "penalt" not in question_lower or cls._is_broad_enumeration_question(question):
+        if not any(term in question_lower for term in ("penalt", "fine")) or cls._is_broad_enumeration_question(question):
             return cleaned
 
         refs = cls._question_named_refs(question=question, extra_refs=doc_refs, prefer_extra_refs=True)
-        if len(refs) < 2:
+        if not refs:
             return cleaned
 
         support_by_ref: dict[str, tuple[str, str, list[str]]] = {}
@@ -3251,8 +3455,30 @@ class RAGGenerator:
             if best_support is not None:
                 support_by_ref[ref.casefold()] = best_support
 
+        if not support_by_ref and len(doc_order) == 1:
+            only_doc_chunks = chunks_by_doc.get(doc_order[0], [])
+            fallback_ref = refs[0]
+            recovered_title = cls._recover_doc_title_from_chunks(only_doc_chunks) or fallback_ref
+            clause, cited_ids = cls._extract_penalty_support(
+                question=question,
+                ref=fallback_ref,
+                doc_chunks=only_doc_chunks,
+            )
+            if clause and cited_ids:
+                support_by_ref[fallback_ref.casefold()] = (recovered_title, clause, cited_ids)
+
+        if len(doc_order) == 1 and len(support_by_ref) == 1:
+            _label, clause, cited_ids = next(iter(support_by_ref.values()))
+            return f"{clause} (cite: {', '.join(cited_ids)})"
+
         if not support_by_ref and cleaned:
             return cleaned
+        if len(refs) == 1:
+            support = support_by_ref.get(refs[0].casefold())
+            if support is None:
+                return cleaned
+            _label, clause, cited_ids = support
+            return f"{clause} (cite: {', '.join(cited_ids)})"
 
         rebuilt: list[str] = []
         for ref in refs:
