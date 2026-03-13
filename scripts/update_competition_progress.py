@@ -378,6 +378,10 @@ def _matrix_default_specs(root: Path) -> list[JsonDict]:
             "git_commit": "unknown",
             "baseline": "v5_public_support_baseline",
             "external_version": "v6",
+            "external_det": 0.971429,
+            "external_asst": 0.693333,
+            "external_g": 0.800729,
+            "external_total": 0.74156,
             "lineage_confidence": "low",
             "notes": "Best public result so far; local artifact lineage is ambiguous relative to the public score state.",
         },
@@ -389,6 +393,10 @@ def _matrix_default_specs(root: Path) -> list[JsonDict]:
             "git_commit": "unknown",
             "baseline": "v6_public_exactness_champion",
             "external_version": "v7",
+            "external_det": 0.971429,
+            "external_asst": 0.646667,
+            "external_g": 0.608,
+            "external_total": 0.554,
             "lineage_confidence": "low",
             "notes": "All-context page broadening; catastrophic public grounding regression.",
         },
@@ -400,6 +408,10 @@ def _matrix_default_specs(root: Path) -> list[JsonDict]:
             "git_commit": "unknown",
             "baseline": "v6_public_exactness_champion",
             "external_version": "v8",
+            "external_det": 0.971429,
+            "external_asst": 0.686667,
+            "external_g": 0.800729,
+            "external_total": 0.740,
             "lineage_confidence": "low",
             "notes": "ONORA casing tweak; no real public gain over v6.",
         },
@@ -509,6 +521,44 @@ def _matrix_default_specs(root: Path) -> list[JsonDict]:
 def _known_row_overrides(root: Path) -> dict[str, JsonDict]:
     research = root / ".sdd" / "researches"
     return {
+        "triad_f331_e0798": {
+            "production_mimic_json": str(
+                research / "production_mimic_triad_f331_e0798_2026-03-13" / "production_mimic.json"
+            ),
+        },
+        "triad_f331_e0798_plus_dotted": {
+            "production_mimic_json": str(
+                research / "production_mimic_current_combined_2026-03-13" / "production_mimic.json"
+            ),
+        },
+        "triad_f331_e0798_plus_dotted_5046": {
+            "production_mimic_json": str(
+                research
+                / "production_mimic_triad_f331_e0798_plus_dotted_5046_2026-03-13"
+                / "production_mimic.json"
+            ),
+        },
+        "v5046_exactness_only_from_v6_context_seed": {
+            "production_mimic_json": str(
+                research
+                / "production_mimic_v5046_exactness_only_from_v6_context_seed_2026-03-13"
+                / "production_mimic.json"
+            ),
+        },
+        "v_embeddinggemma_fullcollection_iter14c": {
+            "production_mimic_json": str(
+                research
+                / "production_mimic_v_embeddinggemma_fullcollection_iter14c_2026-03-13"
+                / "production_mimic.json"
+            ),
+        },
+        "v_within_doc_rerank_surrogate_iter13": {
+            "production_mimic_json": str(
+                research
+                / "production_mimic_v_within_doc_rerank_surrogate_iter13_2026-03-13"
+                / "production_mimic.json"
+            ),
+        },
         "v10_local_page_localizer_r1": {
             "production_mimic_json": str(research / "production_mimic_v10_local_page_localizer_r1_2026-03-13" / "production_mimic.json"),
         },
@@ -523,6 +573,11 @@ def _known_row_overrides(root: Path) -> dict[str, JsonDict]:
         },
         "v10_local_page_candidates_r1": {
             "production_mimic_json": str(research / "ticket23_page_candidates_r1_2026-03-13" / "production_mimic_v10_local_page_candidates_r1.json"),
+        },
+        "v10_local_colbert_page_rerank_r1": {
+            "production_mimic_json": str(
+                research / "ticket28_local_colbert_sidecar_2026-03-13" / "production_mimic_v10_local_colbert_page_rerank_r1.json"
+            ),
         },
     }
 
@@ -609,13 +664,13 @@ def _hydrate_row(
         "judge_accuracy": None,
         "exactness_resolved_qids": [],
         "exactness_unresolved_qids": [],
-        "external_det": None,
-        "external_asst": None,
-        "external_g": None,
-        "external_t": None,
-        "external_f": None,
-        "external_total": None,
-        "external_rank": None,
+        "external_det": spec.get("external_det"),
+        "external_asst": spec.get("external_asst"),
+        "external_g": spec.get("external_g"),
+        "external_t": spec.get("external_t"),
+        "external_f": spec.get("external_f"),
+        "external_total": spec.get("external_total"),
+        "external_rank": spec.get("external_rank"),
         "platform_like_total_estimate": None,
         "strict_total_estimate": None,
         "paranoid_total_estimate": None,
@@ -624,7 +679,11 @@ def _hydrate_row(
 
     version = str(spec.get("external_version") or "").strip()
     if version and version in history_rows:
-        row.update(history_rows[version])
+        history_row = history_rows[version]
+        for key, value in history_row.items():
+            current_value = row.get(key)
+            if current_value is None or current_value == "" or current_value == []:
+                row[key] = value
 
     status_payload = _load_json(_resolve_path(spec.get("external_status_json")))
     if status_payload:
@@ -707,10 +766,15 @@ def _best_offline_row(rows: list[JsonDict]) -> JsonDict | None:
         key=lambda row: (
             row.get("paranoid_total_estimate") is not None,
             _as_float(row.get("paranoid_total_estimate"), default=-1.0),
+            status_priority.get(str(row.get("status")), -1),
             row.get("strict_total_estimate") is not None,
             _as_float(row.get("strict_total_estimate"), default=-1.0),
             _as_float(row.get("hidden_g_trusted"), default=-999.0),
-            status_priority.get(str(row.get("status")), -1),
+            len(cast("list[object]", row.get("exactness_resolved_qids") or [])),
+            -len(cast("list[object]", row.get("exactness_unresolved_qids") or [])),
+            _as_float(row.get("judge_pass_rate"), default=-999.0),
+            -_as_float(row.get("answer_drift"), default=999.0),
+            -_as_float(row.get("page_drift"), default=999.0),
         ),
     )
 
@@ -719,7 +783,15 @@ def _best_public_row(rows: list[JsonDict]) -> JsonDict | None:
     submitted = [row for row in rows if str(row.get("status")) == "submitted" and row.get("external_total") is not None]
     if not submitted:
         return None
-    return max(submitted, key=lambda row: _as_float(row.get("external_total"), default=-1.0))
+    return max(
+        submitted,
+        key=lambda row: (
+            _as_float(row.get("external_total"), default=-1.0),
+            _as_float(row.get("external_det"), default=-1.0),
+            _as_float(row.get("external_asst"), default=-1.0),
+            _as_float(row.get("external_g"), default=-1.0),
+        ),
+    )
 
 
 def _summary_block(*, leaderboard_summary: JsonDict, rows: list[JsonDict], supervisor_action: str | None) -> list[str]:
@@ -899,9 +971,12 @@ def build_competition_matrix(
     offline_best = _best_offline_row(rows)
     if public_best is not None and public_best.get("external_rank") is None:
         public_best["external_rank"] = leaderboard_summary.get("rank")
-        public_best["external_total"] = leaderboard_summary.get("total")
-        public_best["external_t"] = leaderboard_summary.get("t")
-        public_best["external_f"] = leaderboard_summary.get("f")
+        if public_best.get("external_total") is None:
+            public_best["external_total"] = leaderboard_summary.get("total")
+        if public_best.get("external_t") is None:
+            public_best["external_t"] = leaderboard_summary.get("t")
+        if public_best.get("external_f") is None:
+            public_best["external_f"] = leaderboard_summary.get("f")
     payload: JsonDict = {
         "summary": {
             "team": team_name,
