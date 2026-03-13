@@ -183,6 +183,15 @@ def _fmt_int(value: object) -> str:
     return str(_as_int(value))
 
 
+def _short_hash(value: object, *, length: int = 12) -> str:
+    if value is None or value == "":
+        return "-"
+    text = str(value).strip()
+    if not text:
+        return "-"
+    return text[:length]
+
+
 def _short_qids(value: object, *, limit: int = 4) -> str:
     if not isinstance(value, list):
         return "-"
@@ -292,6 +301,16 @@ def _load_production_mimic(path: Path | None) -> JsonDict | None:
     if not payload:
         return None
     nested = payload.get("production_mimic")
+    if isinstance(nested, dict):
+        return cast("JsonDict", nested)
+    return payload
+
+
+def _load_run_manifest(path: Path | None) -> JsonDict | None:
+    payload = _load_json(path)
+    if not payload:
+        return None
+    nested = payload.get("run_manifest")
     if isinstance(nested, dict):
         return cast("JsonDict", nested)
     return payload
@@ -655,6 +674,8 @@ def _hydrate_row(
         "baseline": spec.get("baseline") or "-",
         "notes": spec.get("notes") or "",
         "lineage_confidence": spec.get("lineage_confidence") or "unknown",
+        "run_manifest_status": spec.get("run_manifest_status") or "unknown",
+        "run_manifest_fingerprint": None,
         "answer_drift": None,
         "page_drift": None,
         "hidden_g_trusted": None,
@@ -736,6 +757,27 @@ def _hydrate_row(
 
     lineage_payload = _load_lineage(_resolve_path(spec.get("lineage_json")))
     row["lineage_confidence"] = _infer_lineage_confidence(spec, lineage_payload)
+
+    run_manifest_path = _resolve_path(spec.get("run_manifest_json") or spec.get("manifest_json"))
+    run_manifest_payload = _load_run_manifest(run_manifest_path)
+    if run_manifest_payload is not None:
+        row["run_manifest_status"] = "present"
+        row["run_manifest_fingerprint"] = run_manifest_payload.get("fingerprint")
+        manifest_git = cast("JsonDict", run_manifest_payload.get("git") or {})
+        manifest_sha = str(manifest_git.get("sha") or "").strip()
+        if manifest_sha and str(row.get("git_commit") or "unknown") == "unknown":
+            row["git_commit"] = manifest_sha[:7]
+    else:
+        status = str(row.get("status") or "").strip()
+        if status in {"candidate", "ceiling"}:
+            row["run_manifest_status"] = "missing_blocking"
+            row["notes"] = (
+                f"{row['notes']} [manifest=missing_blocking]".strip()
+                if row["notes"]
+                else "manifest=missing_blocking"
+            )
+        else:
+            row["run_manifest_status"] = "legacy_unknown"
 
     exactness_payload = _load_exactness(_resolve_path(spec.get("exactness_json")))
     if exactness_payload is not None:
@@ -826,6 +868,11 @@ def _summary_block(*, leaderboard_summary: JsonDict, rows: list[JsonDict], super
     used = _as_int(leaderboard_summary.get("submissions"))
     remaining = max(0, 10 - used)
     current_path_ceilinged = supervisor_action in {"small_diff_ceiling_reached", "local_ceiling_reached_hold_budget"}
+    manifest_counts = {
+        "present": sum(1 for row in rows if str(row.get("run_manifest_status") or "") == "present"),
+        "missing_blocking": sum(1 for row in rows if str(row.get("run_manifest_status") or "") == "missing_blocking"),
+        "legacy_unknown": sum(1 for row in rows if str(row.get("run_manifest_status") or "") == "legacy_unknown"),
+    }
     lines = [
         "# Competition Matrix",
         "",
@@ -849,6 +896,7 @@ def _summary_block(*, leaderboard_summary: JsonDict, rows: list[JsonDict], super
         f"- Current default decision: `{supervisor_action or 'no_submit_continue_offline'}`",
         f"- Current S: `{_fmt_float(leaderboard_summary.get('s'))}`",
         f"- Current G: `{_fmt_float(leaderboard_summary.get('g'))}`",
+        f"- Run manifest coverage: present=`{manifest_counts['present']}` missing_blocking=`{manifest_counts['missing_blocking']}` legacy_unknown=`{manifest_counts['legacy_unknown']}`",
     ]
     gap_map = {int(_as_int(item.get("rank"))): item for item in gap_targets}
     for rank in (1, 3, 5):
@@ -880,6 +928,8 @@ def _render_matrix(rows: list[JsonDict], *, leaderboard_summary: JsonDict, super
         "git_commit",
         "baseline",
         "lineage_confidence",
+        "run_manifest_status",
+        "run_manifest_fingerprint",
         "answer_drift",
         "page_drift",
         "hidden_g_trusted",
@@ -917,6 +967,8 @@ def _render_matrix(rows: list[JsonDict], *, leaderboard_summary: JsonDict, super
             str(row.get("git_commit") or "-"),
             str(row.get("baseline") or "-"),
             str(row.get("lineage_confidence") or "-"),
+            str(row.get("run_manifest_status") or "-"),
+            _short_hash(row.get("run_manifest_fingerprint")),
             _fmt_int(row.get("answer_drift")),
             _fmt_int(row.get("page_drift")),
             _fmt_small(row.get("hidden_g_trusted")),

@@ -6,9 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _load_update_competition_progress_module():
-    scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
+    scripts_dir = REPO_ROOT / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
     return importlib.import_module("update_competition_progress")
@@ -89,7 +91,7 @@ def test_update_competition_progress_script_renders_budget_and_estimate(tmp_path
             "--out",
             str(out),
         ],
-        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -109,6 +111,7 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
     history_md = tmp_path / "history.md"
     candidate_cycle = tmp_path / "cycle.json"
     production_mimic = tmp_path / "production_mimic.json"
+    run_manifest = tmp_path / "run_manifest.json"
     supervisor_runs = tmp_path / "runs.json"
     matrix_json = tmp_path / "competition_matrix.json"
     matrix_md = tmp_path / "competition_matrix.md"
@@ -139,10 +142,11 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
                         "date": "2026-03-13",
                         "status": "ceiling",
                         "branch_class": "combined_small_diff_ceiling",
-                        "git_commit": "0343e02",
+                        "git_commit": "unknown",
                         "baseline": "submission_v6_context_seed",
                         "candidate_label": "triad_f331_e0798_plus_dotted",
                         "lineage_confidence": "high",
+                        "run_manifest_json": str(run_manifest),
                         "notes": "best offline candidate",
                     },
                     {
@@ -217,6 +221,18 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
         ),
         encoding="utf-8",
     )
+    run_manifest.write_text(
+        json.dumps(
+            {
+                "run_manifest": {
+                    "candidate_label": "triad_f331_e0798_plus_dotted",
+                    "fingerprint": "manifest1234567890",
+                    "git": {"sha": "feedfacecafebeef"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     supervisor_runs.write_text(
         json.dumps(
             {
@@ -255,7 +271,7 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
             "--matrix-md-out",
             str(matrix_md),
         ],
-        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -267,12 +283,17 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
     assert matrix_payload["summary"]["current_public_best_label"] == "v6_public_exactness_champion"
     assert matrix_payload["summary"]["current_best_offline_label"] == "triad_f331_e0798_plus_dotted"
     rows = {row["label"]: row for row in matrix_payload["rows"]}
+    assert rows["triad_f331_e0798_plus_dotted"]["run_manifest_status"] == "present"
+    assert rows["triad_f331_e0798_plus_dotted"]["run_manifest_fingerprint"] == "manifest1234567890"
+    assert rows["triad_f331_e0798_plus_dotted"]["git_commit"] == "feedfac"
+    assert rows["v10_local_page_reranker_r1"]["run_manifest_status"] == "legacy_unknown"
     assert rows["triad_f331_e0798_plus_dotted"]["platform_like_rank_estimate"] is not None
     assert rows["triad_f331_e0798_plus_dotted"]["strict_rank_estimate"] is not None
     assert rows["triad_f331_e0798_plus_dotted"]["paranoid_rank_estimate"] is not None
     assert "# Competition Matrix" in matrix_report
     assert "paranoid_rank=`" in matrix_report
     assert "Current default decision: `local_ceiling_reached_hold_budget`" in matrix_report
+    assert "Run manifest coverage: present=`1`" in matrix_report
     assert "triad_f331_e0798_plus_dotted" in matrix_report
     assert "v6_public_exactness_champion" in matrix_report
 
@@ -386,7 +407,7 @@ def test_update_competition_progress_script_merges_partial_specs_with_defaults(t
             "--matrix-md-out",
             str(matrix_md),
         ],
-        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -401,6 +422,8 @@ def test_update_competition_progress_script_merges_partial_specs_with_defaults(t
     assert "v10_local_page_candidates_r1" in labels
     assert matrix_payload["summary"]["current_best_offline_label"] == "triad_f331_e0798_plus_dotted"
     assert "Current best offline candidate: `triad_f331_e0798_plus_dotted`" in matrix_report
+    rejected_row = next(row for row in matrix_payload["rows"] if row["label"] == "v10_local_page_candidates_r1")
+    assert rejected_row["run_manifest_status"] == "legacy_unknown"
 
 
 def test_load_specs_autodiscovers_ticket_specs_and_applies_known_overrides(tmp_path: Path) -> None:
@@ -516,3 +539,26 @@ def test_hydrate_row_prefers_row_specific_cycle_and_production_mimic(tmp_path: P
     assert row["strict_total_estimate"] == 0.77
     assert row["paranoid_total_estimate"] == 0.383
     assert row["judge_pass_rate"] == 0.0
+    assert row["run_manifest_status"] == "legacy_unknown"
+
+
+def test_hydrate_row_blocks_active_candidates_without_run_manifest() -> None:
+    module = _load_update_competition_progress_module()
+    spec = {
+        "label": "triad_f331_e0798_plus_dotted",
+        "status": "ceiling",
+        "candidate_label": "triad_f331_e0798_plus_dotted",
+        "notes": "best offline candidate",
+    }
+
+    row = module._hydrate_row(
+        spec=spec,
+        history_rows={},
+        global_cycle_index={},
+        cycle_index_cache={},
+        global_production_mimic=None,
+        supervisor_action=None,
+    )
+
+    assert row["run_manifest_status"] == "missing_blocking"
+    assert "manifest=missing_blocking" in str(row["notes"])

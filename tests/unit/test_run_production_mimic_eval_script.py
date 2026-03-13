@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -> None:
@@ -173,7 +172,7 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
             "--out-md",
             str(out_md),
         ],
-        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
