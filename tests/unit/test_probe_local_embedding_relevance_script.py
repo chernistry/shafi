@@ -3,6 +3,7 @@ from __future__ import annotations
 from scripts.probe_local_embedding_relevance import (
     CandidatePage,
     _cosine_similarity,
+    _load_scaffold_cases,
     _parse_page_id,
     _pick_distractor_page_ids,
     _same_doc_neighbor_page_ids,
@@ -77,3 +78,51 @@ def test_same_doc_neighbor_page_ids_adds_adjacent_pages(tmp_path) -> None:
     )
 
     assert neighbors == ["doc123_1", "doc123_3"]
+
+
+def test_load_scaffold_cases_filters_by_verdict_failure_class_and_pages(tmp_path) -> None:
+    scaffold = tmp_path / "scaffold.json"
+    scaffold.write_text(
+        """
+        {
+          "records": [
+            {
+              "question_id": "q1",
+              "manual_verdict": "correct",
+              "failure_class": "support_undercoverage",
+              "minimal_required_support_pages": ["doca_1"]
+            },
+            {
+              "question_id": "q2",
+              "manual_verdict": "incorrect",
+              "failure_class": "weak_path_fallback",
+              "minimal_required_support_pages": ["docb_2"]
+            },
+            {
+              "question_id": "q3",
+              "manual_verdict": "correct",
+              "failure_class": "support_undercoverage",
+              "minimal_required_support_pages": []
+            }
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    cases = _load_scaffold_cases(
+        scaffold,
+        question_ids=None,
+        manual_verdicts={"correct"},
+        failure_classes={"support_undercoverage"},
+        max_cases=None,
+    )
+
+    assert cases == [
+        {
+            "question_id": "q1",
+            "gold_page_ids": ["doca_1"],
+            "source_manual_verdict": "correct",
+            "source_failure_class": "support_undercoverage",
+        }
+    ]
