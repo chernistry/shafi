@@ -10,6 +10,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, StateGraph
 
 from rag_challenge.config import get_settings
+from rag_challenge.core.classifier import QueryClassifier
 from rag_challenge.core.conflict_detector import ConflictDetector
 from rag_challenge.core.decomposer import QueryDecomposer
 from rag_challenge.core.premise_guard import check_query_premise
@@ -21,7 +22,6 @@ from rag_challenge.telemetry import TelemetryCollector  # noqa: TC001
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from rag_challenge.core.classifier import QueryClassifier
     from rag_challenge.core.reranker import RerankerClient
     from rag_challenge.core.retriever import HybridRetriever
     from rag_challenge.core.verifier import AnswerVerifier
@@ -5940,6 +5940,85 @@ class RAGPipelineBuilder:
         return ordered
 
     @classmethod
+    def _best_support_chunk_id_for_doc_page(
+        cls,
+        *,
+        doc_id: str | None,
+        page_num: int,
+        context_chunks: Sequence[RankedChunk],
+    ) -> str:
+        if page_num <= 0:
+            return ""
+
+        target_doc_id = str(doc_id or "").strip()
+        best_chunk_id = ""
+        best_key: tuple[int, float, float, int] | None = None
+        for idx, chunk in enumerate(context_chunks):
+            chunk_doc_id = str(getattr(chunk, "doc_id", "") or chunk.chunk_id).strip()
+            if target_doc_id and chunk_doc_id != target_doc_id:
+                continue
+            if cls._page_num(str(getattr(chunk, "section_path", "") or "")) != page_num:
+                continue
+            text = cls._normalize_support_text(str(getattr(chunk, "text", "") or "")).casefold()
+            score = 0
+            if page_num == 1:
+                score += 80
+                if "may be cited as" in text or "judgment" in text or "claimant" in text or "respondent" in text:
+                    score += 40
+            candidate = (
+                score,
+                float(getattr(chunk, "rerank_score", 0.0) or 0.0),
+                float(getattr(chunk, "retrieval_score", 0.0) or 0.0),
+                -idx,
+            )
+            if best_key is None or candidate > best_key:
+                best_key = candidate
+                best_chunk_id = chunk.chunk_id
+        return best_chunk_id
+
+    @classmethod
+    def _explicit_page_reference_support_chunk_ids(
+        cls,
+        *,
+        query: str,
+        context_chunks: Sequence[RankedChunk],
+    ) -> list[str]:
+        explicit_ref = QueryClassifier.extract_explicit_page_reference(query)
+        if explicit_ref is None or explicit_ref.requested_page is None or explicit_ref.requested_page <= 0:
+            return []
+
+        requested_page = explicit_ref.requested_page
+        chunk_ids: list[str] = []
+        seen_chunk_ids: set[str] = set()
+        resolved_doc_ids: set[str] = set()
+
+        for ref in cls._support_question_refs(query)[:4]:
+            title_chunk_id = cls._best_title_support_chunk_id(title=ref, context_chunks=context_chunks)
+            if not title_chunk_id:
+                continue
+            resolved_doc_ids.update(cls._doc_ids_for_chunk_ids(chunk_ids=[title_chunk_id], context_chunks=context_chunks))
+
+        for resolved_doc_id in sorted(resolved_doc_ids):
+            chunk_id = cls._best_support_chunk_id_for_doc_page(
+                doc_id=resolved_doc_id,
+                page_num=requested_page,
+                context_chunks=context_chunks,
+            )
+            if chunk_id and chunk_id not in seen_chunk_ids:
+                seen_chunk_ids.add(chunk_id)
+                chunk_ids.append(chunk_id)
+
+        if chunk_ids:
+            return chunk_ids
+
+        fallback_chunk_id = cls._best_support_chunk_id_for_doc_page(
+            doc_id=None,
+            page_num=requested_page,
+            context_chunks=context_chunks,
+        )
+        return [fallback_chunk_id] if fallback_chunk_id else []
+
+    @classmethod
     def _is_named_metadata_support_query(cls, query: str) -> bool:
         q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
         if not q or _is_broad_enumeration_query(query):
@@ -6023,6 +6102,7 @@ class RAGPipelineBuilder:
         extras: list[str] = []
         seen_ids = set(ordered_ids)
         flags: list[str] = []
+        explicit_page_forced = False
 
         def _push(chunk_id: str) -> None:
             normalized = str(chunk_id).strip()
@@ -6030,6 +6110,18 @@ class RAGPipelineBuilder:
                 return
             seen_ids.add(normalized)
             extras.append(normalized)
+
+        explicit_page_ref = QueryClassifier.extract_explicit_page_reference(query)
+        if explicit_page_ref is not None and explicit_page_ref.requested_page is not None:
+            explicit_page_chunk_ids = cls._explicit_page_reference_support_chunk_ids(
+                query=query,
+                context_chunks=context_chunks,
+            )
+            for chunk_id in explicit_page_chunk_ids:
+                before_len = len(extras)
+                _push(chunk_id)
+                if len(extras) > before_len:
+                    explicit_page_forced = True
 
         compare_refs = cls._paired_support_question_refs(query)
         if len(compare_refs) < 2:
@@ -6123,6 +6215,16 @@ class RAGPipelineBuilder:
                 if chunk_id in context_by_id
             ):
                 flags.append("outcome_costs_support_missing")
+        if explicit_page_ref is not None and explicit_page_ref.requested_page is not None:
+            explicit_page_present = any(
+                cls._page_num(str(getattr(chunk, "section_path", "") or "")) == explicit_page_ref.requested_page
+                for chunk in context_chunks
+                if chunk.chunk_id in shaped_ids
+            )
+            if explicit_page_present and explicit_page_forced:
+                flags.append("explicit_page_reference_forced")
+            elif not explicit_page_present:
+                flags.append("explicit_page_reference_missing")
 
         return shaped_ids, flags
 

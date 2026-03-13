@@ -986,6 +986,88 @@ def test_apply_support_shape_policy_keeps_outcome_and_cost_pages() -> None:
     assert flags == []
 
 
+def test_apply_support_shape_policy_forces_explicit_second_page_chunk() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="judgment:page1",
+            doc_id="judgment-doc",
+            doc_title="CFI 010/2024 Alpha v Beta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="CFI 010/2024 Alpha v Beta. Cover page with parties.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="judgment:page2",
+            doc_id="judgment-doc",
+            doc_title="CFI 010/2024 Alpha v Beta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="The second page contains the judge names and filing details.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="name",
+        answer="Justice Example",
+        query="Who is named on the second page of CFI 010/2024 Alpha v Beta?",
+        context_chunks=context_chunks,
+        cited_ids=["judgment:page1"],
+        support_ids=["judgment:page1"],
+    )
+
+    assert set(shaped_ids) == {"judgment:page1", "judgment:page2"}
+    assert flags == ["explicit_page_reference_forced"]
+
+
+def test_apply_support_shape_policy_forces_title_page_chunk_for_named_metadata_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:title",
+            doc_id="foundations-law",
+            doc_title="Foundations Law 2018",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text='This Law may be cited as the "Foundations Law 2018".',
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:update",
+            doc_id="foundations-law",
+            doc_title="Foundations Law 2018",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text="The consolidated version of this Law was updated on 1 July 2024.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="free_text",
+        answer="The consolidated version was updated on 1 July 2024.",
+        query="What appears on the title page of the Foundations Law 2018?",
+        context_chunks=context_chunks,
+        cited_ids=["law:update"],
+        support_ids=["law:update"],
+    )
+
+    assert set(shaped_ids) == {"law:title", "law:update"}
+    assert flags == ["explicit_page_reference_forced"]
+
+
 def test_expand_page_spanning_support_chunk_ids_includes_adjacent_continuation_page() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
