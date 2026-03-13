@@ -19,14 +19,19 @@ def _settings_model_config(*, env_prefix: str = "") -> SettingsConfigDict:
 class EmbeddingSettings(BaseSettings):
     model_config = _settings_model_config(env_prefix="EMBED_")
 
+    provider: str = "isaacus"
     model: str = "kanon-2-embedder"
     api_url: str = "https://api.isaacus.com/v1/embeddings"
+    ollama_base_url: str = "http://localhost:11434"
     api_key: SecretStr = Field(alias="ISAACUS_API_KEY")
     dimensions: int = 1024
     batch_size: int = 128  # Isaacus API hard limit
     concurrency: int = 8
     timeout_s: float = 30.0
     connect_timeout_s: float = 10.0
+    ollama_batch_size: int = 32
+    ollama_concurrency: int = 2
+    ollama_timeout_s: float = 90.0
     retry_attempts: int = 6
     retry_base_delay_s: float = 0.5
     retry_max_delay_s: float = 16.0

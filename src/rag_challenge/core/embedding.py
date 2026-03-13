@@ -55,14 +55,38 @@ class EmbeddingClient:
         self._query_cache_max = 1000
 
     def _make_client(self) -> httpx.AsyncClient:
+        provider = str(getattr(self._settings, "provider", "isaacus")).strip().lower()
+        headers: dict[str, str] = {}
+        base_url = self._settings.api_url
+        max_connections = self._settings.concurrency
+        timeout_s = self._settings.timeout_s
+        if provider == "isaacus":
+            headers = {"Authorization": f"Bearer {self._settings.api_key.get_secret_value()}"}
+        elif provider == "ollama":
+            base_url = self._settings.ollama_base_url
+            max_connections = max(1, int(getattr(self._settings, "ollama_concurrency", self._settings.concurrency)))
+            timeout_s = float(getattr(self._settings, "ollama_timeout_s", self._settings.timeout_s))
         return httpx.AsyncClient(
-            headers={"Authorization": f"Bearer {self._settings.api_key.get_secret_value()}"},
+            base_url=base_url.rstrip("/"),
+            headers=headers,
             limits=httpx.Limits(
-                max_connections=self._settings.concurrency,
-                max_keepalive_connections=self._settings.concurrency,
+                max_connections=max_connections,
+                max_keepalive_connections=max_connections,
             ),
-            timeout=httpx.Timeout(self._settings.timeout_s, connect=self._settings.connect_timeout_s),
+            timeout=httpx.Timeout(timeout_s, connect=self._settings.connect_timeout_s),
         )
+
+    def _effective_batch_size(self) -> int:
+        provider = str(getattr(self._settings, "provider", "isaacus")).strip().lower()
+        if provider == "ollama":
+            return max(1, int(getattr(self._settings, "ollama_batch_size", self._settings.batch_size)))
+        return max(1, int(self._settings.batch_size))
+
+    def _effective_concurrency(self) -> int:
+        provider = str(getattr(self._settings, "provider", "isaacus")).strip().lower()
+        if provider == "ollama":
+            return max(1, int(getattr(self._settings, "ollama_concurrency", self._settings.concurrency)))
+        return max(1, int(self._settings.concurrency))
 
     async def close(self) -> None:
         if not self._external_client:
@@ -96,8 +120,8 @@ class EmbeddingClient:
         if not texts:
             return []
 
-        sem = asyncio.Semaphore(self._settings.concurrency)
-        batches = list(self._chunk_list(list(texts), self._settings.batch_size))
+        sem = asyncio.Semaphore(self._effective_concurrency())
+        batches = list(self._chunk_list(list(texts), self._effective_batch_size()))
 
         async def _process_batch(batch: list[str]) -> list[list[float]]:
             async with sem:
@@ -132,6 +156,13 @@ class EmbeddingClient:
         raise AssertionError("unreachable")
 
     async def _embed_batch_once(self, texts: list[str], task: str) -> list[list[float]]:
+        provider = str(getattr(self._settings, "provider", "isaacus")).strip().lower()
+        if provider == "ollama":
+            return await self._embed_batch_once_ollama(texts)
+
+        return await self._embed_batch_once_isaacus(texts=texts, task=task)
+
+    async def _embed_batch_once_isaacus(self, *, texts: list[str], task: str) -> list[list[float]]:
         payload = {
             "model": self._settings.model,
             "texts": texts,
@@ -152,6 +183,43 @@ class EmbeddingClient:
             )
 
         raise EmbeddingError(f"Kanon 2 API error {resp.status_code}: {resp.text[:500]}")
+
+    async def _embed_batch_once_ollama(self, texts: list[str]) -> list[list[float]]:
+        payload = {
+            "model": self._settings.model,
+            "input": texts if len(texts) > 1 else texts[0],
+        }
+        resp = await self._client.post("/api/embed", json=payload)
+        if resp.status_code == 404:
+            return await self._embed_batch_legacy_ollama(texts)
+        if resp.status_code < 400:
+            return self._parse_ollama_embeddings(resp, expected_count=len(texts))
+        if resp.status_code in (429, 500, 502, 503, 504):
+            retry_after_s = self._parse_retry_after_seconds(resp)
+            raise _RetryableEmbeddingError(
+                f"Ollama transient error {resp.status_code} (will retry)",
+                retry_after_s=retry_after_s,
+            )
+        raise EmbeddingError(f"Ollama API error {resp.status_code}: {resp.text[:500]}")
+
+    async def _embed_batch_legacy_ollama(self, texts: list[str]) -> list[list[float]]:
+        async def _embed_single(text: str) -> list[float]:
+            resp = await self._client.post(
+                "/api/embeddings",
+                json={"model": self._settings.model, "prompt": text},
+            )
+            if resp.status_code < 400:
+                parsed = self._parse_ollama_embeddings(resp, expected_count=1)
+                return parsed[0]
+            if resp.status_code in (429, 500, 502, 503, 504):
+                retry_after_s = self._parse_retry_after_seconds(resp)
+                raise _RetryableEmbeddingError(
+                    f"Ollama legacy transient error {resp.status_code} (will retry)",
+                    retry_after_s=retry_after_s,
+                )
+            raise EmbeddingError(f"Ollama legacy API error {resp.status_code}: {resp.text[:500]}")
+
+        return await asyncio.gather(*[_embed_single(text) for text in texts])
 
     def _retry_wait_seconds(self, retry_state: RetryCallState) -> float:
         exc = retry_state.outcome.exception() if retry_state.outcome is not None else None
@@ -212,6 +280,63 @@ class EmbeddingClient:
             )
 
         return embeddings
+
+    @staticmethod
+    def _parse_ollama_embeddings(resp: httpx.Response, *, expected_count: int) -> list[list[float]]:
+        data: object = resp.json()
+        if not isinstance(data, dict):
+            raise EmbeddingError("Ollama API returned non-object JSON")
+
+        data_dict = cast("dict[str, object]", data)
+        embeddings_obj = data_dict.get("embeddings")
+        if isinstance(embeddings_obj, list):
+            rows = cast("list[object]", embeddings_obj)
+            parsed: list[list[float]] = []
+            for row in rows:
+                if not isinstance(row, list):
+                    raise EmbeddingError("Ollama embeddings response contains non-list row")
+                try:
+                    parsed.append([float(value) for value in cast("list[int | float | str]", row)])
+                except (TypeError, ValueError) as exc:
+                    raise EmbeddingError("Ollama embeddings response contains non-numeric values") from exc
+            if len(parsed) != expected_count:
+                raise EmbeddingError(
+                    f"Ollama API returned {len(parsed)} embeddings for {expected_count} texts"
+                )
+            return parsed
+
+        embedding_obj = data_dict.get("embedding")
+        if isinstance(embedding_obj, list):
+            try:
+                vector = [float(value) for value in cast("list[int | float | str]", embedding_obj)]
+            except (TypeError, ValueError) as exc:
+                raise EmbeddingError("Ollama embedding response contains non-numeric values") from exc
+            if expected_count != 1:
+                raise EmbeddingError(
+                    f"Ollama API returned a single embedding for {expected_count} texts"
+                )
+            return [vector]
+
+        data_rows = data_dict.get("data")
+        if isinstance(data_rows, list):
+            parsed_rows: list[list[float]] = []
+            for row in cast("list[object]", data_rows):
+                if not isinstance(row, dict):
+                    raise EmbeddingError("Ollama API response contains non-object data row")
+                embedding_candidate = cast("dict[str, object]", row).get("embedding")
+                if not isinstance(embedding_candidate, list):
+                    raise EmbeddingError("Ollama API response data row missing embedding list")
+                try:
+                    parsed_rows.append([float(value) for value in cast("list[int | float | str]", embedding_candidate)])
+                except (TypeError, ValueError) as exc:
+                    raise EmbeddingError("Ollama API response data row contains non-numeric values") from exc
+            if len(parsed_rows) != expected_count:
+                raise EmbeddingError(
+                    f"Ollama API returned {len(parsed_rows)} embeddings for {expected_count} texts"
+                )
+            return parsed_rows
+
+        raise EmbeddingError("Ollama API response missing embeddings")
 
     @staticmethod
     def _chunk_list(items: list[str], size: int) -> list[list[str]]:
