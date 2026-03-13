@@ -508,6 +508,12 @@ def _seed_qids(args: argparse.Namespace) -> list[str]:
     seed_qids_file = getattr(args, "seed_qids_file", None)
     if isinstance(seed_qids_file, Path):
         raw_values.extend(seed_qids_file.read_text(encoding="utf-8").splitlines())
+    elif not raw_values:
+        benchmark_path = getattr(args, "benchmark", None)
+        if isinstance(benchmark_path, Path):
+            default_seed_qids = benchmark_path.with_name(f"{benchmark_path.stem}_qids.txt")
+            if default_seed_qids.exists():
+                raw_values.extend(default_seed_qids.read_text(encoding="utf-8").splitlines())
     for raw in raw_values:
         text = str(raw).strip()
         if not text or text.startswith("#") or text in seen:
