@@ -97,6 +97,12 @@ def _load_candidate_ceiling_cycle(path: Path | None) -> dict[str, object] | None
     return _load_json(path)
 
 
+def _load_remaining_signal_summary(path: Path | None) -> dict[str, object] | None:
+    if path is None or not path.exists():
+        return None
+    return _load_json(path)
+
+
 def _exactness_page_metrics_identical(report: dict[str, object]) -> bool:
     direct = report.get("page_metrics_identical")
     if isinstance(direct, bool):
@@ -144,6 +150,23 @@ def _safe_exactness_baselines(
     return safe_baselines, matched
 
 
+def _remaining_signal_stats(summary: dict[str, object] | None) -> tuple[int, int]:
+    if summary is None:
+        return 0, 0
+    summaries_obj = summary.get("summaries")
+    if not isinstance(summaries_obj, list):
+        return 0, 0
+    family_count = 0
+    actionable_count = 0
+    for item in summaries_obj:
+        if not isinstance(item, dict):
+            continue
+        family_count += 1
+        if bool(item.get("likely_actionable")):
+            actionable_count += 1
+    return family_count, actionable_count
+
+
 def _decide(
     *,
     subject_summary: dict[str, object],
@@ -151,6 +174,7 @@ def _decide(
     exactness_report: dict[str, object] | None,
     equivalence_report: dict[str, object] | None,
     candidate_ceiling_cycle: dict[str, object] | None,
+    remaining_signal_summary: dict[str, object] | None,
     required_safe_baseline_substrings: list[str],
     ticket_names: list[str],
     warmup_budget: int,
@@ -177,6 +201,7 @@ def _decide(
             )
 
     if candidate_ceiling_cycle is not None:
+        remaining_family_count, remaining_actionable_count = _remaining_signal_stats(remaining_signal_summary)
         ranked_obj = candidate_ceiling_cycle.get("ranked_candidates")
         ranked = cast("list[object]", ranked_obj) if isinstance(ranked_obj, list) else []
         if ranked and isinstance(ranked[0], dict):
@@ -196,6 +221,18 @@ def _decide(
                 rationale.append("paranoid estimate is non-improving relative to the current public baseline")
             if paranoid_rank > target_rank and strict_rank > target_rank and upper_rank > target_rank:
                 rationale.append("best current small-diff path still misses the requested target rank even under the upper estimate")
+                if remaining_family_count > 0:
+                    rationale.append(
+                        f"remaining family-level signal scan: actionable_families={remaining_actionable_count}/{remaining_family_count}"
+                    )
+                if remaining_family_count > 0 and remaining_actionable_count == 0:
+                    rationale.append("no likely actionable family-level signals remain after investigated/manual-tested coverage")
+                    return SupervisorDecision(
+                        action="small_diff_ceiling_reached",
+                        rationale=rationale,
+                        submissions_remaining=submissions_remaining,
+                        next_tickets=ticket_names[:5],
+                    )
                 if blindspot_improved > 0 or support_undercoverage_blindspots > 0:
                     rationale.append("benchmark-blind page-family gains are still active, so the small-diff path is not yet fully exhausted")
                 elif submissions_remaining <= 1:
@@ -367,6 +404,7 @@ def main() -> None:
     parser.add_argument("--exactness-report", type=Path, default=None)
     parser.add_argument("--equivalence-json", type=Path, default=None)
     parser.add_argument("--candidate-ceiling-cycle", type=Path, default=None)
+    parser.add_argument("--remaining-signal-json", type=Path, default=None)
     parser.add_argument("--required-safe-baseline-substring", action="append", default=[])
     parser.add_argument("--scoring-json", type=Path, default=None)
     parser.add_argument("--min-ticket", type=int, default=31)
@@ -382,6 +420,7 @@ def main() -> None:
     exactness_report = _load_exactness_report(args.exactness_report)
     equivalence_report = _load_equivalence_report(args.equivalence_json)
     candidate_ceiling_cycle = _load_candidate_ceiling_cycle(args.candidate_ceiling_cycle)
+    remaining_signal_summary = _load_remaining_signal_summary(args.remaining_signal_json)
     scoring_summary = _load_scoring_summary(args.scoring_json)
     ticket_names = _open_tickets(args.backlog_dir, min_ticket=args.min_ticket)
     decision = _decide(
@@ -390,6 +429,7 @@ def main() -> None:
         exactness_report=exactness_report,
         equivalence_report=equivalence_report,
         candidate_ceiling_cycle=candidate_ceiling_cycle,
+        remaining_signal_summary=remaining_signal_summary,
         required_safe_baseline_substrings=[
             str(item).strip() for item in args.required_safe_baseline_substring if str(item).strip()
         ],
