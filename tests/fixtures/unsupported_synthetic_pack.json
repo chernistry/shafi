@@ -1,0 +1,86 @@
+{
+  "ticket": 61,
+  "created_at": "2026-03-13",
+  "cases": [
+    {
+      "case_id": "strict-null-empty",
+      "question": "Was Article 8(1) violated?",
+      "answer_type": "boolean",
+      "answer_text": "null",
+      "telemetry": {},
+      "expected_submission_answer": null,
+      "expected_submission_pages": [],
+      "expected_platform_answer": null,
+      "expected_platform_pages": [],
+      "expected_anomaly_flags": [
+        "specific_question_unsupported"
+      ]
+    },
+    {
+      "case_id": "free-text-empty",
+      "question": "Who administers the Foundations Law?",
+      "answer_type": "free_text",
+      "answer_text": "There is no information on this question.",
+      "telemetry": {},
+      "expected_submission_answer": "There is no information on this question in the provided documents.",
+      "expected_submission_pages": [],
+      "expected_platform_answer": "There is no information on this question in the provided documents.",
+      "expected_platform_pages": [],
+      "expected_anomaly_flags": [
+        "specific_question_unsupported"
+      ]
+    },
+    {
+      "case_id": "free-text-unsupported-with-support",
+      "question": "Who administers the Foundations Law?",
+      "answer_type": "free_text",
+      "answer_text": "There is no information on this question.",
+      "telemetry": {
+        "used_page_ids": [
+          "doca_4"
+        ],
+        "retrieved_page_ids": [
+          "doca_4"
+        ],
+        "doc_refs": [
+          "Foundations Law 2018"
+        ]
+      },
+      "expected_submission_answer": "There is no information on this question in the provided documents.",
+      "expected_submission_pages": [],
+      "expected_platform_answer": "There is no information on this question in the provided documents.",
+      "expected_platform_pages": [],
+      "expected_anomaly_flags": [
+        "specific_question_unsupported",
+        "unsupported_with_support_pages",
+        "unsupported_with_retrieved_pages",
+        "unsupported_with_doc_refs"
+      ]
+    },
+    {
+      "case_id": "strict-null-with-retrieval",
+      "question": "When was the consolidated version of the Law on the Application of Civil and Commercial Laws in the DIFC published?",
+      "answer_type": "date",
+      "answer_text": "",
+      "telemetry": {
+        "used_page_ids": [
+          "docb_1",
+          "docb_2"
+        ],
+        "retrieved_page_ids": [
+          "docb_1",
+          "docb_2"
+        ]
+      },
+      "expected_submission_answer": null,
+      "expected_submission_pages": [],
+      "expected_platform_answer": null,
+      "expected_platform_pages": [],
+      "expected_anomaly_flags": [
+        "specific_question_unsupported",
+        "unsupported_with_support_pages",
+        "unsupported_with_retrieved_pages"
+      ]
+    }
+  ]
+}

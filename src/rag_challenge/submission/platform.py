@@ -514,9 +514,15 @@ def _project_platform_answer(result: PlatformCaseResult) -> dict[str, object]:
     telemetry = result.telemetry
     is_unanswerable_strict, is_unanswerable_free_text = classify_unanswerable_answer(answer_text, answer_type)
 
-    answer_out: SubmissionAnswer = None if is_unanswerable_strict else coerce_answer_type(answer_text, answer_type)
-    if answer_out is None and not is_unanswerable_strict and answer_type.strip().lower() == "free_text":
+    answer_out: SubmissionAnswer
+    if is_unanswerable_strict:
+        answer_out = None
+    elif is_unanswerable_free_text:
         answer_out = _DEFAULT_UNANSWERABLE_FREE_TEXT
+    else:
+        answer_out = coerce_answer_type(answer_text, answer_type)
+        if answer_out is None and answer_type.strip().lower() == "free_text":
+            answer_out = _DEFAULT_UNANSWERABLE_FREE_TEXT
     _validate_projected_answer(answer_out, answer_type)
 
     used_pages = select_submission_used_pages(telemetry)

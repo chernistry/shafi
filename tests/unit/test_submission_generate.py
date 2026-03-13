@@ -9,6 +9,7 @@ from rag_challenge.submission.generate import (
     SubmissionCase,
     _coerce_answer_type,
     _normalize_free_text_answer,
+    _project_submission_result,
     _run_case,
 )
 
@@ -251,6 +252,35 @@ async def test_submission_outputs_null_and_clears_refs_for_strict_unanswerable()
     result = await _run_case(case, _FakeClient(_FakeResponse(text=body)), "http://localhost:8000/query")
 
     assert result["answer"] is None
+    assert result["retrieved_chunk_ids"] == []
+
+
+@pytest.mark.parametrize(
+    ("answer_text", "expected_answer"),
+    [
+        ("There is no information on this question.", "There is no information on this question in the provided documents."),
+        (
+            "There is no information on this question in the provided documents.",
+            "There is no information on this question in the provided documents.",
+        ),
+    ],
+)
+def test_project_submission_result_canonicalizes_free_text_unanswerable_and_clears_refs(
+    answer_text: str,
+    expected_answer: str,
+) -> None:
+    result = _project_submission_result(
+        case_id="q-free",
+        answer_type="free_text",
+        answer_text=answer_text,
+        telemetry={
+            "used_page_ids": ["doc_2"],
+            "retrieved_page_ids": ["doc_2"],
+            "doc_refs": ["Foundations Law 2018"],
+        },
+    )
+
+    assert result["answer"] == expected_answer
     assert result["retrieved_chunk_ids"] == []
 
 

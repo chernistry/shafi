@@ -23,6 +23,8 @@ from rag_challenge.submission.common import (
     select_submission_used_pages,
 )
 
+_DEFAULT_UNANSWERABLE_FREE_TEXT = "There is no information on this question in the provided documents."
+
 
 def _parse_sse_body(text: str) -> list[dict[str, object]]:
     events: list[dict[str, object]] = []
@@ -65,6 +67,8 @@ def _project_submission_result(
     is_unanswerable_strict, is_unanswerable_free_text = _classify_unanswerable_answer(answer_text, answer_type)
 
     answer_out: SubmissionAnswer = None if is_unanswerable_strict else _coerce_answer_type(answer_text, answer_type)
+    if is_unanswerable_free_text:
+        answer_out = _DEFAULT_UNANSWERABLE_FREE_TEXT
     if is_unanswerable_strict or is_unanswerable_free_text:
         used_pages = []
 

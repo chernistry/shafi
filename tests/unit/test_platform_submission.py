@@ -159,6 +159,33 @@ def test_project_platform_answer_keeps_specific_free_text_clauses() -> None:
     )
 
 
+def test_project_platform_answer_canonicalizes_free_text_unanswerable_and_clears_refs() -> None:
+    result = PlatformCaseResult(
+        case=SubmissionCase(
+            case_id="q-unanswerable",
+            question="Who administers the Foundations Law?",
+            answer_type="free_text",
+        ),
+        answer_text="There is no information on this question.",
+        telemetry={
+            "used_page_ids": ["doca_4"],
+            "retrieved_page_ids": ["doca_4"],
+            "doc_refs": ["Foundations Law 2018"],
+            "model_llm": "gpt-4.1-mini",
+        },
+        total_ms=10,
+    )
+
+    payload = _project_platform_answer(result)
+
+    assert payload["answer"] == "There is no information on this question in the provided documents."
+    telemetry = payload["telemetry"]
+    assert isinstance(telemetry, dict)
+    retrieval = telemetry["retrieval"]
+    assert isinstance(retrieval, dict)
+    assert retrieval["retrieved_chunk_pages"] == []
+
+
 def test_create_code_archive_only_includes_allowlisted_files(tmp_path: Path) -> None:
     root = tmp_path
     (root / "src" / "pkg").mkdir(parents=True)
