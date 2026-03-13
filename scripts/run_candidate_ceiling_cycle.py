@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +14,7 @@ try:
         load_rows as load_leaderboard_rows,
     )
     from impact_router import route_changed_files
+    from runner_session_pool import RunnerSessionPool
 except ModuleNotFoundError:  # pragma: no cover - import path differs under pytest/module import
     from scripts.analyze_leaderboard import (  # noqa: I001
         LeaderboardRow,
@@ -22,6 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover - import path differs under pyte
         load_rows as load_leaderboard_rows,
     )
     from scripts.impact_router import route_changed_files
+    from scripts.runner_session_pool import RunnerSessionPool
 
 JsonDict = dict[str, Any]
 
@@ -59,8 +60,8 @@ def _resolve(root: Path, raw: str | Path | None) -> Path | None:
     return (root / value).resolve()
 
 
-def _run(cmd: list[str], *, cwd: Path) -> None:
-    subprocess.run(cmd, cwd=str(cwd), check=True)
+def _run(cmd: list[str], *, cwd: Path, runner: RunnerSessionPool, lease: str) -> None:
+    runner.run(cmd, cwd=cwd, lease=lease)
 
 
 def _load_json(path: Path) -> JsonDict:
@@ -195,6 +196,7 @@ def _write_qids(path: Path, qids: list[str]) -> None:
 def _verify_lineage(
     *,
     root: Path,
+    runner: RunnerSessionPool,
     baseline_submission: Path,
     champion_equivalence_json: Path | None,
     candidate: CandidateSpec,
@@ -220,13 +222,14 @@ def _verify_lineage(
     ]
     if champion_equivalence_json is not None:
         cmd.extend(["--champion-equivalence-json", str(champion_equivalence_json)])
-    _run(cmd, cwd=root)
+    _run(cmd, cwd=root, runner=runner, lease=f"{candidate.label}:lineage")
     return _load_json(paths["lineage_json"])
 
 
 def _run_gate(
     *,
     root: Path,
+    runner: RunnerSessionPool,
     baseline_label: str,
     baseline_submission: Path,
     baseline_raw_results: Path,
@@ -266,13 +269,14 @@ def _run_gate(
         cmd.extend(["--baseline-preflight", str(baseline_preflight)])
     if candidate.preflight is not None:
         cmd.extend(["--candidate-preflight", str(candidate.preflight)])
-    _run(cmd, cwd=root)
+    _run(cmd, cwd=root, runner=runner, lease=f"{candidate.label}:gate")
     return _load_json(paths["gate_json"])
 
 
 def _run_exactness(
     *,
     root: Path,
+    runner: RunnerSessionPool,
     baseline_label: str,
     baseline_submission: Path,
     scaffold: Path,
@@ -299,13 +303,14 @@ def _run_exactness(
         "--judge-scope",
         "none",
     ]
-    _run(cmd, cwd=root)
+    _run(cmd, cwd=root, runner=runner, lease=f"{candidate.label}:exactness")
     return _load_json(paths["exactness_json"])
 
 
 def _run_family_debug(
     *,
     root: Path,
+    runner: RunnerSessionPool,
     baseline_label: str,
     baseline_raw_results: Path,
     questions: Path,
@@ -345,7 +350,7 @@ def _run_family_debug(
     ]
     for candidate in candidates:
         cmd.extend(["--candidate", f"{candidate.label}={candidate.raw_results}"])
-    _run(cmd, cwd=root)
+    _run(cmd, cwd=root, runner=runner, lease="family_debug")
     return _load_json(out_json)
 
 
@@ -677,6 +682,7 @@ def main() -> int:
     manifest_json = cast("Path", _resolve(root, args.manifest_json))
     out_dir = cast("Path", _resolve(root, args.out_dir))
     out_dir.mkdir(parents=True, exist_ok=True)
+    runner_summary_json = out_dir / "runner_session.json"
     leaderboard_path = _resolve(root, args.leaderboard)
     public_realized_qids_path = _resolve(root, args.public_realized_exactness_qids_file)
     champion_equivalence_json = _resolve(root, args.champion_equivalence_json)
@@ -696,82 +702,91 @@ def main() -> int:
     _write_qids(include_qids_file, include_qids)
 
     rows: list[JsonDict] = []
-    for candidate in candidates:
-        paths = _candidate_paths(out_dir=out_dir, label=candidate.label)
-        paths["dir"].mkdir(parents=True, exist_ok=True)
-        lineage = _verify_lineage(
-            root=root,
-            baseline_submission=baseline_submission,
-            champion_equivalence_json=champion_equivalence_json,
-            candidate=candidate,
-            paths=paths,
-        )
-        gate = _run_gate(
-            root=root,
-            baseline_label=str(args.baseline_label),
-            baseline_submission=baseline_submission,
-            baseline_raw_results=baseline_raw_results,
-            baseline_preflight=baseline_preflight,
-            benchmark=benchmark,
-            scaffold=scaffold,
-            candidate=candidate,
-            paths=paths,
-        )
-        exactness = _run_exactness(
-            root=root,
-            baseline_label=str(args.baseline_label),
-            baseline_submission=baseline_submission,
-            scaffold=scaffold,
-            candidate=candidate,
-            paths=paths,
-        )
-        row: JsonDict = {
-            "label": candidate.label,
-            "submission": str(candidate.submission),
-            "raw_results": str(candidate.raw_results),
-            "preflight": None if candidate.preflight is None else str(candidate.preflight),
-            "branch_class": candidate.branch_class,
-            "timeline_scope": candidate.timeline_scope,
-            "recommendation": gate.get("recommendation"),
-            "lineage_ok": lineage.get("lineage_ok"),
-            "answer_drift": lineage.get("answer_changed_count"),
-            "page_drift": lineage.get("page_changed_count"),
-            "page_p95": gate.get("candidate_page_p95"),
-            "hidden_g_trusted_delta": _coerce_float(gate.get("benchmark_trusted_candidate")) - _coerce_float(gate.get("benchmark_trusted_baseline")),
-            "hidden_g_all_delta": _coerce_float(gate.get("benchmark_all_candidate")) - _coerce_float(gate.get("benchmark_all_baseline")),
-            "blindspot_improved_case_count": len(cast("list[object]", gate.get("blindspot_improved_cases") or [])),
-            "blindspot_support_undercoverage_case_count": len(
-                cast("list[object]", gate.get("blindspot_support_undercoverage_cases") or [])
-            ),
-            "resolved_incorrect_qids": _coerce_str_list(exactness.get("resolved_incorrect_qids")),
-            "resolved_incorrect_count": len(cast("list[object]", exactness.get("resolved_incorrect_qids") or [])),
-            "still_mismatched_incorrect_count": len(cast("list[object]", exactness.get("still_mismatched_incorrect_qids") or [])),
-            "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
-        }
-        _apply_impact_router(candidate, row)
-        if subject_summary is not None:
-            row.update(
-                _candidate_score_estimates(
-                    row=row,
-                    subject_summary=subject_summary,
-                    leaderboard_rows=leaderboard_rows,
-                    team_name=str(args.team_name),
-                    public_realized_exactness_qids=public_realized_exactness_qids,
-                )
+    runner = RunnerSessionPool(session_name="candidate_ceiling_cycle", pool_size=1)
+    try:
+        for candidate in candidates:
+            paths = _candidate_paths(out_dir=out_dir, label=candidate.label)
+            paths["dir"].mkdir(parents=True, exist_ok=True)
+            lineage = _verify_lineage(
+                root=root,
+                runner=runner,
+                baseline_submission=baseline_submission,
+                champion_equivalence_json=champion_equivalence_json,
+                candidate=candidate,
+                paths=paths,
             )
-        rows.append(row)
+            gate = _run_gate(
+                root=root,
+                runner=runner,
+                baseline_label=str(args.baseline_label),
+                baseline_submission=baseline_submission,
+                baseline_raw_results=baseline_raw_results,
+                baseline_preflight=baseline_preflight,
+                benchmark=benchmark,
+                scaffold=scaffold,
+                candidate=candidate,
+                paths=paths,
+            )
+            exactness = _run_exactness(
+                root=root,
+                runner=runner,
+                baseline_label=str(args.baseline_label),
+                baseline_submission=baseline_submission,
+                scaffold=scaffold,
+                candidate=candidate,
+                paths=paths,
+            )
+            row: JsonDict = {
+                "label": candidate.label,
+                "submission": str(candidate.submission),
+                "raw_results": str(candidate.raw_results),
+                "preflight": None if candidate.preflight is None else str(candidate.preflight),
+                "branch_class": candidate.branch_class,
+                "timeline_scope": candidate.timeline_scope,
+                "recommendation": gate.get("recommendation"),
+                "lineage_ok": lineage.get("lineage_ok"),
+                "answer_drift": lineage.get("answer_changed_count"),
+                "page_drift": lineage.get("page_changed_count"),
+                "page_p95": gate.get("candidate_page_p95"),
+                "hidden_g_trusted_delta": _coerce_float(gate.get("benchmark_trusted_candidate")) - _coerce_float(gate.get("benchmark_trusted_baseline")),
+                "hidden_g_all_delta": _coerce_float(gate.get("benchmark_all_candidate")) - _coerce_float(gate.get("benchmark_all_baseline")),
+                "blindspot_improved_case_count": len(cast("list[object]", gate.get("blindspot_improved_cases") or [])),
+                "blindspot_support_undercoverage_case_count": len(
+                    cast("list[object]", gate.get("blindspot_support_undercoverage_cases") or [])
+                ),
+                "resolved_incorrect_qids": _coerce_str_list(exactness.get("resolved_incorrect_qids")),
+                "resolved_incorrect_count": len(cast("list[object]", exactness.get("resolved_incorrect_qids") or [])),
+                "still_mismatched_incorrect_count": len(cast("list[object]", exactness.get("still_mismatched_incorrect_qids") or [])),
+                "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
+            }
+            _apply_impact_router(candidate, row)
+            if subject_summary is not None:
+                row.update(
+                    _candidate_score_estimates(
+                        row=row,
+                        subject_summary=subject_summary,
+                        leaderboard_rows=leaderboard_rows,
+                        team_name=str(args.team_name),
+                        public_realized_exactness_qids=public_realized_exactness_qids,
+                    )
+                )
+            rows.append(row)
 
-    family_debug = _run_family_debug(
-        root=root,
-        baseline_label=str(args.baseline_label),
-        baseline_raw_results=baseline_raw_results,
-        questions=questions,
-        docs_dir=docs_dir,
-        include_qids_file=include_qids_file,
-        candidates=candidates,
-        out_dir=out_dir / "family_debug",
-        judge_scope=str(args.judge_scope),
-    )
+        family_debug = _run_family_debug(
+            root=root,
+            runner=runner,
+            baseline_label=str(args.baseline_label),
+            baseline_raw_results=baseline_raw_results,
+            questions=questions,
+            docs_dir=docs_dir,
+            include_qids_file=include_qids_file,
+            candidates=candidates,
+            out_dir=out_dir / "family_debug",
+            judge_scope=str(args.judge_scope),
+        )
+    finally:
+        runner.close()
+        runner.write_summary(runner_summary_json)
     family_rows = _family_rows_by_label(family_debug)
     for row in rows:
         family = family_rows.get(str(row["label"]), {})
@@ -793,6 +808,7 @@ def main() -> int:
         "team_name": args.team_name,
         "public_realized_exactness_qids_file": None if public_realized_qids_path is None else str(public_realized_qids_path),
         "champion_equivalence_json": None if champion_equivalence_json is None else str(champion_equivalence_json),
+        "runner_session_json": str(runner_summary_json),
         "target_rank": args.target_rank,
         "branch_class_summary": branch_class_summary,
         "ranked_candidates": ranked,

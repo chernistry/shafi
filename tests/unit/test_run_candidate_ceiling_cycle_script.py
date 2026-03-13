@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 from scripts.analyze_leaderboard import LeaderboardRow
 from scripts.impact_router import route_changed_files
 from scripts.run_candidate_ceiling_cycle import (
@@ -14,6 +17,7 @@ from scripts.run_candidate_ceiling_cycle import (
     _load_manifest,
     _summarize_branch_classes,
 )
+from scripts.runner_session_pool import RunnerSessionPool
 
 
 def test_load_manifest_resolves_candidate_specs(tmp_path: Path) -> None:
@@ -215,6 +219,40 @@ def test_branch_class_summary_freezes_dead_and_private_only_classes() -> None:
     assert by_class["visual_page_rerank"]["status"] == "private_only"
     assert by_class["doc_page_rerank_core"]["status"] == "active"
     assert by_class["doc_page_rerank_core"]["active_before_march17"] is True
+
+
+def test_runner_session_pool_records_successful_serialized_lease(tmp_path: Path) -> None:
+    pool = RunnerSessionPool(session_name="test-session")
+    pool.run([sys.executable, "-c", "print('ok')"], cwd=tmp_path, lease="smoke")
+    summary_path = tmp_path / "runner_session.json"
+    pool.close()
+    pool.write_summary(summary_path)
+
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert payload["mode"] == "serialized_pool_size_1"
+    assert payload["lease_count"] == 1
+    assert payload["cleanup_performed_count"] == 0
+    assert payload["leases"][0]["lease"] == "smoke"
+    assert payload["leases"][0]["status"] == "ok"
+
+
+def test_runner_session_pool_cleans_up_timed_out_child_process(tmp_path: Path) -> None:
+    pool = RunnerSessionPool(session_name="test-timeout")
+    with pytest.raises(subprocess.TimeoutExpired):
+        pool.run(
+            [sys.executable, "-c", "import time; time.sleep(5)"],
+            cwd=tmp_path,
+            lease="timeout-case",
+            timeout_s=0.01,
+        )
+    summary_path = tmp_path / "runner_session_timeout.json"
+    pool.close()
+    pool.write_summary(summary_path)
+
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert payload["cleanup_performed_count"] == 1
+    assert payload["leases"][0]["lease"] == "timeout-case"
+    assert payload["leases"][0]["status"] == "timeout"
 
 
 def test_apply_branch_class_policy_demotes_private_only_rows_in_score_order() -> None:
