@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from scripts.audit_exactness_candidate import _build_exactness_rows, _render_markdown
+from scripts.audit_exactness_candidate import _build_exactness_rows, _incorrect_scaffold_qids, _render_markdown
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -116,3 +116,24 @@ def test_payload_shape_for_rows_is_json_serializable(tmp_path: Path) -> None:
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     restored = json.loads(out.read_text(encoding="utf-8"))
     assert restored["resolved_incorrect_qids"] == ["q1"]
+
+
+def test_incorrect_scaffold_qids_selects_all_incorrect_cases_present_in_both_submissions() -> None:
+    baseline = {
+        "q1": {"question_id": "q1", "answer": "Wrong"},
+        "q2": {"question_id": "q2", "answer": "Still wrong"},
+        "q3": {"question_id": "q3", "answer": "Correct"},
+    }
+    candidate = {
+        "q1": {"question_id": "q1", "answer": "Expected"},
+        "q2": {"question_id": "q2", "answer": "Still wrong"},
+        "q3": {"question_id": "q3", "answer": "Correct"},
+    }
+    scaffold = {
+        "q1": {"question_id": "q1", "manual_verdict": "incorrect"},
+        "q2": {"question_id": "q2", "manual_verdict": "incorrect"},
+        "q3": {"question_id": "q3", "manual_verdict": "correct"},
+        "q4": {"question_id": "q4", "manual_verdict": "incorrect"},
+    }
+
+    assert _incorrect_scaffold_qids(baseline, candidate, scaffold) == ["q1", "q2"]
