@@ -10,10 +10,26 @@ from typing import cast
 
 JsonDict = dict[str, object]
 
-_EXPLICIT_ANCHOR_RE = re.compile(
-    r"\b(page 2|second page|page 1|first page|title page|cover page)\b",
+_PAGE_2_RE = re.compile(r"\b(page 2|second page)\b", re.IGNORECASE)
+_EXPLICIT_PAGE_RE = re.compile(
+    r"\b(page \d+|first page|second page|title page|title pages|cover page|title/cover page)\b",
     re.IGNORECASE,
 )
+_TITLE_PAGE_RE = re.compile(r"\b(title page|title pages|cover page|title/cover page)\b", re.IGNORECASE)
+_CAPTION_HEADER_RE = re.compile(r"\b(caption|header)\b", re.IGNORECASE)
+_ARTICLE_RE = re.compile(r"\barticle\s+\d+", re.IGNORECASE)
+_OCR_RE = re.compile(r"\b(ocr|scanned|scan)\b", re.IGNORECASE)
+
+_SUMMARY_FAMILIES = [
+    "title_page",
+    "page_2",
+    "caption_header",
+    "explicit_page",
+    "ocr_risk",
+    "same_doc_miss",
+    "article_anchor",
+    "multi_doc_comparison",
+]
 
 
 @dataclass(frozen=True)
@@ -22,7 +38,10 @@ class BenchmarkBlindspot:
     question: str
     manual_verdict: str
     failure_class: str
+    route_family: str
+    family_tags: list[str]
     explicit_anchor: bool
+    same_doc_miss: bool
     in_benchmark: bool
     gold_page_ids: list[str]
     current_page_ids: list[str]
@@ -38,6 +57,15 @@ def _coerce_str_list(value: object) -> list[str]:
         text = str(raw).strip()
         if text:
             out.append(text)
+    return out
+
+
+def _doc_ids(page_ids: list[str]) -> set[str]:
+    out: set[str] = set()
+    for page_id in page_ids:
+        doc_id, _, _ = page_id.partition("_")
+        if doc_id:
+            out.add(doc_id)
     return out
 
 
@@ -92,6 +120,38 @@ def _load_raw_results_pages(path: Path) -> dict[str, list[str]]:
     return out
 
 
+def _route_family(question: str) -> str:
+    text = question.casefold()
+    if "both case" in text or "both enf" in text or "across all documents" in text or "common to both" in text:
+        return "multi_doc_comparison"
+    if _ARTICLE_RE.search(question):
+        return "article_anchor"
+    if _EXPLICIT_PAGE_RE.search(question):
+        return "explicit_page_anchor"
+    return "single_doc_support"
+
+
+def _family_tags(*, question: str, failure_class: str, gold_page_ids: list[str], current_page_ids: list[str], current_has_gold: bool) -> list[str]:
+    tags: list[str] = []
+    if _TITLE_PAGE_RE.search(question):
+        tags.append("title_page")
+    if _PAGE_2_RE.search(question):
+        tags.append("page_2")
+    if _CAPTION_HEADER_RE.search(question):
+        tags.append("caption_header")
+    if _EXPLICIT_PAGE_RE.search(question):
+        tags.append("explicit_page")
+    if _OCR_RE.search(question) or "ocr" in failure_class.casefold():
+        tags.append("ocr_risk")
+    if _ARTICLE_RE.search(question):
+        tags.append("article_anchor")
+    if _route_family(question) == "multi_doc_comparison":
+        tags.append("multi_doc_comparison")
+    if not current_has_gold and _doc_ids(gold_page_ids).intersection(_doc_ids(current_page_ids)):
+        tags.append("same_doc_miss")
+    return list(dict.fromkeys(tags))
+
+
 def build_blindspots(
     *,
     scaffold_path: Path,
@@ -110,7 +170,8 @@ def build_blindspots(
         if manual_verdict != "correct":
             continue
         failure_class = str(record.get("failure_class") or "").strip()
-        explicit_anchor = bool(_EXPLICIT_ANCHOR_RE.search(str(record.get("question") or "")))
+        question = str(record.get("question") or "").strip()
+        explicit_anchor = bool(_EXPLICIT_PAGE_RE.search(question))
         if failure_class != "support_undercoverage" and not explicit_anchor:
             continue
         gold_page_ids = _coerce_str_list(record.get("minimal_required_support_pages"))
@@ -119,13 +180,23 @@ def build_blindspots(
         current_page_ids = current_pages_by_qid.get(qid, [])
         gold_set = set(gold_page_ids)
         current_has_gold = bool(gold_set.intersection(current_page_ids))
+        family_tags = _family_tags(
+            question=question,
+            failure_class=failure_class,
+            gold_page_ids=gold_page_ids,
+            current_page_ids=current_page_ids,
+            current_has_gold=current_has_gold,
+        )
         out.append(
             BenchmarkBlindspot(
                 question_id=qid,
-                question=str(record.get("question") or "").strip(),
+                question=question,
                 manual_verdict=manual_verdict,
                 failure_class=failure_class,
+                route_family=_route_family(question),
+                family_tags=family_tags,
                 explicit_anchor=explicit_anchor,
+                same_doc_miss="same_doc_miss" in family_tags,
                 in_benchmark=qid in benchmark_qids,
                 gold_page_ids=gold_page_ids,
                 current_page_ids=current_page_ids,
@@ -144,20 +215,36 @@ def build_blindspots(
     return out
 
 
+def _family_counts(blindspots: list[BenchmarkBlindspot]) -> dict[str, int]:
+    counts = {family: 0 for family in _SUMMARY_FAMILIES}
+    for item in blindspots:
+        for family in item.family_tags:
+            counts[family] = counts.get(family, 0) + 1
+    return counts
+
+
 def _render_markdown(*, blindspots: list[BenchmarkBlindspot]) -> str:
+    family_counts = _family_counts(blindspots)
     lines = [
         "# Hidden-G Benchmark Blindspot Audit",
         "",
         f"- blindspots: `{len(blindspots)}`",
         "- submission_policy: `NO_SUBMIT_WITHOUT_USER_APPROVAL`",
-        "",
-        "| QID | In Benchmark | Current Has Gold | Explicit Anchor | Failure Class | Missing Gold Pages |",
-        "| --- | ---: | ---: | ---: | --- | --- |",
+        "- family_counts:",
     ]
+    for family in _SUMMARY_FAMILIES:
+        lines.append(f"  - `{family}`: `{family_counts.get(family, 0)}`")
+    lines.extend(
+        [
+            "",
+            "| QID | In Benchmark | Current Has Gold | Explicit Anchor | Route Family | Family Tags | Missing Gold Pages |",
+            "| --- | ---: | ---: | ---: | --- | --- | --- |",
+        ]
+    )
     for item in blindspots:
         lines.append(
             f"| `{item.question_id}` | `{item.in_benchmark}` | `{item.current_has_gold}` | `{item.explicit_anchor}` | "
-            f"`{item.failure_class}` | `{item.missing_gold_page_ids}` |"
+            f"`{item.route_family}` | `{item.family_tags}` | `{item.missing_gold_page_ids}` |"
         )
     lines.append("")
     for item in blindspots:
@@ -169,6 +256,9 @@ def _render_markdown(*, blindspots: list[BenchmarkBlindspot]) -> str:
                 f"- in_benchmark: `{item.in_benchmark}`",
                 f"- current_has_gold: `{item.current_has_gold}`",
                 f"- explicit_anchor: `{item.explicit_anchor}`",
+                f"- route_family: `{item.route_family}`",
+                f"- family_tags: `{item.family_tags}`",
+                f"- same_doc_miss: `{item.same_doc_miss}`",
                 f"- failure_class: `{item.failure_class}`",
                 f"- gold_page_ids: `{item.gold_page_ids}`",
                 f"- current_page_ids: `{item.current_page_ids}`",
@@ -198,6 +288,7 @@ def main() -> None:
     )
     payload = {
         "blindspot_count": len(blindspots),
+        "family_counts": _family_counts(blindspots),
         "blindspots": [asdict(item) for item in blindspots],
         "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
     }

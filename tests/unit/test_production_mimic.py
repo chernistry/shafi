@@ -13,6 +13,7 @@ def test_aggregate_hybrid_strict_eval_prefers_worse_metrics() -> None:
     cheap = {
         "summary": {
             "citation_coverage": 0.95,
+            "citation_coverage_by_answer_type": {"boolean": 0.95, "free_text": 0.7},
             "answer_type_format_compliance": 1.0,
             "grounding_g_score_beta_2_5": 0.84,
             "judge": {
@@ -29,6 +30,7 @@ def test_aggregate_hybrid_strict_eval_prefers_worse_metrics() -> None:
     strict = {
         "summary": {
             "citation_coverage": 1.0,
+            "citation_coverage_by_answer_type": {"boolean": 0.85, "free_text": 0.5},
             "answer_type_format_compliance": 0.9,
             "grounding_g_score_beta_2_5": 0.72,
             "judge": {
@@ -47,6 +49,7 @@ def test_aggregate_hybrid_strict_eval_prefers_worse_metrics() -> None:
     judge = aggregated["judge"]
 
     assert aggregated["citation_coverage"] == 0.95
+    assert aggregated["citation_coverage_by_answer_type"] == {"boolean": 0.85, "free_text": 0.5}
     assert aggregated["answer_type_format_compliance"] == 0.9
     assert aggregated["grounding_g_score_beta_2_5"] == 0.72
     assert judge["pass_rate"] == 0.5
@@ -61,6 +64,7 @@ def test_aggregate_hybrid_strict_eval_accepts_production_mimic_payload() -> None
         "production_mimic": {
             "eval": {
                 "citation_coverage": 0.8,
+                "citation_coverage_by_answer_type": {"boolean": 0.82, "name": 0.9},
                 "answer_type_format_compliance": 0.95,
                 "grounding_g_score_beta_2_5": 0.7,
             },
@@ -77,6 +81,7 @@ def test_aggregate_hybrid_strict_eval_accepts_production_mimic_payload() -> None
     aggregated = aggregate_hybrid_strict_eval(cheap_payload=cheap, strict_payload=None)
 
     assert aggregated["citation_coverage"] == 0.8
+    assert aggregated["citation_coverage_by_answer_type"] == {"boolean": 0.82, "name": 0.9}
     assert aggregated["answer_type_format_compliance"] == 0.95
     assert aggregated["grounding_g_score_beta_2_5"] == 0.7
     assert aggregated["judge"]["avg_grounding"] == 4.5
@@ -186,7 +191,21 @@ def test_build_page_trace_summary_preserves_stage_counts() -> None:
                 "failure_stage_counts": {"lost_after_context": 1, "wrong_page_used_same_doc": 2},
                 "stage_examples": {"lost_after_context": ["5046"], "wrong_page_used_same_doc": ["9f9f"]},
                 "explained_ratio": 1.0,
-            }
+            },
+            "records": [
+                {
+                    "qid": "q1",
+                    "gold_pages": ["docA_1", "docB_1"],
+                    "used_pages": ["docA_1", "docA_4"],
+                    "trust_tier": "trusted",
+                },
+                {
+                    "qid": "q2",
+                    "gold_pages": ["docC_2"],
+                    "used_pages": ["docC_2", "docD_9"],
+                    "trust_tier": "suspect",
+                },
+            ],
         }
     )
 
@@ -194,6 +213,13 @@ def test_build_page_trace_summary_preserves_stage_counts() -> None:
     assert summary["gold_in_reranked_count"] == 2
     assert summary["failure_stage_counts"] == {"lost_after_context": 1, "wrong_page_used_same_doc": 2}
     assert summary["stage_examples"] == {"lost_after_context": ["5046"], "wrong_page_used_same_doc": ["9f9f"]}
+    assert summary["page_true_positive_count"] == 2
+    assert summary["page_used_count"] == 4
+    assert summary["page_gold_count"] == 3
+    assert summary["page_precision"] == 0.5
+    assert summary["page_recall"] == 2 / 3
+    assert summary["trusted_page_precision"] == 0.5
+    assert summary["trusted_page_recall"] == 0.5
 
 
 def test_estimate_production_mimic_penalizes_support_shape_issues() -> None:
@@ -240,3 +266,71 @@ def test_estimate_production_mimic_penalizes_support_shape_issues() -> None:
     assert result["support_shape"]["page_budget_case_count"] == 1
     assert result["paranoid_total_estimate"] < result["platform_like_total_estimate"] < result["strict_total_estimate"]
     assert "weak same-doc page choices" in str(result["no_submit_reason"])
+
+
+def test_estimate_production_mimic_penalizes_page_trace_and_citation_floor_failures() -> None:
+    result = estimate_production_mimic(
+        subject_summary={"total": 0.74156},
+        candidate_row={
+            "label": "strict_eval_candidate",
+            "strict_total_estimate": 0.79,
+            "upper_total_estimate": 0.80,
+            "paranoid_total_estimate": 0.785,
+            "hidden_g_trusted_delta": 0.01,
+            "page_drift": 0,
+            "lineage_ok": True,
+        },
+        exactness_report={"resolved_incorrect_qids": [], "still_mismatched_incorrect_qids": []},
+        equivalence_report={"safe_baselines": ["v6"]},
+        cheap_eval_payload={
+            "summary": {
+                "citation_coverage": 0.9,
+                "citation_coverage_by_answer_type": {"boolean": 0.75, "free_text": 0.7},
+                "answer_type_format_compliance": 1.0,
+                "grounding_g_score_beta_2_5": 0.83,
+                "judge": {
+                    "cases": 3,
+                    "pass_rate": 1.0,
+                    "avg_accuracy": 5.0,
+                    "avg_grounding": 5.0,
+                    "avg_clarity": 5.0,
+                    "avg_uncertainty_handling": 5.0,
+                    "judge_failures": 0,
+                },
+            }
+        },
+        strict_eval_payload=None,
+        calibration={},
+        raw_results_payload=None,
+        scaffold_payload=None,
+        page_trace_payload={
+            "summary": {
+                "cases_scored": 5,
+                "trusted_case_count": 0,
+                "gold_in_retrieved_count": 4,
+                "gold_in_reranked_count": 3,
+                "gold_in_used_count": 2,
+                "false_positive_case_count": 4,
+                "failure_stage_counts": {"lost_after_context": 2},
+                "stage_examples": {"lost_after_context": ["q1", "q2"]},
+                "explained_ratio": 0.8,
+            },
+            "records": [
+                {"qid": "q1", "gold_pages": ["docA_1"], "used_pages": ["docA_3"]},
+                {"qid": "q2", "gold_pages": ["docB_1"], "used_pages": ["docB_1", "docB_5"]},
+                {"qid": "q3", "gold_pages": ["docC_1"], "used_pages": ["docC_5", "docD_2"]},
+                {"qid": "q4", "gold_pages": ["docD_2"], "used_pages": ["docD_2", "docE_1"]},
+                {"qid": "q5", "gold_pages": ["docF_9"], "used_pages": ["docF_4", "docG_1"]},
+            ],
+        },
+    )
+
+    assert result["eval"]["citation_floor_failures"] == [
+        {"answer_type": "boolean", "observed": 0.75, "floor": 0.8, "gap": 0.05}
+    ]
+    assert result["page_trace"]["page_precision"] == 2 / 9
+    assert result["page_trace"]["page_recall"] == 0.4
+    assert result["submit_eligibility"] is False
+    assert "citation floor miss" in str(result["no_submit_reason"])
+    assert "page-id precision below strict local floor" in str(result["no_submit_reason"])
+    assert "changed-set page trace has no trusted page-id cases" in str(result["no_submit_reason"])

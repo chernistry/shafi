@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import cast
 
 JsonDict = dict[str, object]
+
+_EXPLICIT_ANCHOR_RE = re.compile(
+    r"\b(page 2|second page|page 1|first page|title page|title pages|cover page|title/cover page)\b",
+    re.IGNORECASE,
+)
 
 MANUAL_CASE_OVERRIDES: dict[str, JsonDict] = {
     "bd8d0befc731315ee2a477221feb950b44e68d9596823a90c47f78fc04870870": {
@@ -193,6 +199,30 @@ def _coerce_str_list(value: object) -> list[str]:
     return items
 
 
+def _load_qid_filter(path: Path | None) -> set[str] | None:
+    if path is None:
+        return None
+    out: set[str] = set()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        text = raw_line.strip()
+        if not text or text.startswith("#"):
+            continue
+        out.add(text)
+    return out
+
+
+def _load_scaffold_records(path: Path) -> list[JsonDict]:
+    payload = _load_json(path)
+    records_obj = payload.get("records")
+    if not isinstance(records_obj, list):
+        raise ValueError(f"Scaffold JSON must contain a top-level 'records' list: {path}")
+    out: list[JsonDict] = []
+    for raw_item in cast("list[object]", records_obj):
+        if isinstance(raw_item, dict):
+            out.append(cast("JsonDict", raw_item))
+    return out
+
+
 def _default_trust_tier(case: JsonDict) -> str:
     raw = str(case.get("trust_tier") or "").strip().lower()
     if raw in {"trusted", "suspect"}:
@@ -243,6 +273,72 @@ def _seed_case_from_eval(eval_case: JsonDict) -> JsonDict:
     }
 
 
+def _is_explicit_anchor(question: str) -> bool:
+    return bool(_EXPLICIT_ANCHOR_RE.search(question))
+
+
+def _is_scaffold_case_eligible(record: JsonDict) -> bool:
+    manual_verdict = str(record.get("manual_verdict") or "").strip().lower()
+    if manual_verdict != "correct":
+        return False
+    if not str(record.get("question_id") or "").strip():
+        return False
+    gold_page_ids = _coerce_str_list(record.get("minimal_required_support_pages"))
+    if not gold_page_ids:
+        return False
+    question = str(record.get("question") or "").strip()
+    failure_class = str(record.get("failure_class") or "").strip().lower()
+    return failure_class == "support_undercoverage" or _is_explicit_anchor(question)
+
+
+def _scaffold_family_tags(record: JsonDict) -> list[str]:
+    question = str(record.get("question") or "").strip().lower()
+    tags: list[str] = []
+    if "title page" in question or "title pages" in question or "cover page" in question or "title/cover page" in question:
+        tags.append("title_page")
+    if "page 2" in question or "second page" in question:
+        tags.append("page_2")
+    if "page " in question or "title page" in question or "cover page" in question or "title/cover page" in question:
+        tags.append("explicit_page")
+    if "caption" in question or "header" in question:
+        tags.append("caption_header")
+    if "article " in question:
+        tags.append("article_anchor")
+    return list(dict.fromkeys(tags))
+
+
+def _seed_case_from_scaffold(record: JsonDict) -> JsonDict:
+    gold_page_ids = _coerce_str_list(record.get("minimal_required_support_pages"))
+    question = str(record.get("question") or "").strip()
+    failure_class = str(record.get("failure_class") or "").strip().lower()
+    family_tags = _scaffold_family_tags(record)
+    note_parts = [
+        "Trusted scaffold-backed page-id case from truth_audit_scaffold minimal_required_support_pages.",
+    ]
+    if failure_class == "support_undercoverage":
+        note_parts.append("Manual verdict stayed correct while support under-covered the gold page set.")
+    elif _is_explicit_anchor(question):
+        note_parts.append("Question contains an explicit page/title/cover anchor and the scaffold provides reviewed gold pages.")
+    if family_tags:
+        note_parts.append(f"Families: {', '.join(family_tags)}.")
+    return {
+        "question_id": str(record.get("question_id") or "").strip(),
+        "trust_tier": "trusted",
+        "gold_origin": "manual_override",
+        "audit_note": " ".join(note_parts),
+        "gold_page_ids": gold_page_ids,
+        "gold_items": [],
+        "items": [],
+        "wrong_document_risk": False,
+    }
+
+
+def _should_promote_existing_case(existing_case: JsonDict) -> bool:
+    trust_tier = str(existing_case.get("trust_tier") or "").strip().lower()
+    gold_origin = str(existing_case.get("gold_origin") or "").strip().lower()
+    return trust_tier != "trusted" or gold_origin == "seeded_eval"
+
+
 def _apply_manual_overrides(case: JsonDict) -> JsonDict:
     question_id = str(case.get("question_id") or "").strip()
     override = MANUAL_CASE_OVERRIDES.get(question_id)
@@ -251,14 +347,17 @@ def _apply_manual_overrides(case: JsonDict) -> JsonDict:
     return cast("JsonDict", json.loads(json.dumps(override)))
 
 
-def _merge_cases(*, benchmark_payload: JsonDict, eval_payload: JsonDict, source_eval_name: str) -> JsonDict:
+def _merge_cases(
+    *,
+    benchmark_payload: JsonDict,
+    eval_payload: JsonDict | None,
+    scaffold_records: list[JsonDict] | None,
+    source_eval_name: str | None,
+    qid_filter: set[str] | None,
+) -> JsonDict:
     existing_cases_obj = benchmark_payload.get("cases")
     if not isinstance(existing_cases_obj, list):
         raise ValueError("Benchmark JSON must contain a top-level 'cases' list")
-
-    eval_cases_obj = eval_payload.get("cases")
-    if not isinstance(eval_cases_obj, list):
-        raise ValueError("Eval JSON must contain a top-level 'cases' list")
 
     existing_by_question_id: dict[str, JsonDict] = {}
     ordered_existing_ids: list[str] = []
@@ -272,43 +371,87 @@ def _merge_cases(*, benchmark_payload: JsonDict, eval_payload: JsonDict, source_
         existing_by_question_id[question_id] = _apply_manual_overrides(_normalize_case_metadata(case))
         ordered_existing_ids.append(question_id)
 
+    if scaffold_records is not None:
+        for record in scaffold_records:
+            question_id = str(record.get("question_id") or "").strip()
+            if not question_id:
+                continue
+            if qid_filter is not None and question_id not in qid_filter:
+                continue
+            if not _is_scaffold_case_eligible(record):
+                continue
+            existing_case = existing_by_question_id.get(question_id)
+            if existing_case is None or not _should_promote_existing_case(existing_case):
+                continue
+            existing_by_question_id[question_id] = _apply_manual_overrides(_seed_case_from_scaffold(record))
+
     merged_cases: list[JsonDict] = [existing_by_question_id[question_id] for question_id in ordered_existing_ids]
     seen_question_ids = set(ordered_existing_ids)
-    for raw_case in cast("list[object]", eval_cases_obj):
-        if not isinstance(raw_case, dict):
-            continue
-        eval_case = cast("JsonDict", raw_case)
-        question_id = str(eval_case.get("question_id") or eval_case.get("case_id") or "").strip()
-        if not question_id or question_id in seen_question_ids:
-            continue
-        merged_cases.append(_normalize_case_metadata(_seed_case_from_eval(eval_case)))
-        seen_question_ids.add(question_id)
 
+    if scaffold_records is not None:
+        for record in scaffold_records:
+            question_id = str(record.get("question_id") or "").strip()
+            if not question_id or question_id in seen_question_ids:
+                continue
+            if qid_filter is not None and question_id not in qid_filter:
+                continue
+            if not _is_scaffold_case_eligible(record):
+                continue
+            merged_cases.append(_apply_manual_overrides(_seed_case_from_scaffold(record)))
+            seen_question_ids.add(question_id)
+
+    if eval_payload is not None:
+        eval_cases_obj = eval_payload.get("cases")
+        if not isinstance(eval_cases_obj, list):
+            raise ValueError("Eval JSON must contain a top-level 'cases' list")
+        for raw_case in cast("list[object]", eval_cases_obj):
+            if not isinstance(raw_case, dict):
+                continue
+            eval_case = cast("JsonDict", raw_case)
+            question_id = str(eval_case.get("question_id") or eval_case.get("case_id") or "").strip()
+            if not question_id or question_id in seen_question_ids:
+                continue
+            merged_cases.append(_normalize_case_metadata(_seed_case_from_eval(eval_case)))
+            seen_question_ids.add(question_id)
+
+    benchmark_source_eval = str(benchmark_payload.get("source_eval") or "").strip()
+    description_parts = [
+        "Tracked seed benchmark derived from the accepted local eval plus source-backed manual scaffold additions.",
+        "Manually curated high-risk cases keep item/slot gold pages, while accepted eval spillover remains regression-only suspect gold.",
+    ]
+    if scaffold_records is not None:
+        description_parts.append(
+            "Scaffold-backed additions are limited to reviewed support-undercoverage or explicit-page-anchor cases with minimal_required_support_pages."
+        )
     return {
         "name": "hidden_g_benchmark_seed_v2",
-        "source_eval": source_eval_name,
-        "description": (
-            "Tracked seed benchmark derived from the latest accepted local Docker eval. "
-            "Manually curated high-risk cases keep item/slot gold pages, while uncovered public cases "
-            "inherit seed page ids from the accepted eval as a regression-only guardrail."
-        ),
+        "source_eval": source_eval_name or benchmark_source_eval or "manual_scaffold_seed",
+        "description": " ".join(description_parts),
         "cases": merged_cases,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sync the hidden-G benchmark seed with an accepted eval JSON.")
+    parser = argparse.ArgumentParser(description="Sync the hidden-G benchmark seed with accepted eval output and reviewed scaffold cases.")
     parser.add_argument("--benchmark", type=Path, required=True, help="Existing benchmark JSON to extend.")
-    parser.add_argument("--eval", type=Path, required=True, help="Accepted eval JSON used as the sync source.")
+    parser.add_argument("--eval", type=Path, default=None, help="Accepted eval JSON used as the suspect seed source.")
+    parser.add_argument("--scaffold", type=Path, default=None, help="Truth-audit scaffold JSON used for trusted manual additions.")
+    parser.add_argument("--qids-file", type=Path, default=None, help="Optional filter limiting scaffold additions to listed question ids.")
     parser.add_argument("--out", type=Path, default=None, help="Output path. Defaults to overwriting --benchmark.")
     args = parser.parse_args()
 
+    if args.eval is None and args.scaffold is None:
+        parser.error("Provide at least one of --eval or --scaffold.")
+
     benchmark_payload = _load_json(args.benchmark)
-    eval_payload = _load_json(args.eval)
+    eval_payload = _load_json(args.eval) if args.eval is not None else None
+    scaffold_records = _load_scaffold_records(args.scaffold) if args.scaffold is not None else None
     merged = _merge_cases(
         benchmark_payload=benchmark_payload,
         eval_payload=eval_payload,
-        source_eval_name=args.eval.name,
+        scaffold_records=scaffold_records,
+        source_eval_name=args.eval.name if args.eval is not None else None,
+        qid_filter=_load_qid_filter(args.qids_file),
     )
 
     out_path = args.out or args.benchmark
