@@ -18,6 +18,7 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
     scaffold = tmp_path / "scaffold.json"
     raw_results = tmp_path / "raw_results.json"
     cheap_eval = tmp_path / "cheap_eval.json"
+    page_trace = tmp_path / "page_trace.json"
     out_json = tmp_path / "production_mimic.json"
     out_md = tmp_path / "production_mimic.md"
 
@@ -124,6 +125,24 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
         ),
         encoding="utf-8",
     )
+    page_trace.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "cases_scored": 1,
+                    "trusted_case_count": 1,
+                    "gold_in_retrieved_count": 1,
+                    "gold_in_reranked_count": 0,
+                    "gold_in_used_count": 0,
+                    "false_positive_case_count": 1,
+                    "failure_stage_counts": {"wrong_page_used_same_doc": 1},
+                    "stage_examples": {"wrong_page_used_same_doc": ["q1"]},
+                    "explained_ratio": 1.0,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
     subprocess.run(
         [
@@ -147,6 +166,8 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
             str(cheap_eval),
             "--scaffold-json",
             str(scaffold),
+            "--page-trace-json",
+            str(page_trace),
             "--out-json",
             str(out_json),
             "--out-md",
@@ -164,8 +185,11 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
 
     assert report["lineage_confidence"] == "high"
     assert report["support_shape"]["weak_same_doc_anchor_case_count"] == 1
+    assert report["page_trace"]["cases_scored"] == 1
+    assert report["page_trace"]["failure_stage_counts"] == {"wrong_page_used_same_doc": 1}
     assert report["platform_like_rank_estimate"] >= 1
     assert report["strict_rank_estimate"] >= 1
     assert report["paranoid_rank_estimate"] >= 1
     assert "Production-Mimic Local Eval" in markdown
     assert "triad_f331_e0798_plus_dotted" in markdown
+    assert "## Page Trace" in markdown

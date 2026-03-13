@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rag_challenge.eval.production_mimic import (
     aggregate_hybrid_strict_eval,
+    build_page_trace_summary,
     build_public_history_calibration,
     build_support_shape_report,
     estimate_production_mimic,
@@ -170,6 +171,29 @@ def test_build_support_shape_report_detects_anchor_miss_and_overbreadth() -> Non
     assert report["page_budget_case_count"] == 1
     assert report["citation_overbreadth_case_count"] == 1
     assert report["weak_same_doc_anchor_qids"] == ["q1"]
+
+
+def test_build_page_trace_summary_preserves_stage_counts() -> None:
+    summary = build_page_trace_summary(
+        {
+            "summary": {
+                "cases_scored": 4,
+                "trusted_case_count": 2,
+                "gold_in_retrieved_count": 3,
+                "gold_in_reranked_count": 2,
+                "gold_in_used_count": 1,
+                "false_positive_case_count": 2,
+                "failure_stage_counts": {"lost_after_context": 1, "wrong_page_used_same_doc": 2},
+                "stage_examples": {"lost_after_context": ["5046"], "wrong_page_used_same_doc": ["9f9f"]},
+                "explained_ratio": 1.0,
+            }
+        }
+    )
+
+    assert summary["cases_scored"] == 4
+    assert summary["gold_in_reranked_count"] == 2
+    assert summary["failure_stage_counts"] == {"lost_after_context": 1, "wrong_page_used_same_doc": 2}
+    assert summary["stage_examples"] == {"lost_after_context": ["5046"], "wrong_page_used_same_doc": ["9f9f"]}
 
 
 def test_estimate_production_mimic_penalizes_support_shape_issues() -> None:
