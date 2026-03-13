@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from copy import deepcopy
 from typing import TYPE_CHECKING, cast
 
 from qdrant_client import models
@@ -58,6 +59,7 @@ class HybridRetriever:
         self._pipeline_settings = settings.pipeline
         self._reranker_settings = settings.reranker
         self._last_retrieved_ids: list[str] = []
+        self._last_retrieval_debug: dict[str, object] = {}
         self._qdrant_circuit = CircuitBreaker(
             name="qdrant",
             failure_threshold=int(self._qdrant_settings.circuit_failure_threshold),
@@ -69,6 +71,9 @@ class HybridRetriever:
 
     def get_last_retrieved_ids(self) -> list[str]:
         return list(self._last_retrieved_ids)
+
+    def get_last_retrieval_debug(self) -> dict[str, object]:
+        return deepcopy(self._last_retrieval_debug)
 
     async def retrieve(
         self,
@@ -86,12 +91,44 @@ class HybridRetriever:
         extracted_refs = [ref.strip() for ref in (list(doc_refs) if doc_refs is not None else []) if str(ref).strip()]
         expanded_refs = self._expand_doc_ref_variants(extracted_refs)
         sparse_query = self._build_sparse_query(query=query, extracted_refs=extracted_refs)
+        exact_legal_refs = QueryClassifier.extract_exact_legal_refs(str(query or ""))
+        retrieval_mode = "sparse_only" if sparse_only and self._bm25_enabled else ("dense_only" if not self._bm25_enabled else "hybrid")
+        retrieval_debug: dict[str, object] = {
+            "query": str(query or ""),
+            "sparse_query": sparse_query,
+            "doc_refs": list(extracted_refs),
+            "expanded_doc_refs": list(expanded_refs),
+            "has_doc_refs": bool(extracted_refs),
+            "has_exact_legal_refs_in_query": bool(exact_legal_refs),
+            "exact_legal_refs": list(exact_legal_refs),
+            "doc_type_filter_requested": doc_type_filter.value if doc_type_filter is not None else "",
+            "doc_type_filter_inferred": False,
+            "jurisdiction_filter": str(jurisdiction_filter or ""),
+            "sparse_only_requested": bool(sparse_only),
+            "bm25_enabled_at_start": bool(self._bm25_enabled),
+            "retrieval_mode": retrieval_mode,
+            "hybrid_degraded_to_dense_only": False,
+            "dense_only_reason": "bm25_disabled" if not self._bm25_enabled else "",
+            "fail_open_triggered": False,
+            "fail_open_stage": "none",
+            "fail_open_stages": [],
+            "initial_doc_ref_filter_applied": bool(expanded_refs),
+            "initial_doc_type_filter_applied": doc_type_filter.value if doc_type_filter is not None else "",
+            "initial_chunk_count": 0,
+            "drop_doc_type_chunk_count": 0,
+            "drop_doc_refs_chunk_count": 0,
+            "final_chunk_count": 0,
+            "final_doc_ref_filter_applied": bool(expanded_refs),
+            "final_doc_type_filter_applied": doc_type_filter.value if doc_type_filter is not None else "",
+        }
 
         if doc_type_filter is None and extracted_refs:
             case_ref_prefixes = {"CFI", "CA", "SCT", "ENF", "DEC", "TCD", "ARB"}
             has_case_ref = any(ref.split(" ", maxsplit=1)[0].upper() in case_ref_prefixes for ref in extracted_refs)
             if has_case_ref and bool(getattr(self._pipeline_settings, "doc_ref_case_law_filter", True)):
                 doc_type_filter = DocType.CASE_LAW
+                retrieval_debug["doc_type_filter_inferred"] = True
+                retrieval_debug["initial_doc_type_filter_applied"] = doc_type_filter.value
 
         dense_limit = int(prefetch_dense or self._qdrant_settings.prefetch_dense)
         sparse_limit = int(prefetch_sparse or self._qdrant_settings.prefetch_sparse)
@@ -113,6 +150,8 @@ class HybridRetriever:
             except Exception as exc:
                 logger.warning("Sparse-only retrieval failed; degrading to standard retrieval path: %s", exc)
                 sparse_only = False
+                retrieval_mode = "dense_only" if not self._bm25_enabled else "hybrid"
+                retrieval_debug["retrieval_mode"] = retrieval_mode
                 result = None
         else:
             result = None
@@ -150,6 +189,10 @@ class HybridRetriever:
                         logger.warning("Qdrant BM25 local model unavailable, switching retriever to dense-only mode")
                         self._bm25_enabled = False
                     logger.warning("Hybrid retrieval failed; degrading to dense-only search: %s", exc)
+                    retrieval_mode = "dense_only"
+                    retrieval_debug["retrieval_mode"] = retrieval_mode
+                    retrieval_debug["hybrid_degraded_to_dense_only"] = True
+                    retrieval_debug["dense_only_reason"] = "hybrid_failure"
                     try:
                         result = await self._query_dense_only(
                             query_vector=query_vector,
@@ -160,10 +203,15 @@ class HybridRetriever:
                         raise RetrieverError(f"Qdrant retrieval failed (hybrid+dense): {dense_exc}") from dense_exc
 
         chunks = self._map_results(result)
+        retrieval_debug["initial_chunk_count"] = len(chunks)
 
         if extracted_refs and not chunks:
             # Step 1 fail-open: keep doc refs, relax doc_type constraint first.
             logger.info("Doc-ref filter produced 0 chunks; retrying without doc_type filter")
+            retrieval_debug["fail_open_triggered"] = True
+            fail_open_stages = cast("list[str]", retrieval_debug["fail_open_stages"])
+            fail_open_stages.append("drop_doc_type")
+            retrieval_debug["fail_open_stage"] = "drop_doc_type"
             fallback_where = self._build_filter(
                 doc_type_filter=None,
                 jurisdiction_filter=jurisdiction_filter,
@@ -190,10 +238,16 @@ class HybridRetriever:
                 fusion = self._resolve_fusion_method()
                 result = await self._query_hybrid(prefetch=prefetch, fusion=fusion, limit=limit)
             chunks = self._map_results(result)
+            retrieval_debug["drop_doc_type_chunk_count"] = len(chunks)
+            retrieval_debug["final_doc_type_filter_applied"] = ""
 
         if extracted_refs and not chunks:
             # Step 2 fail-open: final fallback without doc_refs.
             logger.info("Doc-ref filter still produced 0 chunks; retrying without doc_refs")
+            retrieval_debug["fail_open_triggered"] = True
+            fail_open_stages = cast("list[str]", retrieval_debug["fail_open_stages"])
+            fail_open_stages.append("drop_doc_refs")
+            retrieval_debug["fail_open_stage"] = "drop_doc_refs"
             fallback_where = self._build_filter(
                 doc_type_filter=None,
                 jurisdiction_filter=jurisdiction_filter,
@@ -218,8 +272,13 @@ class HybridRetriever:
                 fusion = self._resolve_fusion_method()
                 result = await self._query_hybrid(prefetch=prefetch, fusion=fusion, limit=limit)
             chunks = self._map_results(result)
+            retrieval_debug["drop_doc_refs_chunk_count"] = len(chunks)
+            retrieval_debug["final_doc_ref_filter_applied"] = False
+            retrieval_debug["final_doc_type_filter_applied"] = ""
 
         self._last_retrieved_ids = [chunk.chunk_id for chunk in chunks]
+        retrieval_debug["final_chunk_count"] = len(chunks)
+        self._last_retrieval_debug = retrieval_debug
         logger.info(
             "Hybrid retrieval returned %d chunks (dense=%d sparse=%d top_k=%d doc_ref_filter=%s sparse_only=%s)",
             len(chunks),

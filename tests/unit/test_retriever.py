@@ -73,11 +73,16 @@ async def test_retrieve_returns_chunks_and_tracks_ids(mock_settings, mock_embedd
 
     retriever = HybridRetriever(store=mock_store, embedder=mock_embedder)
     chunks = await retriever.retrieve("What is the statute of limitations?")
+    debug = retriever.get_last_retrieval_debug()
 
     assert len(chunks) == 5
     assert chunks[0].chunk_id == "c0"
     assert chunks[0].score == pytest.approx(0.9)
     assert retriever.get_last_retrieved_ids() == [f"c{i}" for i in range(5)]
+    assert debug["retrieval_mode"] == "hybrid"
+    assert debug["fail_open_triggered"] is False
+    assert debug["initial_chunk_count"] == 5
+    assert debug["final_chunk_count"] == 5
     mock_embedder.embed_query.assert_awaited_once()
     mock_store.client.query_points.assert_awaited_once()
 
@@ -346,6 +351,10 @@ async def test_retrieve_falls_back_to_dense_only_on_hybrid_failure(mock_settings
     second_kwargs = mock_store.client.query_points.await_args_list[1].kwargs
     assert "prefetch" in first_kwargs
     assert second_kwargs["using"] == "dense"
+    debug = retriever.get_last_retrieval_debug()
+    assert debug["retrieval_mode"] == "dense_only"
+    assert debug["hybrid_degraded_to_dense_only"] is True
+    assert debug["dense_only_reason"] == "hybrid_failure"
 
 
 @pytest.mark.asyncio
@@ -370,3 +379,37 @@ async def test_retrieve_disables_cloud_bm25_after_inference_unavailable(mock_set
     assert mock_store.client.query_points.await_count == 3
     third_kwargs = mock_store.client.query_points.await_args_list[2].kwargs
     assert third_kwargs["using"] == "dense"
+
+
+@pytest.mark.asyncio
+async def test_retrieve_records_exact_ref_fail_open_debug(mock_settings, mock_embedder, mock_store):
+    from rag_challenge.core.retriever import HybridRetriever
+
+    points = mock_store.client.query_points.return_value.points
+    mock_store.client.query_points = AsyncMock(
+        side_effect=[
+            SimpleNamespace(points=[]),
+            SimpleNamespace(points=[]),
+            SimpleNamespace(points=points),
+        ]
+    )
+
+    retriever = HybridRetriever(store=mock_store, embedder=mock_embedder)
+    chunks = await retriever.retrieve(
+        "According to Article 16(1) of the Operating Law 2018, what document must be filed?",
+        doc_refs=["Operating Law 2018"],
+    )
+    debug = retriever.get_last_retrieval_debug()
+
+    assert len(chunks) == 5
+    assert debug["has_exact_legal_refs_in_query"] is True
+    assert debug["initial_doc_ref_filter_applied"] is True
+    assert debug["fail_open_triggered"] is True
+    assert debug["fail_open_stages"] == ["drop_doc_type", "drop_doc_refs"]
+    assert debug["fail_open_stage"] == "drop_doc_refs"
+    assert debug["initial_chunk_count"] == 0
+    assert debug["drop_doc_type_chunk_count"] == 0
+    assert debug["drop_doc_refs_chunk_count"] == 5
+    assert debug["final_chunk_count"] == 5
+    assert debug["final_doc_ref_filter_applied"] is False
+    assert debug["final_doc_type_filter_applied"] == ""
