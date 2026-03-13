@@ -2894,8 +2894,26 @@ class RAGPipelineBuilder:
         explicit_page_anchor = "page 2" in q_lower or "second page" in q_lower or any(
             term in q_lower for term in ("title page", "cover page", "first page", "header", "caption")
         )
+        has_case_metadata_anchor = any(
+            term in q_lower
+            for term in (
+                "claim number",
+                "case number",
+                "claimant",
+                "defendant",
+                "appellant",
+                "respondent",
+                "applicant",
+                "judge",
+                "date of issue",
+                "issue date",
+            )
+        )
+        has_provision_ref = bool(cls._extract_provision_refs(query))
         return (
             explicit_page_anchor
+            or has_case_metadata_anchor
+            or has_provision_ref
             or _is_common_judge_compare_query(query)
             or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
             or _is_case_monetary_claim_compare_query(query, answer_type=answer_type)
@@ -2903,6 +2921,106 @@ class RAGPipelineBuilder:
             or _is_case_party_role_name_query(query, answer_type=answer_type)
             or _is_case_outcome_query(query)
         )
+
+    @classmethod
+    def _doc_family_page_candidate_template_score(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        chunk: RetrievedChunk | RankedChunk,
+    ) -> int:
+        q_lower = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        page_type = str(getattr(chunk, "page_type", "") or "").strip().casefold()
+        heading_text = cls._normalize_support_text(str(getattr(chunk, "heading_text", "") or "")).casefold()
+        text = cls._normalize_support_text(str(getattr(chunk, "text", "") or "")).casefold()
+        article_refs = [str(ref).strip().casefold() for ref in getattr(chunk, "article_refs", []) if str(ref).strip()]
+        page_num = getattr(chunk, "page_number", None)
+        if page_num is None:
+            page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+
+        score = 0
+        wants_page_two = "page 2" in q_lower or "second page" in q_lower
+        wants_title_caption = any(
+            term in q_lower for term in ("title page", "cover page", "first page", "header", "caption")
+        )
+        wants_issue_date_page = _is_case_issue_date_name_compare_query(query, answer_type=answer_type) or any(
+            term in q_lower for term in ("date of issue", "issue date")
+        )
+        wants_claim_number_page = any(
+            term in q_lower for term in ("claim number", "case number", "claim no.", "case no.")
+        )
+        wants_party_page = _is_case_party_overlap_compare_query(query, answer_type=answer_type) or _is_case_party_role_name_query(
+            query,
+            answer_type=answer_type,
+        ) or any(
+            term in q_lower
+            for term in (
+                "claimant",
+                "defendant",
+                "appellant",
+                "respondent",
+                "applicant",
+                "judge",
+            )
+        )
+        wants_outcome_page = _is_case_outcome_query(query) or any(
+            term in q_lower for term in ("it is hereby ordered", "costs", "dismissed", "granted", "denied")
+        )
+        wants_claim_page = _is_case_monetary_claim_compare_query(query, answer_type=answer_type) or any(
+            term in q_lower for term in ("claim amount", "claim value", "amount claimed", "monetary claim")
+        )
+        provision_refs = [ref.casefold() for ref in cls._extract_provision_refs(query)]
+        wants_article_heading = bool(provision_refs)
+
+        if wants_page_two and page_num == 2:
+            score += 900
+            if page_type == "page2_anchor":
+                score += 180
+
+        if wants_issue_date_page and page_num == 2:
+            score += 760
+            if page_type == "page2_anchor":
+                score += 180
+
+        if wants_title_caption or wants_party_page or wants_claim_number_page:
+            if page_num == 1:
+                score += 320
+            if page_type == "title_anchor":
+                score += 260
+            if page_type == "caption_anchor":
+                score += 300
+            if bool(getattr(chunk, "has_caption_terms", False)):
+                score += 80
+
+        if wants_outcome_page:
+            if bool(getattr(chunk, "has_order_terms", False)):
+                score += 280
+            if page_type == "heading_window":
+                score += 180
+
+        if wants_claim_page:
+            if page_type == "heading_window":
+                score += 220
+            if "claim" in text or "aed" in text or "amount" in text:
+                score += 140
+
+        if wants_article_heading:
+            ref_match = 0
+            for provision_ref in provision_refs:
+                if provision_ref in heading_text or provision_ref in text or provision_ref in article_refs:
+                    ref_match = max(ref_match, 280)
+                short_ref = provision_ref.replace("article ", "").replace("section ", "").replace("schedule ", "").strip()
+                if short_ref and (short_ref in heading_text or short_ref in text or short_ref in article_refs):
+                    ref_match = max(ref_match, 220)
+            if ref_match > 0:
+                score += ref_match
+                if page_type == "heading_window":
+                    score += 160
+                if article_refs:
+                    score += 80
+
+        return score
 
     @classmethod
     def _case_doc_family_page_localizer_score(
@@ -2980,6 +3098,13 @@ class RAGPipelineBuilder:
         ref: str,
         chunk: RetrievedChunk,
     ) -> tuple[int, int, float] | None:
+        template_score = cls._doc_family_page_candidate_template_score(
+            query=query,
+            answer_type=answer_type,
+            chunk=chunk,
+        )
+        if template_score <= 0:
+            return None
         score = cls._case_doc_family_page_localizer_score(
             query=query,
             answer_type=answer_type,
@@ -2989,7 +3114,7 @@ class RAGPipelineBuilder:
         if score <= 0:
             return None
         page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
-        return (score, -max(page_num, 0), float(chunk.score))
+        return (template_score + score, -max(page_num, 0), float(chunk.score))
 
     @classmethod
     def _ensure_doc_family_page_localizer_context(

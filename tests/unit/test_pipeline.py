@@ -1263,6 +1263,86 @@ def test_doc_family_page_localizer_prefers_unseen_doc_tail_before_same_doc_spam(
     assert [chunk.chunk_id for chunk in localized[:3]] == ["ca:page1", "sct:page1", "third:page1"]
 
 
+def test_doc_family_page_localizer_prefers_heading_window_for_article_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="law:title",
+            doc_id="employment-law-2019",
+            doc_title="Employment Law 2019",
+            section_path="page:1",
+            text="Employment Law 2019 title page.",
+            score=0.97,
+            page_number=1,
+            page_type="title_anchor",
+        ),
+        _make_retrieved_chunk(
+            chunk_id="law:article11",
+            doc_id="employment-law-2019",
+            doc_title="Employment Law 2019",
+            section_path="page:7",
+            text="Article 11(2)(b) An Employee may waive a right only in the listed circumstances.",
+            score=0.82,
+            page_number=7,
+            page_type="heading_window",
+            heading_text="Article 11(2)(b)",
+            article_refs=["Article 11(2)(b)"],
+        ),
+    ]
+    reranked = [RAGPipelineBuilder._raw_to_ranked(chunk) for chunk in retrieved]
+
+    localized = RAGPipelineBuilder._ensure_doc_family_page_localizer_context(
+        query="Under Article 11(2)(b) of the Employment Law 2019, can an Employee waive any right under this Law?",
+        answer_type="free_text",
+        doc_refs=["Employment Law 2019"],
+        reranked=reranked,
+        retrieved=retrieved,
+        top_n=2,
+    )
+
+    assert localized[0].chunk_id == "law:article11"
+
+
+def test_doc_family_page_localizer_prefers_caption_page_for_claim_number_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="cfi057:page4",
+            doc_id="cfi-057",
+            doc_title="CFI 057/2025 Example v Example",
+            section_path="page:4",
+            text="Later merits page without the claim number field.",
+            score=0.98,
+            page_number=4,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="cfi057:page1",
+            doc_id="cfi-057",
+            doc_title="CFI 057/2025 Example v Example",
+            section_path="page:1",
+            text="CFI 057/2025 Claim No. ENF-316-2023/2 Example Claimant v Example Defendant.",
+            score=0.81,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+    ]
+    reranked = [RAGPipelineBuilder._raw_to_ranked(chunk) for chunk in retrieved]
+
+    localized = RAGPipelineBuilder._ensure_doc_family_page_localizer_context(
+        query="What is the claim number in case CFI 057/2025?",
+        answer_type="free_text",
+        doc_refs=["CFI 057/2025"],
+        reranked=reranked,
+        retrieved=retrieved,
+        top_n=2,
+    )
+
+    assert localized[0].chunk_id == "cfi057:page1"
+
+
 def test_localize_free_text_support_keeps_multiple_pages_for_composite_item() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
