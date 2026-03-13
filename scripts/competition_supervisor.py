@@ -184,13 +184,17 @@ def _decide(
             best_label = str(best.get("label") or "unknown").strip() or "unknown"
             strict_rank = _as_int(best.get("strict_rank_estimate"), default=10_000)
             upper_rank = _as_int(best.get("upper_rank_estimate"), default=10_000)
+            blindspot_improved = _as_int(best.get("blindspot_improved_case_count"))
+            support_undercoverage_blindspots = _as_int(best.get("blindspot_support_undercoverage_case_count"))
             strict_total = _as_float(best.get("strict_total_estimate"))
             rationale.append(
-                f"best small-diff ceiling candidate={best_label} strict_rank≈{strict_rank} upper_rank≈{upper_rank}"
+                f"best small-diff ceiling candidate={best_label} strict_rank≈{strict_rank} upper_rank≈{upper_rank} blindspot_gains={blindspot_improved}"
             )
             if upper_rank > target_rank:
                 rationale.append("best current small-diff path still misses the requested target rank even under the upper estimate")
-                if submissions_remaining <= 1:
+                if blindspot_improved > 0 or support_undercoverage_blindspots > 0:
+                    rationale.append("benchmark-blind page-family gains are still active, so the small-diff path is not yet fully exhausted")
+                elif submissions_remaining <= 1:
                     return SupervisorDecision(
                         action="small_diff_ceiling_reached",
                         rationale=rationale,
@@ -322,6 +326,8 @@ def _render_report(
                     f"- Upper total estimate: `{_as_float(best.get('upper_total_estimate')):.6f}`",
                     f"- Strict rank estimate: `{_as_int(best.get('strict_rank_estimate'))}`",
                     f"- Upper rank estimate: `{_as_int(best.get('upper_rank_estimate'))}`",
+                    f"- Blindspot improved cases: `{_as_int(best.get('blindspot_improved_case_count'))}`",
+                    f"- Support-undercoverage blindspots: `{_as_int(best.get('blindspot_support_undercoverage_case_count'))}`",
                 ]
             )
 

@@ -31,8 +31,10 @@ class SeedCaseDelta:
     baseline_context_page_ids: list[str]
     candidate_context_page_ids: list[str]
     baseline_used_hit: bool
+    baseline_used_equivalent_hit: bool
     candidate_used_hit: bool
     baseline_context_hit: bool
+    baseline_context_equivalent_hit: bool
     candidate_context_hit: bool
     candidate_used_equivalent_hit: bool
     candidate_context_equivalent_hit: bool
@@ -332,6 +334,20 @@ def _seed_case_deltas(
         baseline_context = _coerce_str_list(baseline_telemetry.get("context_page_ids"))
         candidate_context = _coerce_str_list(candidate_telemetry.get("context_page_ids"))
         gold_set = set(gold_page_ids)
+        baseline_used_equivalent_hit = _page_title_equivalent_hit(
+            gold_page_ids=gold_page_ids,
+            candidate_page_ids=baseline_used,
+            gold_title_map=baseline_title_map,
+            candidate_title_map=baseline_title_map,
+            gold_record_titles=gold_record_titles,
+        )
+        baseline_context_equivalent_hit = _page_title_equivalent_hit(
+            gold_page_ids=gold_page_ids,
+            candidate_page_ids=baseline_context,
+            gold_title_map=baseline_title_map,
+            candidate_title_map=baseline_title_map,
+            gold_record_titles=gold_record_titles,
+        )
         candidate_used_equivalent_hit = _page_title_equivalent_hit(
             gold_page_ids=gold_page_ids,
             candidate_page_ids=candidate_used,
@@ -355,14 +371,128 @@ def _seed_case_deltas(
                 baseline_context_page_ids=baseline_context,
                 candidate_context_page_ids=candidate_context,
                 baseline_used_hit=bool(gold_set.intersection(baseline_used)),
+                baseline_used_equivalent_hit=baseline_used_equivalent_hit,
                 candidate_used_hit=bool(gold_set.intersection(candidate_used)),
                 baseline_context_hit=bool(gold_set.intersection(baseline_context)),
+                baseline_context_equivalent_hit=baseline_context_equivalent_hit,
                 candidate_context_hit=bool(gold_set.intersection(candidate_context)),
                 candidate_used_equivalent_hit=candidate_used_equivalent_hit,
                 candidate_context_equivalent_hit=candidate_context_equivalent_hit,
             )
         )
     return deltas
+
+
+def _has_any_hit(*, exact_hit: bool, equivalent_hit: bool) -> bool:
+    return exact_hit or equivalent_hit
+
+
+def _improved_qids(deltas: list[SeedCaseDelta]) -> list[str]:
+    return [
+        delta.question_id
+        for delta in deltas
+        if (
+            (
+                _has_any_hit(
+                    exact_hit=delta.candidate_used_hit,
+                    equivalent_hit=delta.candidate_used_equivalent_hit,
+                )
+                and not _has_any_hit(
+                    exact_hit=delta.baseline_used_hit,
+                    equivalent_hit=delta.baseline_used_equivalent_hit,
+                )
+            )
+            or (
+                _has_any_hit(
+                    exact_hit=delta.candidate_context_hit,
+                    equivalent_hit=delta.candidate_context_equivalent_hit,
+                )
+                and not _has_any_hit(
+                    exact_hit=delta.baseline_context_hit,
+                    equivalent_hit=delta.baseline_context_equivalent_hit,
+                )
+            )
+        )
+    ]
+
+
+def _equivalent_qids(deltas: list[SeedCaseDelta]) -> list[str]:
+    return [
+        delta.question_id
+        for delta in deltas
+        if (
+            (delta.candidate_used_equivalent_hit and not delta.candidate_used_hit)
+            or (delta.candidate_context_equivalent_hit and not delta.candidate_context_hit)
+        )
+    ]
+
+
+def _regressed_qids(deltas: list[SeedCaseDelta]) -> list[str]:
+    return [
+        delta.question_id
+        for delta in deltas
+        if (
+            (
+                _has_any_hit(
+                    exact_hit=delta.baseline_used_hit,
+                    equivalent_hit=delta.baseline_used_equivalent_hit,
+                )
+                and not _has_any_hit(
+                    exact_hit=delta.candidate_used_hit,
+                    equivalent_hit=delta.candidate_used_equivalent_hit,
+                )
+            )
+            or (
+                _has_any_hit(
+                    exact_hit=delta.baseline_context_hit,
+                    equivalent_hit=delta.baseline_context_equivalent_hit,
+                )
+                and not _has_any_hit(
+                    exact_hit=delta.candidate_context_hit,
+                    equivalent_hit=delta.candidate_context_equivalent_hit,
+                )
+            )
+        )
+    ]
+
+
+def _blindspot_support_summary(
+    *,
+    scaffold_path: Path,
+    candidate_scaffold_path: Path | None,
+    baseline_raw_results_path: Path,
+    candidate_raw_results_path: Path,
+    seed_qids: list[str],
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    records = _scaffold_records_by_id(scaffold_path)
+    scaffold_qids = [
+        qid
+        for qid, record in records.items()
+        if _coerce_str_list(record.get("minimal_required_support_pages"))
+    ]
+    if not scaffold_qids:
+        return [], [], [], []
+    deltas = _seed_case_deltas(
+        baseline_scaffold_path=scaffold_path,
+        candidate_scaffold_path=candidate_scaffold_path,
+        baseline_raw_results_path=baseline_raw_results_path,
+        candidate_raw_results_path=candidate_raw_results_path,
+        seed_qids=scaffold_qids,
+    )
+    improved = _improved_qids(deltas)
+    regressed = _regressed_qids(deltas)
+    seed_qid_set = set(seed_qids)
+    support_undercoverage_qids = {
+        qid
+        for qid, record in records.items()
+        if str(record.get("failure_class") or "").strip() == "support_undercoverage"
+    }
+    blindspot_improved = [qid for qid in improved if qid not in seed_qid_set]
+    blindspot_support_undercoverage = [
+        qid for qid in blindspot_improved if qid in support_undercoverage_qids
+    ]
+    blindspot_regressed = [qid for qid in regressed if qid not in seed_qid_set]
+    return improved, blindspot_improved, blindspot_support_undercoverage, blindspot_regressed
 
 
 def _recommendation(
@@ -402,31 +532,14 @@ def _render_report(
     seed_deltas: list[SeedCaseDelta],
     recommendation: str,
     notes: list[str],
+    scaffold_improved_cases: list[str],
+    blindspot_improved_cases: list[str],
+    blindspot_support_undercoverage_cases: list[str],
+    blindspot_regressed_cases: list[str],
 ) -> str:
-    improved = [
-        delta.question_id
-        for delta in seed_deltas
-        if (
-            (delta.candidate_used_hit and not delta.baseline_used_hit)
-            or (delta.candidate_context_hit and not delta.baseline_context_hit)
-        )
-    ]
-    equivalent = [
-        delta.question_id
-        for delta in seed_deltas
-        if (
-            (delta.candidate_used_equivalent_hit and not delta.candidate_used_hit)
-            or (delta.candidate_context_equivalent_hit and not delta.candidate_context_hit)
-        )
-    ]
-    regressed = [
-        delta.question_id
-        for delta in seed_deltas
-        if (
-            (delta.baseline_used_hit and not (delta.candidate_used_hit or delta.candidate_used_equivalent_hit))
-            or (delta.baseline_context_hit and not (delta.candidate_context_hit or delta.candidate_context_equivalent_hit))
-        )
-    ]
+    improved = _improved_qids(seed_deltas)
+    equivalent = _equivalent_qids(seed_deltas)
+    regressed = _regressed_qids(seed_deltas)
 
     lines = [
         "# Experiment Gate Report",
@@ -464,6 +577,27 @@ def _render_report(
         lines.extend([f"- Equivalent IDs: `{', '.join(equivalent)}`", ""])
     if regressed:
         lines.extend([f"- Regressed IDs: `{', '.join(regressed)}`", ""])
+    lines.extend(
+        [
+            "## Scaffold Blindspots",
+            "",
+            f"- Improved scaffold cases: `{len(scaffold_improved_cases)}`",
+            f"- Improved blindspot cases: `{len(blindspot_improved_cases)}`",
+            f"- Improved support-undercoverage blindspots: `{len(blindspot_support_undercoverage_cases)}`",
+            f"- Regressed blindspot cases: `{len(blindspot_regressed_cases)}`",
+        ]
+    )
+    if blindspot_improved_cases:
+        lines.extend([f"- Blindspot improved IDs: `{', '.join(blindspot_improved_cases)}`", ""])
+    if blindspot_support_undercoverage_cases:
+        lines.extend(
+            [
+                f"- Support-undercoverage blindspot IDs: `{', '.join(blindspot_support_undercoverage_cases)}`",
+                "",
+            ]
+        )
+    if blindspot_regressed_cases:
+        lines.extend([f"- Blindspot regressed IDs: `{', '.join(blindspot_regressed_cases)}`", ""])
     lines.extend(["## Seed Case Details", ""])
     if not seed_deltas:
         lines.append("- None")
@@ -502,31 +636,14 @@ def _report_payload(
     seed_deltas: list[SeedCaseDelta],
     recommendation: str,
     notes: list[str],
+    scaffold_improved_cases: list[str],
+    blindspot_improved_cases: list[str],
+    blindspot_support_undercoverage_cases: list[str],
+    blindspot_regressed_cases: list[str],
 ) -> JsonDict:
-    improved = [
-        delta.question_id
-        for delta in seed_deltas
-        if (
-            (delta.candidate_used_hit and not delta.baseline_used_hit)
-            or (delta.candidate_context_hit and not delta.baseline_context_hit)
-        )
-    ]
-    equivalent = [
-        delta.question_id
-        for delta in seed_deltas
-        if (
-            (delta.candidate_used_equivalent_hit and not delta.candidate_used_hit)
-            or (delta.candidate_context_equivalent_hit and not delta.candidate_context_hit)
-        )
-    ]
-    regressed = [
-        delta.question_id
-        for delta in seed_deltas
-        if (
-            (delta.baseline_used_hit and not (delta.candidate_used_hit or delta.candidate_used_equivalent_hit))
-            or (delta.baseline_context_hit and not (delta.candidate_context_hit or delta.candidate_context_equivalent_hit))
-        )
-    ]
+    improved = _improved_qids(seed_deltas)
+    equivalent = _equivalent_qids(seed_deltas)
+    regressed = _regressed_qids(seed_deltas)
     return {
         "label": label,
         "baseline_label": baseline_label,
@@ -542,6 +659,10 @@ def _report_payload(
         "improved_seed_cases": improved,
         "equivalent_seed_cases": equivalent,
         "regressed_seed_cases": regressed,
+        "scaffold_improved_cases": scaffold_improved_cases,
+        "blindspot_improved_cases": blindspot_improved_cases,
+        "blindspot_support_undercoverage_cases": blindspot_support_undercoverage_cases,
+        "blindspot_regressed_cases": blindspot_regressed_cases,
         "seed_deltas": [asdict(delta) for delta in seed_deltas],
         "notes": notes,
         "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
@@ -619,6 +740,13 @@ def main() -> None:
         candidate_raw_results_path=args.candidate_raw_results,
         seed_qids=_seed_qids(args),
     )
+    scaffold_improved_cases, blindspot_improved_cases, blindspot_support_undercoverage_cases, blindspot_regressed_cases = _blindspot_support_summary(
+        scaffold_path=args.scaffold,
+        candidate_scaffold_path=args.candidate_scaffold,
+        baseline_raw_results_path=args.baseline_raw_results,
+        candidate_raw_results_path=args.candidate_raw_results,
+        seed_qids=_seed_qids(args),
+    )
     recommendation, notes = _recommendation(
         baseline_trusted=baseline_trusted,
         candidate_trusted=candidate_trusted,
@@ -640,6 +768,10 @@ def main() -> None:
         seed_deltas=seed_deltas,
         recommendation=recommendation,
         notes=notes,
+        scaffold_improved_cases=scaffold_improved_cases,
+        blindspot_improved_cases=blindspot_improved_cases,
+        blindspot_support_undercoverage_cases=blindspot_support_undercoverage_cases,
+        blindspot_regressed_cases=blindspot_regressed_cases,
     )
     report_payload = _report_payload(
         label=args.label,
@@ -655,6 +787,10 @@ def main() -> None:
         seed_deltas=seed_deltas,
         recommendation=recommendation,
         notes=notes,
+        scaffold_improved_cases=scaffold_improved_cases,
+        blindspot_improved_cases=blindspot_improved_cases,
+        blindspot_support_undercoverage_cases=blindspot_support_undercoverage_cases,
+        blindspot_regressed_cases=blindspot_regressed_cases,
     )
     if args.out is not None:
         args.out.write_text(report, encoding="utf-8")

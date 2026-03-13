@@ -48,6 +48,8 @@ def test_combined_score_prefers_lineage_and_exactness_when_hidden_g_ties() -> No
         "lineage_ok": True,
         "strict_total_estimate": 0.7600,
         "upper_total_estimate": 0.7800,
+        "blindspot_improved_case_count": 3,
+        "blindspot_support_undercoverage_case_count": 2,
         "hidden_g_trusted_delta": 0.0425,
         "hidden_g_all_delta": 0.1993 - 0.1787,
         "judge_pass_delta": 1.0,
@@ -59,6 +61,8 @@ def test_combined_score_prefers_lineage_and_exactness_when_hidden_g_ties() -> No
     }
     weaker = dict(base)
     weaker["resolved_incorrect_count"] = 0
+    weaker["blindspot_improved_case_count"] = 0
+    weaker["blindspot_support_undercoverage_case_count"] = 0
     weaker["label"] = "support-only"
 
     assert _combined_score(base) > _combined_score(weaker)

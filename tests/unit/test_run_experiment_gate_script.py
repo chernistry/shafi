@@ -197,6 +197,10 @@ def test_run_experiment_gate_script_reports_and_appends_ledger(tmp_path: Path) -
     assert report_payload["improved_seed_cases"] == ["q1"]
     assert report_payload["equivalent_seed_cases"] == []
     assert report_payload["regressed_seed_cases"] == []
+    assert report_payload["scaffold_improved_cases"] == ["q1"]
+    assert report_payload["blindspot_improved_cases"] == []
+    assert report_payload["blindspot_support_undercoverage_cases"] == []
+    assert report_payload["blindspot_regressed_cases"] == []
     assert report_payload["submission_policy"] == "NO_SUBMIT_WITHOUT_USER_APPROVAL"
 
     ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
