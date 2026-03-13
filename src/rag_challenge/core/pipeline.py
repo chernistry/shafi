@@ -13,6 +13,7 @@ from rag_challenge.config import get_settings
 from rag_challenge.core.classifier import QueryClassifier
 from rag_challenge.core.conflict_detector import ConflictDetector
 from rag_challenge.core.decomposer import QueryDecomposer
+from rag_challenge.core.local_page_reranker import score_pages_from_chunk_scores, select_top_pages_per_doc
 from rag_challenge.core.premise_guard import check_query_premise
 from rag_challenge.core.strict_answerer import StrictAnswerer
 from rag_challenge.models import Citation, QueryComplexity, RankedChunk, RetrievedChunk, TelemetryPayload
@@ -4308,7 +4309,13 @@ class RAGPipelineBuilder:
                     },
                 )
             collector.set_cited_ids(cited_ids)
-            collector.set_used_ids(shaped_used_ids if shaped_used_ids else used_ids)
+            final_used_ids = self._rerank_support_pages_within_selected_docs(
+                query=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                used_ids=shaped_used_ids if shaped_used_ids else used_ids,
+            )
+            collector.set_used_ids(final_used_ids)
             citations: list[Citation] = []
             cited_ids = list(cited_ids)
         else:
@@ -4533,7 +4540,13 @@ class RAGPipelineBuilder:
                         "flags": support_shape_flags,
                     },
                 )
-            collector.set_used_ids(shaped_used_ids)
+            final_used_ids = self._rerank_support_pages_within_selected_docs(
+                query=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                used_ids=shaped_used_ids,
+            )
+            collector.set_used_ids(final_used_ids)
             if answer_type == "free_text" and streamed and answer.strip():
                 writer({"type": "answer_final", "text": answer})
 
@@ -6151,6 +6164,109 @@ class RAGPipelineBuilder:
             context_chunks=context_chunks,
         )
         return [fallback_chunk_id] if fallback_chunk_id else []
+
+    @classmethod
+    def _rerank_support_pages_within_selected_docs(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        context_chunks: Sequence[RankedChunk],
+        used_ids: Sequence[str],
+    ) -> list[str]:
+        ordered_used_ids: list[str] = []
+        seen_used_ids: set[str] = set()
+        for raw_chunk_id in used_ids:
+            chunk_id = str(raw_chunk_id).strip()
+            if not chunk_id or chunk_id in seen_used_ids:
+                continue
+            seen_used_ids.add(chunk_id)
+            ordered_used_ids.append(chunk_id)
+        if not ordered_used_ids or not context_chunks:
+            return ordered_used_ids
+        if QueryClassifier.extract_explicit_page_reference(query) is not None:
+            return ordered_used_ids
+        if _is_broad_enumeration_query(query):
+            return ordered_used_ids
+
+        q_lower = re.sub(r"\s+", " ", query).strip().lower()
+        normalized_answer_type = answer_type.strip().lower()
+        compare_like = normalized_answer_type in {"boolean", "name", "names", "date", "number"} and (
+            len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
+            or len(cls._support_question_refs(query)) >= 2
+            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+            or _is_common_judge_compare_query(query)
+            or "same year" in q_lower
+            or "same party" in q_lower
+            or "appeared in both" in q_lower
+            or "administ" in q_lower
+        )
+        metadata_like = (
+            cls._is_named_metadata_support_query(query)
+            or _is_named_multi_title_lookup_query(query)
+            or _is_named_commencement_query(query)
+            or _is_named_amendment_query(query)
+        )
+        if not (compare_like or metadata_like):
+            return ordered_used_ids
+
+        selected_doc_ids = cls._doc_ids_for_chunk_ids(chunk_ids=ordered_used_ids, context_chunks=context_chunks)
+        if not selected_doc_ids:
+            return ordered_used_ids
+
+        doc_order = [
+            doc_id
+            for doc_id in (
+                str(getattr(chunk, "doc_id", "") or "").strip()
+                for chunk_id in ordered_used_ids
+                for chunk in context_chunks
+                if chunk.chunk_id == chunk_id
+            )
+            if doc_id
+        ]
+        page_one_bias = 0.18 if metadata_like else 0.12
+        early_page_bias = 0.04 if metadata_like else 0.0
+        if compare_like and any(
+            term in q_lower for term in ("judge", "party", "claimant", "respondent", "title", "citation title")
+        ):
+            page_one_bias = max(page_one_bias, 0.20)
+            early_page_bias = 0.0
+        elif compare_like and any(
+            term in q_lower for term in ("date of issue", "issue date", "issued", "commencement", "effective date")
+        ):
+            page_one_bias = min(page_one_bias, 0.08)
+            early_page_bias = max(early_page_bias, 0.18)
+        scored_pages = score_pages_from_chunk_scores(
+            chunks=context_chunks,
+            doc_ids=selected_doc_ids,
+            page_one_bias=page_one_bias,
+            early_page_bias=early_page_bias,
+        )
+        if not scored_pages:
+            return ordered_used_ids
+
+        selected_pages = select_top_pages_per_doc(
+            scored_pages=scored_pages,
+            doc_order=doc_order,
+            per_doc_pages=1,
+        )
+        if not selected_pages:
+            return ordered_used_ids
+
+        reranked_ids: list[str] = []
+        for row in selected_pages:
+            doc_id, _, page_raw = row.page_id.rpartition("_")
+            if not doc_id or not page_raw.isdigit():
+                continue
+            chunk_id = cls._best_support_chunk_id_for_doc_page(
+                doc_id=doc_id,
+                page_num=int(page_raw),
+                context_chunks=context_chunks,
+            )
+            if chunk_id and chunk_id not in reranked_ids:
+                reranked_ids.append(chunk_id)
+
+        return reranked_ids or ordered_used_ids
 
     @classmethod
     def _is_named_metadata_support_query(cls, query: str) -> bool:

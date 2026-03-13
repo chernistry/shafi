@@ -3961,6 +3961,145 @@ def test_collapse_doc_family_crowding_context_injects_second_doc_for_issue_date_
     assert [chunk.chunk_id for chunk in collapsed] == ["sct169:body1", "sct169:body2", "sct295:page2"]
 
 
+def test_rerank_support_pages_within_selected_docs_prefers_page_one_for_named_metadata(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="companies:body",
+            doc_id="companies",
+            doc_title="Companies Law",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text="Body text mentioning updated provisions.",
+            retrieval_score=0.95,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="companies:title",
+            doc_id="companies",
+            doc_title="Companies Law",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="COMPANIES LAW. Last updated (consolidated version): March 2022.",
+            retrieval_score=0.83,
+            rerank_score=0.84,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="What is the title of DIFC Law No. 5 of 2018 and when was its consolidated version last updated?",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        used_ids=["companies:body"],
+    )
+
+    assert reranked_ids == ["companies:title"]
+
+
+def test_rerank_support_pages_within_selected_docs_picks_one_page_per_doc_for_compare(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="ca4:body",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:4",
+            text="Reasons about jurisdiction without any judge title markers.",
+            retrieval_score=0.97,
+            rerank_score=0.97,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ca4:title",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="ORDER WITH REASONS OF H.E. CHIEF JUSTICE WAYNE MARTIN",
+            retrieval_score=0.82,
+            rerank_score=0.83,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="arb34:body",
+            doc_id="arb-034",
+            doc_title="ARB 034/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="Return date hearing details without judge names.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="arb34:title",
+            doc_id="arb-034",
+            doc_title="ARB 034/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI",
+            retrieval_score=0.81,
+            rerank_score=0.82,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="Was the same judge involved in CA 004/2025 and ARB 034/2025?",
+        answer_type="boolean",
+        context_chunks=context_chunks,
+        used_ids=["ca4:body", "arb34:body"],
+    )
+
+    assert reranked_ids == ["ca4:title", "arb34:title"]
+
+
+def test_rerank_support_pages_within_selected_docs_skips_explicit_page_queries(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="arb34:page2",
+            doc_id="arb-034",
+            doc_title="ARB 034/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="Return date hearing details.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="arb34:title",
+            doc_id="arb-034",
+            doc_title="ARB 034/2025 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="ORDER WITH REASONS",
+            retrieval_score=0.81,
+            rerank_score=0.82,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="What is stated on page 2 of ARB 034/2025?",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        used_ids=["arb34:page2"],
+    )
+
+    assert reranked_ids == ["arb34:page2"]
+
+
 def test_collapse_doc_family_crowding_context_keeps_existing_doc_diversity(mock_settings):
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
