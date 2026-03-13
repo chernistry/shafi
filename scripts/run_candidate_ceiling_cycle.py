@@ -317,13 +317,14 @@ def _run_family_debug(
 
 def _combined_score(
     row: JsonDict,
-) -> tuple[float, float, float, float, float, float, float, float, float, float, int, int, str]:
+) -> tuple[float, float, float, float, float, float, float, float, float, float, float, int, int, str]:
     lineage_ok = bool(row.get("lineage_ok"))
     recommendation = str(row.get("recommendation") or "")
     recommendation_bonus = {"PROMISING": 2.0, "EXPERIMENTAL_NO_SUBMIT": 1.0}.get(recommendation.upper(), 0.0)
     return (
         1.0 if lineage_ok else 0.0,
         recommendation_bonus,
+        _coerce_float(row.get("paranoid_total_estimate")),
         _coerce_float(row.get("strict_total_estimate")),
         _coerce_float(row.get("upper_total_estimate")),
         float(_coerce_int(row.get("blindspot_support_undercoverage_case_count"))),
@@ -336,6 +337,25 @@ def _combined_score(
         -_coerce_int(row.get("answer_drift")),
         str(row.get("label") or ""),
     )
+
+
+def _paranoid_total_penalty(row: JsonDict) -> float:
+    page_drift = _coerce_int(row.get("page_drift"))
+    answer_drift = _coerce_int(row.get("answer_drift"))
+    page_p95 = _coerce_int(row.get("page_p95"))
+    still_mismatched = _coerce_int(row.get("still_mismatched_incorrect_count"))
+    recommendation = str(row.get("recommendation") or "").upper()
+    judge_timeout = bool(row.get("judge_timeout"))
+    penalty = 0.0
+    penalty += 0.0025 * page_drift
+    penalty += 0.0015 * answer_drift
+    penalty += 0.0020 * still_mismatched
+    penalty += 0.0010 * max(0, page_p95 - 4)
+    if recommendation != "PROMISING":
+        penalty += 0.0030
+    if judge_timeout:
+        penalty += 0.0040
+    return penalty
 
 
 def _rank_for_total(rows: list[LeaderboardRow], *, team_name: str, total: float) -> int:
@@ -372,6 +392,8 @@ def _candidate_score_estimates(
     upper_g = current_g + max(_coerce_float(row.get("hidden_g_all_delta")), _coerce_float(row.get("hidden_g_trusted_delta")))
     strict_total = strict_s * strict_g * current_t * current_f
     upper_total = upper_s * upper_g * current_t * current_f
+    paranoid_penalty = _paranoid_total_penalty(row)
+    paranoid_total = max(0.0, strict_total - paranoid_penalty)
 
     return {
         "strict_resolved_incorrect_qids": strict_resolved_qids,
@@ -382,10 +404,14 @@ def _candidate_score_estimates(
         "upper_s_estimate": upper_s,
         "strict_g_estimate": strict_g,
         "upper_g_estimate": upper_g,
+        "paranoid_total_penalty": paranoid_penalty,
+        "paranoid_total_estimate": paranoid_total,
+        "paranoid_total_delta": paranoid_total - current_total,
         "strict_total_estimate": strict_total,
         "upper_total_estimate": upper_total,
         "strict_total_delta": strict_total - current_total,
         "upper_total_delta": upper_total - current_total,
+        "paranoid_rank_estimate": _rank_for_total(leaderboard_rows, team_name=team_name, total=paranoid_total),
         "strict_rank_estimate": _rank_for_total(leaderboard_rows, team_name=team_name, total=strict_total),
         "upper_rank_estimate": _rank_for_total(leaderboard_rows, team_name=team_name, total=upper_total),
         "strict_exactness_basis": exactness_basis,
@@ -419,15 +445,19 @@ def _render_markdown(
         )
     lines.extend(
         [
-            "| Rank | Label | Recommendation | Lineage | Strict Total | Upper Total | Strict Rank | Upper Rank | Blindspot Gains | SU Blindspots | Hidden-G Trusted Δ | Hidden-G All Δ | Judge Pass Δ | Judge Grounding Δ | Resolved Exactness | Answer Drift | Page Drift | Page p95 |",
-            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "| Rank | Label | Recommendation | Lineage | Paranoid Total | Strict Total | Upper Total | Paranoid Rank | Strict Rank | Upper Rank | Blindspot Gains | SU Blindspots | Hidden-G Trusted Δ | Hidden-G All Δ | Judge Pass Δ | Judge Grounding Δ | Resolved Exactness | Answer Drift | Page Drift | Page p95 |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for index, row in enumerate(sorted(rows, key=_combined_score, reverse=True), start=1):
+        paranoid_total = row.get("paranoid_total_estimate")
+        paranoid_rank = row.get("paranoid_rank_estimate")
         strict_total = row.get("strict_total_estimate")
         upper_total = row.get("upper_total_estimate")
         strict_rank = row.get("strict_rank_estimate")
         upper_rank = row.get("upper_rank_estimate")
+        paranoid_total_cell = f"{_coerce_float(paranoid_total):.6f}" if paranoid_total is not None else "n/a"
+        paranoid_rank_cell = str(_coerce_int(paranoid_rank)) if paranoid_rank is not None else "n/a"
         strict_total_cell = f"{_coerce_float(strict_total):.6f}" if strict_total is not None else "n/a"
         upper_total_cell = f"{_coerce_float(upper_total):.6f}" if upper_total is not None else "n/a"
         strict_rank_cell = str(_coerce_int(strict_rank)) if strict_rank is not None else "n/a"
@@ -435,7 +465,7 @@ def _render_markdown(
         lines.append(
             "| "
             f"{index} | `{row['label']}` | `{row['recommendation']}` | `{row['lineage_ok']}` | "
-            f"{strict_total_cell} | {upper_total_cell} | {strict_rank_cell} | {upper_rank_cell} | "
+            f"{paranoid_total_cell} | {strict_total_cell} | {upper_total_cell} | {paranoid_rank_cell} | {strict_rank_cell} | {upper_rank_cell} | "
             f"{_coerce_int(row.get('blindspot_improved_case_count'))} | {_coerce_int(row.get('blindspot_support_undercoverage_case_count'))} | "
             f"{_coerce_float(row.get('hidden_g_trusted_delta')):.4f} | {_coerce_float(row.get('hidden_g_all_delta')):.4f} | "
             f"{_coerce_float(row.get('judge_pass_delta')):+.4f} | {_coerce_float(row.get('judge_grounding_delta')):+.4f} | "
@@ -591,6 +621,7 @@ def main() -> int:
         row["judge_accuracy_delta"] = family.get("judge_accuracy_delta", 0.0)
         row["citation_delta"] = family.get("citation_delta", 0.0)
         row["format_delta"] = family.get("format_delta", 0.0)
+        row["judge_timeout"] = family.get("judge_timeout", False)
 
     ranked = sorted(rows, key=_combined_score, reverse=True)
     payload = {
