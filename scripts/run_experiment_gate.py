@@ -6,14 +6,25 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 try:
     from score_page_benchmark import CaseScore, _load_benchmark, _score_case
+    from staged_eval_runner import (
+        evaluate_stage_sequence,
+        prepare_measured_stage,
+        prepare_precondition_stage,
+    )
 except ModuleNotFoundError:  # pragma: no cover - import path differs under pytest/module import
     from scripts.score_page_benchmark import CaseScore, _load_benchmark, _score_case
+    from scripts.staged_eval_runner import (
+        evaluate_stage_sequence,
+        prepare_measured_stage,
+        prepare_precondition_stage,
+    )
 
 JsonDict = dict[str, object]
+PreconditionStatus = Literal["passed", "blocked", "assumed_passed"]
 
 
 @dataclass(frozen=True)
@@ -46,6 +57,9 @@ class ExperimentRecord:
     label: str
     baseline_label: str
     recommendation: str
+    blocked_stage: str | None
+    block_reason: str | None
+    should_run_stage3: bool
     answer_changed_count: int
     retrieval_page_projection_changed_count: int
     benchmark_all_baseline: float
@@ -497,24 +511,66 @@ def _blindspot_support_summary(
 
 def _recommendation(
     *,
+    static_safety_status: str,
+    static_safety_reason: str | None,
+    impact_canary_status: str,
+    impact_canary_reason: str | None,
+    impact_canary_pack: str | None,
     baseline_trusted: BenchmarkSummary,
     candidate_trusted: BenchmarkSummary,
     answer_changed_count: int,
     baseline_page_p95: int | None,
     candidate_page_p95: int | None,
-) -> tuple[str, list[str]]:
+) -> tuple[str, list[str], JsonDict]:
     notes: list[str] = []
+    page_shape_block = (
+        baseline_page_p95 is not None
+        and candidate_page_p95 is not None
+        and candidate_page_p95 > baseline_page_p95 + 1
+    )
+    stage2_reason: str | None = None
     if candidate_trusted.page_f_beta + 1e-9 < baseline_trusted.page_f_beta:
-        notes.append("trusted hidden-G benchmark regressed")
-        return "NO_SUBMIT", notes
-    if baseline_page_p95 is not None and candidate_page_p95 is not None and candidate_page_p95 > baseline_page_p95 + 1:
-        notes.append("page p95 widened beyond safe bound")
-        return "NO_SUBMIT", notes
+        stage2_reason = "trusted hidden-G benchmark regressed"
+    elif page_shape_block:
+        stage2_reason = "page p95 widened beyond safe bound"
+
+    staged_eval = evaluate_stage_sequence(
+        [
+            prepare_precondition_stage(
+                key="stage0_static_safety",
+                status=_precondition_status(static_safety_status),
+                reason=static_safety_reason,
+            ),
+            prepare_precondition_stage(
+                key="stage1_impact_routed_canary",
+                status=_precondition_status(impact_canary_status),
+                reason=impact_canary_reason,
+                details={"pack": impact_canary_pack} if impact_canary_pack else {},
+            ),
+            prepare_measured_stage(
+                key="stage2_changed_set_truth",
+                passed=stage2_reason is None,
+                reason=stage2_reason,
+                details={
+                    "trusted_hidden_g_baseline": baseline_trusted.page_f_beta,
+                    "trusted_hidden_g_candidate": candidate_trusted.page_f_beta,
+                    "baseline_page_p95": baseline_page_p95,
+                    "candidate_page_p95": candidate_page_p95,
+                    "answer_changed_count": answer_changed_count,
+                },
+            ),
+        ]
+    )
+    blocked_stage = str(staged_eval.get("blocked_stage") or "").strip()
+    block_reason = str(staged_eval.get("block_reason") or "").strip()
+    if blocked_stage:
+        notes.append(block_reason or f"{blocked_stage} blocked")
+        return "NO_SUBMIT", notes, staged_eval
     if answer_changed_count > 0:
         notes.append("answer drift detected; candidate is exploratory only")
-        return "EXPERIMENTAL_NO_SUBMIT", notes
+        return "EXPERIMENTAL_NO_SUBMIT", notes, staged_eval
     notes.append("trusted benchmark non-inferior and no answer drift detected")
-    return "PROMISING", notes
+    return "PROMISING", notes, staged_eval
 
 
 def _render_report(
@@ -532,6 +588,7 @@ def _render_report(
     seed_deltas: list[SeedCaseDelta],
     recommendation: str,
     notes: list[str],
+    staged_eval: JsonDict,
     scaffold_improved_cases: list[str],
     blindspot_improved_cases: list[str],
     blindspot_support_undercoverage_cases: list[str],
@@ -565,12 +622,28 @@ def _render_report(
         f"- Baseline page p95: `{baseline_page_p95 if baseline_page_p95 is not None else 'n/a'}`",
         f"- Candidate page p95: `{candidate_page_p95 if candidate_page_p95 is not None else 'n/a'}`",
         "",
+        "## Staged Eval",
+        "",
+        f"- Blocked stage: `{staged_eval.get('blocked_stage') or 'none'}`",
+        f"- Block reason: `{staged_eval.get('block_reason') or 'none'}`",
+        f"- Should run Stage 3: `{staged_eval.get('should_run_stage3')}`",
+        "",
         "## Anchor Seed Slice",
         "",
         f"- Improved seed cases: `{len(improved)}`",
         f"- Equivalent seed cases: `{len(equivalent)}`",
         f"- Regressed seed cases: `{len(regressed)}`",
     ]
+    stage_results = cast("list[JsonDict]", staged_eval.get("stage_results") or [])
+    if stage_results:
+        lines.extend(["### Stage Status", ""])
+        for stage in stage_results:
+            stage_label = str(stage.get("label") or stage.get("key") or "").strip()
+            status = str(stage.get("status") or "").strip()
+            block_reason = str(stage.get("block_reason") or "").strip()
+            suffix = f" ({block_reason})" if block_reason else ""
+            lines.append(f"- {stage_label}: `{status}`{suffix}")
+        lines.append("")
     if improved:
         lines.extend([f"- Improved IDs: `{', '.join(improved)}`", ""])
     if equivalent:
@@ -636,6 +709,7 @@ def _report_payload(
     seed_deltas: list[SeedCaseDelta],
     recommendation: str,
     notes: list[str],
+    staged_eval: JsonDict,
     scaffold_improved_cases: list[str],
     blindspot_improved_cases: list[str],
     blindspot_support_undercoverage_cases: list[str],
@@ -656,6 +730,7 @@ def _report_payload(
         "benchmark_trusted_candidate": candidate_trusted.page_f_beta,
         "baseline_page_p95": baseline_page_p95,
         "candidate_page_p95": candidate_page_p95,
+        "staged_eval": staged_eval,
         "improved_seed_cases": improved,
         "equivalent_seed_cases": equivalent,
         "regressed_seed_cases": regressed,
@@ -705,6 +780,13 @@ def _seed_qids(args: argparse.Namespace) -> list[str]:
     return qids
 
 
+def _precondition_status(value: object) -> PreconditionStatus:
+    text = str(value or "assumed_passed").strip()
+    if text not in {"passed", "blocked", "assumed_passed"}:
+        raise ValueError(f"Unsupported precondition status: {text}")
+    return cast("PreconditionStatus", text)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a bounded experiment gate for branch-vs-baseline RAG artifacts.")
     parser.add_argument("--label", required=True, help="Short label for the candidate experiment.")
@@ -718,6 +800,19 @@ def main() -> None:
     parser.add_argument("--candidate-scaffold", type=Path, default=None)
     parser.add_argument("--baseline-preflight", type=Path, default=None)
     parser.add_argument("--candidate-preflight", type=Path, default=None)
+    parser.add_argument(
+        "--static-safety-status",
+        choices=["passed", "blocked", "assumed_passed"],
+        default="assumed_passed",
+    )
+    parser.add_argument("--static-safety-reason", default=None)
+    parser.add_argument(
+        "--impact-canary-status",
+        choices=["passed", "blocked", "assumed_passed"],
+        default="assumed_passed",
+    )
+    parser.add_argument("--impact-canary-reason", default=None)
+    parser.add_argument("--impact-canary-pack", default=None)
     parser.add_argument("--seed-qid", action="append", default=[])
     parser.add_argument("--seed-qids-file", "--seed-qid-file", dest="seed_qids_file", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=None)
@@ -747,7 +842,12 @@ def main() -> None:
         candidate_raw_results_path=args.candidate_raw_results,
         seed_qids=_seed_qids(args),
     )
-    recommendation, notes = _recommendation(
+    recommendation, notes, staged_eval = _recommendation(
+        static_safety_status=args.static_safety_status,
+        static_safety_reason=args.static_safety_reason,
+        impact_canary_status=args.impact_canary_status,
+        impact_canary_reason=args.impact_canary_reason,
+        impact_canary_pack=args.impact_canary_pack,
         baseline_trusted=baseline_trusted,
         candidate_trusted=candidate_trusted,
         answer_changed_count=answer_changed_count,
@@ -768,6 +868,7 @@ def main() -> None:
         seed_deltas=seed_deltas,
         recommendation=recommendation,
         notes=notes,
+        staged_eval=staged_eval,
         scaffold_improved_cases=scaffold_improved_cases,
         blindspot_improved_cases=blindspot_improved_cases,
         blindspot_support_undercoverage_cases=blindspot_support_undercoverage_cases,
@@ -787,6 +888,7 @@ def main() -> None:
         seed_deltas=seed_deltas,
         recommendation=recommendation,
         notes=notes,
+        staged_eval=staged_eval,
         scaffold_improved_cases=scaffold_improved_cases,
         blindspot_improved_cases=blindspot_improved_cases,
         blindspot_support_undercoverage_cases=blindspot_support_undercoverage_cases,
@@ -801,11 +903,15 @@ def main() -> None:
         args.out_json.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     if args.ledger_json is not None:
+        staged_eval_payload = cast("JsonDict", report_payload["staged_eval"])
         record = ExperimentRecord(
             timestamp_utc=datetime.now(UTC).isoformat(),
             label=args.label,
             baseline_label=args.baseline_label,
             recommendation=recommendation,
+            blocked_stage=cast("str | None", staged_eval_payload.get("blocked_stage")),
+            block_reason=cast("str | None", staged_eval_payload.get("block_reason")),
+            should_run_stage3=bool(staged_eval_payload.get("should_run_stage3")),
             answer_changed_count=answer_changed_count,
             retrieval_page_projection_changed_count=retrieval_projection_changed_count,
             benchmark_all_baseline=baseline_all.page_f_beta,
