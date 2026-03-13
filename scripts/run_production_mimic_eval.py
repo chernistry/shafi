@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -18,6 +22,21 @@ from rag_challenge.eval.production_mimic import (
     build_public_history_calibration,
     estimate_production_mimic,
 )
+
+
+@dataclass(frozen=True)
+class CandidateEvalTask:
+    leaderboard: str
+    team_name: str
+    candidate_cycle_json: str
+    candidate_label: str
+    exactness_json: str | None
+    equivalence_json: str | None
+    cheap_eval_json: str | None
+    strict_eval_json: str | None
+    history_json: str | None
+    scaffold_json: str | None
+    page_trace_json: str | None
 
 
 def _load_json(path: Path | None) -> JsonDict | None:
@@ -70,6 +89,12 @@ def _load_candidate_row(path: Path, *, label: str) -> JsonDict:
         if str(row.get("label") or "").strip() == label:
             return row
     raise ValueError(f"Candidate label not found in {path}: {label}")
+
+
+def _resolve_optional_path(raw: str | None) -> Path | None:
+    if raw is None:
+        return None
+    return Path(raw).expanduser()
 
 
 def _rank_for_total(
@@ -181,12 +206,108 @@ def _render_markdown(
     return "\n".join(lines) + "\n"
 
 
+def _build_payload_for_task(task: CandidateEvalTask) -> tuple[str, JsonDict, str]:
+    leaderboard_path = Path(task.leaderboard).expanduser()
+    subject_summary = build_leaderboard_summary(load_leaderboard_rows(leaderboard_path), team_name=task.team_name)
+    candidate_row = _load_candidate_row(Path(task.candidate_cycle_json).expanduser(), label=task.candidate_label)
+    calibration = build_public_history_calibration(_load_history_rows(_resolve_optional_path(task.history_json)))
+    raw_results_path = Path(str(candidate_row.get("raw_results") or "")).expanduser()
+    raw_results_payload = _load_json_list(raw_results_path if raw_results_path.exists() else None)
+    result = estimate_production_mimic(
+        subject_summary=subject_summary,
+        candidate_row=candidate_row,
+        exactness_report=_load_json(_resolve_optional_path(task.exactness_json)),
+        equivalence_report=_load_json(_resolve_optional_path(task.equivalence_json)),
+        cheap_eval_payload=_load_json(_resolve_optional_path(task.cheap_eval_json)),
+        strict_eval_payload=_load_json(_resolve_optional_path(task.strict_eval_json)),
+        calibration=calibration,
+        raw_results_payload=raw_results_payload,
+        scaffold_payload=_load_json(_resolve_optional_path(task.scaffold_json)),
+        page_trace_payload=_load_json(_resolve_optional_path(task.page_trace_json)),
+    )
+    result["platform_like_rank_estimate"] = _rank_for_total(
+        leaderboard_path=leaderboard_path,
+        team_name=task.team_name,
+        total=cast("float", result.get("platform_like_total_estimate", 0.0)),
+    )
+    result["strict_rank_estimate"] = _rank_for_total(
+        leaderboard_path=leaderboard_path,
+        team_name=task.team_name,
+        total=cast("float", result.get("strict_total_estimate", 0.0)),
+    )
+    result["paranoid_rank_estimate"] = _rank_for_total(
+        leaderboard_path=leaderboard_path,
+        team_name=task.team_name,
+        total=cast("float", result.get("paranoid_total_estimate", 0.0)),
+    )
+    payload: JsonDict = {
+        "leaderboard": str(leaderboard_path),
+        "team_name": task.team_name,
+        "candidate_label": task.candidate_label,
+        "candidate_row": candidate_row,
+        "calibration": calibration,
+        "production_mimic": result,
+        "parallel_eval_mode": "offline_only",
+        "canonical_candidate_build_concurrency": 1,
+    }
+    markdown = _render_markdown(
+        label=task.candidate_label,
+        leaderboard_path=leaderboard_path,
+        team_name=task.team_name,
+        production_mimic=result,
+    )
+    return task.candidate_label, payload, markdown
+
+
+def _evaluate_tasks(tasks: list[CandidateEvalTask], *, parallel_workers: int) -> list[tuple[str, JsonDict, str]]:
+    if parallel_workers <= 1 or len(tasks) <= 1:
+        return [_build_payload_for_task(task) for task in tasks]
+    worker_count = min(parallel_workers, len(tasks))
+    with ProcessPoolExecutor(max_workers=worker_count, mp_context=multiprocessing.get_context("spawn")) as executor:
+        return list(executor.map(_build_payload_for_task, tasks))
+
+
+def _json_text(payload: JsonDict) -> str:
+    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
+def _payload_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _render_batch_markdown(*, labels: list[str], parallel_workers: int, batch_summary: JsonDict) -> str:
+    artifacts = cast("list[JsonDict]", batch_summary.get("artifacts") or [])
+    lines = [
+        "# Production-Mimic Batch Eval",
+        "",
+        f"- labels: `{labels}`",
+        f"- parallel_workers_used: `{parallel_workers}`",
+        "- parallel_eval_mode: `offline_only`",
+        "- canonical_candidate_build_concurrency: `1`",
+        "- deterministic_inputs_sorted: `true`",
+        "",
+        "## Artifacts",
+        "",
+    ]
+    for row in artifacts:
+        lines.extend(
+            [
+                f"### `{row['candidate_label']}`",
+                f"- json_path: `{row['out_json']}`",
+                f"- markdown_path: `{row['out_md']}`",
+                f"- json_sha256: `{row['json_sha256']}`",
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a strict production-like local evaluation envelope for one candidate.")
     parser.add_argument("--leaderboard", type=Path, required=True)
     parser.add_argument("--team", required=True)
     parser.add_argument("--candidate-cycle-json", type=Path, required=True)
-    parser.add_argument("--candidate-label", required=True)
+    parser.add_argument("--candidate-label", action="append", required=True)
     parser.add_argument("--exactness-json", type=Path, default=None)
     parser.add_argument("--equivalence-json", type=Path, default=None)
     parser.add_argument("--cheap-eval-json", type=Path, default=None)
@@ -194,63 +315,81 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--history-json", type=Path, default=None)
     parser.add_argument("--scaffold-json", type=Path, default=None)
     parser.add_argument("--page-trace-json", type=Path, default=None)
-    parser.add_argument("--out-json", type=Path, required=True)
-    parser.add_argument("--out-md", type=Path, required=True)
+    parser.add_argument("--out-json", type=Path, default=None)
+    parser.add_argument("--out-md", type=Path, default=None)
+    parser.add_argument("--batch-out-dir", type=Path, default=None)
+    parser.add_argument("--parallel-workers", type=int, default=1)
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    subject_summary = build_leaderboard_summary(load_leaderboard_rows(args.leaderboard), team_name=args.team)
-    candidate_row = _load_candidate_row(args.candidate_cycle_json, label=args.candidate_label)
-    calibration = build_public_history_calibration(_load_history_rows(args.history_json))
-    raw_results_path = Path(str(candidate_row.get("raw_results") or "")).expanduser()
-    raw_results_payload = _load_json_list(raw_results_path if raw_results_path.exists() else None)
-    result = estimate_production_mimic(
-        subject_summary=subject_summary,
-        candidate_row=candidate_row,
-        exactness_report=_load_json(args.exactness_json),
-        equivalence_report=_load_json(args.equivalence_json),
-        cheap_eval_payload=_load_json(args.cheap_eval_json),
-        strict_eval_payload=_load_json(args.strict_eval_json),
-        calibration=calibration,
-        raw_results_payload=raw_results_payload,
-        scaffold_payload=_load_json(args.scaffold_json),
-        page_trace_payload=_load_json(args.page_trace_json),
-    )
-    result["platform_like_rank_estimate"] = _rank_for_total(
-        leaderboard_path=args.leaderboard,
-        team_name=args.team,
-        total=cast("float", result.get("platform_like_total_estimate", 0.0)),
-    )
-    result["strict_rank_estimate"] = _rank_for_total(
-        leaderboard_path=args.leaderboard,
-        team_name=args.team,
-        total=cast("float", result.get("strict_total_estimate", 0.0)),
-    )
-    result["paranoid_rank_estimate"] = _rank_for_total(
-        leaderboard_path=args.leaderboard,
-        team_name=args.team,
-        total=cast("float", result.get("paranoid_total_estimate", 0.0)),
-    )
-    payload: JsonDict = {
-        "leaderboard": str(args.leaderboard),
-        "team_name": args.team,
-        "candidate_label": args.candidate_label,
-        "candidate_row": candidate_row,
-        "calibration": calibration,
-        "production_mimic": result,
-    }
-    args.out_json.parent.mkdir(parents=True, exist_ok=True)
-    args.out_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    args.out_md.parent.mkdir(parents=True, exist_ok=True)
-    args.out_md.write_text(
-        _render_markdown(
-            label=args.candidate_label,
-            leaderboard_path=args.leaderboard,
+    labels = sorted({label.strip() for label in args.candidate_label if label.strip()})
+    tasks = [
+        CandidateEvalTask(
+            leaderboard=str(args.leaderboard.resolve()),
             team_name=args.team,
-            production_mimic=result,
-        ),
+            candidate_cycle_json=str(args.candidate_cycle_json.resolve()),
+            candidate_label=label,
+            exactness_json=None if args.exactness_json is None else str(args.exactness_json.resolve()),
+            equivalence_json=None if args.equivalence_json is None else str(args.equivalence_json.resolve()),
+            cheap_eval_json=None if args.cheap_eval_json is None else str(args.cheap_eval_json.resolve()),
+            strict_eval_json=None if args.strict_eval_json is None else str(args.strict_eval_json.resolve()),
+            history_json=None if args.history_json is None else str(args.history_json.resolve()),
+            scaffold_json=None if args.scaffold_json is None else str(args.scaffold_json.resolve()),
+            page_trace_json=None if args.page_trace_json is None else str(args.page_trace_json.resolve()),
+        )
+        for label in labels
+    ]
+    results = _evaluate_tasks(tasks, parallel_workers=max(1, int(args.parallel_workers)))
+
+    if args.batch_out_dir is None:
+        if len(results) != 1:
+            raise ValueError("Single-output mode requires exactly one --candidate-label; use --batch-out-dir for multiple labels")
+        if args.out_json is None or args.out_md is None:
+            raise ValueError("--out-json and --out-md are required in single-output mode")
+        _label, payload, markdown = results[0]
+        args.out_json.parent.mkdir(parents=True, exist_ok=True)
+        args.out_json.write_text(_json_text(payload), encoding="utf-8")
+        args.out_md.parent.mkdir(parents=True, exist_ok=True)
+        args.out_md.write_text(markdown, encoding="utf-8")
+        return 0
+
+    batch_out_dir = args.batch_out_dir.resolve()
+    batch_out_dir.mkdir(parents=True, exist_ok=True)
+    artifacts: list[JsonDict] = []
+    worker_count = min(max(1, int(args.parallel_workers)), len(results))
+    for label, payload, markdown in results:
+        candidate_dir = batch_out_dir / label
+        out_json = candidate_dir / "production_mimic.json"
+        out_md = candidate_dir / "production_mimic.md"
+        relative_json = f"{label}/production_mimic.json"
+        relative_md = f"{label}/production_mimic.md"
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        json_text = _json_text(payload)
+        out_json.write_text(json_text, encoding="utf-8")
+        out_md.write_text(markdown, encoding="utf-8")
+        artifacts.append(
+            {
+                "candidate_label": label,
+                "out_json": relative_json,
+                "out_md": relative_md,
+                "json_sha256": _payload_sha256(json_text),
+            }
+        )
+    batch_summary: JsonDict = {
+        "leaderboard": str(args.leaderboard.resolve()),
+        "team_name": args.team,
+        "labels": labels,
+        "parallel_eval_mode": "offline_only",
+        "parallel_workers_used": worker_count,
+        "canonical_candidate_build_concurrency": 1,
+        "deterministic_inputs_sorted": True,
+        "artifacts": artifacts,
+    }
+    (batch_out_dir / "batch_summary.json").write_text(_json_text(batch_summary), encoding="utf-8")
+    (batch_out_dir / "batch_summary.md").write_text(
+        _render_batch_markdown(labels=labels, parallel_workers=worker_count, batch_summary=batch_summary),
         encoding="utf-8",
     )
     return 0

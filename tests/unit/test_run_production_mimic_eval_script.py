@@ -367,3 +367,139 @@ def test_run_production_mimic_eval_skips_strict_judge_when_candidate_is_not_near
     assert report["judge"]["strict_present"] is False
     assert report["judge"]["pass_rate"] == 1.0
     assert report["judge_penalties"]["disagreement_penalty"] == 0.0
+
+
+def test_run_production_mimic_eval_batch_mode_is_byte_identical_with_parallel_workers(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    candidate_cycle = tmp_path / "cycle.json"
+    raw_results = tmp_path / "raw_results.json"
+    cheap_eval = tmp_path / "cheap_eval.json"
+    strict_eval = tmp_path / "strict_eval.json"
+    batch_a = tmp_path / "batch_a"
+    batch_b = tmp_path / "batch_b"
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","Leader","0.860000","1","0.70","0.920000","0.996","1.05","100","6","2026-03-12T10:00:00"\n'
+        '"8","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-12T14:56:17"\n',
+        encoding="utf-8",
+    )
+    raw_results.write_text(json.dumps([]), encoding="utf-8")
+    candidate_cycle.write_text(
+        json.dumps(
+            {
+                "ranked_candidates": [
+                    {
+                        "label": "cand_b",
+                        "branch_class": "offline_pack",
+                        "strict_total_estimate": 0.75,
+                        "upper_total_estimate": 0.76,
+                        "paranoid_total_estimate": 0.74,
+                        "hidden_g_trusted_delta": 0.01,
+                        "lineage_ok": True,
+                        "raw_results": str(raw_results),
+                    },
+                    {
+                        "label": "cand_a",
+                        "branch_class": "offline_pack",
+                        "strict_total_estimate": 0.77,
+                        "upper_total_estimate": 0.78,
+                        "paranoid_total_estimate": 0.76,
+                        "hidden_g_trusted_delta": 0.02,
+                        "lineage_ok": True,
+                        "raw_results": str(raw_results),
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    cheap_eval.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "citation_coverage": 1.0,
+                    "answer_type_format_compliance": 1.0,
+                    "grounding_g_score_beta_2_5": 0.9,
+                    "judge": {
+                        "cases": 1,
+                        "pass_rate": 1.0,
+                        "avg_accuracy": 5.0,
+                        "avg_grounding": 5.0,
+                        "judge_failures": 0,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    strict_eval.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "citation_coverage": 1.0,
+                    "answer_type_format_compliance": 1.0,
+                    "grounding_g_score_beta_2_5": 0.9,
+                    "judge": {
+                        "cases": 1,
+                        "pass_rate": 1.0,
+                        "avg_accuracy": 5.0,
+                        "avg_grounding": 5.0,
+                        "judge_failures": 0,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    base_cmd = [
+        sys.executable,
+        "scripts/run_production_mimic_eval.py",
+        "--leaderboard",
+        str(leaderboard),
+        "--team",
+        "Tzur Labs",
+        "--candidate-cycle-json",
+        str(candidate_cycle),
+        "--candidate-label",
+        "cand_b",
+        "--candidate-label",
+        "cand_a",
+        "--cheap-eval-json",
+        str(cheap_eval),
+        "--strict-eval-json",
+        str(strict_eval),
+        "--batch-out-dir",
+        str(batch_a),
+        "--parallel-workers",
+        "2",
+    ]
+    subprocess.run(
+        base_cmd,
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    rerun_cmd = list(base_cmd)
+    rerun_cmd[rerun_cmd.index(str(batch_a))] = str(batch_b)
+    subprocess.run(
+        rerun_cmd,
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    batch_a_summary = (batch_a / "batch_summary.json").read_bytes()
+    batch_b_summary = (batch_b / "batch_summary.json").read_bytes()
+    assert batch_a_summary == batch_b_summary
+    assert (batch_a / "cand_a" / "production_mimic.json").read_bytes() == (batch_b / "cand_a" / "production_mimic.json").read_bytes()
+    assert (batch_a / "cand_b" / "production_mimic.json").read_bytes() == (batch_b / "cand_b" / "production_mimic.json").read_bytes()
+
+    payload = json.loads(batch_a_summary.decode("utf-8"))
+    assert payload["parallel_workers_used"] == 2
+    assert payload["canonical_candidate_build_concurrency"] == 1
+    assert payload["deterministic_inputs_sorted"] is True
+    assert [row["candidate_label"] for row in payload["artifacts"]] == ["cand_a", "cand_b"]
