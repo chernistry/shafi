@@ -17,8 +17,17 @@ class CandidateSpec:
     raw_results: Path
 
 
-def _run(cmd: list[str], *, cwd: Path) -> None:
-    subprocess.run(cmd, cwd=str(cwd), check=True)
+def _run(cmd: list[str], *, cwd: Path, timeout_seconds: float | None = None) -> bool:
+    try:
+        subprocess.run(
+            cmd,
+            cwd=str(cwd),
+            check=True,
+            timeout=timeout_seconds if timeout_seconds and timeout_seconds > 0 else None,
+        )
+        return True
+    except subprocess.TimeoutExpired:
+        return False
 
 
 def _resolve(root: Path, raw: str | Path) -> Path:
@@ -66,8 +75,9 @@ def _judge(summary: JsonDict) -> JsonDict:
     return cast("JsonDict", judge_obj) if isinstance(judge_obj, dict) else {}
 
 
-def _candidate_sort_key(row: JsonDict) -> tuple[float, float, float, float, float, str]:
+def _candidate_sort_key(row: JsonDict) -> tuple[float, float, float, float, float, float, str]:
     return (
+        0.0 if bool(row.get("judge_timeout")) else 1.0,
         _coerce_float(row.get("judge_pass_delta")),
         _coerce_float(row.get("judge_grounding_delta")),
         _coerce_float(row.get("judge_accuracy_delta")),
@@ -86,14 +96,15 @@ def _render_markdown(*, family_label: str, include_qids_file: Path, rows: list[J
         f"- candidates: `{len(rows)}`",
         "- submission_policy: `NO_SUBMIT_WITHOUT_USER_APPROVAL`",
         "",
-        "| Rank | Candidate | Judge Pass | Judge Pass Δ | Judge Grounding | Judge Grounding Δ | Judge Accuracy Δ | Citation Δ | Format Δ | TTFT p50 Δ ms |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Rank | Candidate | Judge Timeout | Judge Pass | Judge Pass Δ | Judge Grounding | Judge Grounding Δ | Judge Accuracy Δ | Citation Δ | Format Δ | TTFT p50 Δ ms |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     ranked = sorted(rows, key=_candidate_sort_key, reverse=True)
     for index, row in enumerate(ranked, start=1):
         lines.append(
             "| "
             f"{index} | `{row['label']}` | "
+            f"`{row.get('judge_timeout', False)}` | "
             f"{row['judge_pass_rate']:.4f} | {row['judge_pass_delta']:+.4f} | "
             f"{row['judge_grounding']:.4f} | {row['judge_grounding_delta']:+.4f} | "
             f"{row['judge_accuracy_delta']:+.4f} | {row['citation_delta']:+.4f} | "
@@ -113,6 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate", action="append", default=[], help="label=path/to/raw_results.json")
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--judge-scope", choices=("all", "free_text", "none"), default="all")
+    parser.add_argument("--judge-timeout-seconds", type=float, default=0.0)
     parser.add_argument("--case-scope", choices=("changed", "all"), default="changed")
     parser.add_argument("--out-json", required=True)
     parser.add_argument("--out-md", required=True)
@@ -162,7 +174,18 @@ def main() -> int:
             "--include-qids-file",
             str(include_qids_file),
         ]
-        _run(cmd, cwd=root)
+        judge_timeout = False
+        completed = _run(
+            cmd,
+            cwd=root,
+            timeout_seconds=float(args.judge_timeout_seconds),
+        )
+        if not completed and str(args.judge_scope) != "none":
+            judge_timeout = True
+            fallback_cmd = list(cmd)
+            judge_scope_index = fallback_cmd.index("--judge-scope")
+            fallback_cmd[judge_scope_index + 1] = "none"
+            _run(fallback_cmd, cwd=root)
 
         if baseline_summary is None:
             baseline_summary = _load_summary(baseline_eval_path)
@@ -181,6 +204,7 @@ def main() -> int:
             "citation_delta": _coerce_float(candidate_summary.get("citation_coverage")) - _coerce_float(baseline_summary.get("citation_coverage")),
             "format_delta": _coerce_float(candidate_summary.get("answer_type_format_compliance")) - _coerce_float(baseline_summary.get("answer_type_format_compliance")),
             "ttft_p50_delta_ms": _coerce_float(candidate_summary.get("ttft_p50_ms")) - _coerce_float(baseline_summary.get("ttft_p50_ms")),
+            "judge_timeout": judge_timeout,
             "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
         }
         rows.append(row)
@@ -192,6 +216,7 @@ def main() -> int:
         "baseline_label": args.baseline_label,
         "case_scope": args.case_scope,
         "judge_scope": args.judge_scope,
+        "judge_timeout_seconds": float(args.judge_timeout_seconds),
         "ranked_candidates": ranked,
         "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
     }
