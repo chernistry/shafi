@@ -208,6 +208,7 @@ def _merge_records(
     page_source_raw_results: list[JsonDict],
     allowlisted_qids: set[str],
     page_allowlisted_qids: set[str],
+    page_source_pages_default: str,
 ) -> tuple[JsonDict, list[JsonDict], JsonDict]:
     answer_submission_by_id = _answers_by_id(answer_source_submission)
     page_submission_by_id = _answers_by_id(page_source_submission)
@@ -238,7 +239,9 @@ def _merge_records(
             raise ValueError(f"Missing matching records for question_id={qid}")
 
         use_page_source_answer = qid in allowlisted_qids
-        use_page_source_pages = not page_allowlisted_qids or qid in page_allowlisted_qids
+        use_page_source_pages = page_source_pages_default == "all" and not page_allowlisted_qids
+        if page_allowlisted_qids:
+            use_page_source_pages = qid in page_allowlisted_qids
         chosen_answer_record = page_record if use_page_source_answer else answer_record
         chosen_answer_raw = page_raw if use_page_source_answer else answer_raw
 
@@ -312,6 +315,7 @@ def main() -> None:
     parser.add_argument("--page-source-answer-qids-file", type=Path, default=None)
     parser.add_argument("--page-source-page-qid", action="append", default=[])
     parser.add_argument("--page-source-page-qids-file", type=Path, default=None)
+    parser.add_argument("--page-source-pages-default", choices=("all", "none"), default="all")
     parser.add_argument("--out-submission", type=Path, required=True)
     parser.add_argument("--out-raw-results", type=Path, required=True)
     parser.add_argument("--out-preflight", type=Path, required=True)
@@ -334,6 +338,7 @@ def main() -> None:
         page_source_raw_results=page_source_raw_results,
         allowlisted_qids=allowlisted_qids,
         page_allowlisted_qids=page_allowlisted_qids,
+        page_source_pages_default=str(args.page_source_pages_default),
     )
     merged_preflight = _build_preflight(
         merged_payload=merged_submission,
