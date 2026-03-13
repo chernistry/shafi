@@ -1884,6 +1884,39 @@ def test_cleanup_named_commencement_answer_strips_enactment_boilerplate_from_lab
     )
 
 
+def test_cleanup_named_enactment_date_answer_rebuilds_single_ref_notice_clause() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    chunks = [
+        RankedChunk(
+            chunk_id="personal:enactment",
+            doc_id="personal",
+            doc_title="PERSONAL PROPERTY LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                'This Law may be cited as the "Personal Property Law 2005". '
+                "Date of enactment. This Law is enacted on the date specified in the Enactment Notice in respect of this Law."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="**Document Title:** Personal Property Law 2005",
+        ),
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_enactment_date_answer(
+        "The law was enacted on the date specified elsewhere.",
+        question="On what date was the DIFC Personal Property Law 2005 enacted?",
+        chunks=chunks,
+        doc_refs=["DIFC Personal Property Law 2005"],
+    )
+
+    assert cleaned == (
+        "The date of enactment is the date specified in the Enactment Notice in respect of this Law "
+        "(cite: personal:enactment)"
+    )
+
+
 def test_cleanup_named_administration_answer_rebuilds_per_law_clauses() -> None:
     from rag_challenge.llm.generator import RAGGenerator
 
@@ -3041,6 +3074,147 @@ def test_cleanup_named_penalty_answer_prefers_doc_group_with_actual_penalty_clau
     assert cleaned == (
         "1. Strata Title Regulations: The penalty is 1,000 USD (cite: strata:detail)\n"
         "2. Leasing Regulations: The penalty is 10,000 USD (cite: leasing:detail)"
+    )
+
+
+def test_cleanup_named_penalty_answer_rebuilds_single_ref_clause_deterministically() -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    question = "What is the penalty for using leased premises for an illegal purpose under the Leasing Regulations?"
+    chunks = [
+        RankedChunk(
+            chunk_id="leasing:penalty",
+            doc_id="leasing",
+            doc_title="LEASING REGULATIONS",
+            doc_type=DocType.REGULATION,
+            section_path="page:5",
+            text="Use of the Leased Premises for any purpose that is illegal 10,000",
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="**Document Title:** Leasing Regulations",
+        )
+    ]
+
+    cleaned = RAGGenerator.cleanup_named_penalty_answer(
+        "",
+        question=question,
+        chunks=chunks,
+        doc_refs=["Leasing Regulations"],
+    )
+
+    assert cleaned == "The penalty is 10,000 USD (cite: leasing:penalty)"
+
+
+def test_build_structured_free_text_answer_handles_single_ref_fine_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="foundations:schedule",
+            doc_id="foundations",
+            doc_title="FOUNDATIONS LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:46",
+            text=(
+                "SCHEDULE 3 FINES AND FEES PART 1 "
+                "10(7) Person failing to provide a copy of assignment of rights $1,500"
+            ),
+            retrieval_score=0.99,
+            rerank_score=0.99,
+            doc_summary="This contract is the Foundations Law under DIFC Law No. 3 of 2018.",
+        ),
+        RankedChunk(
+            chunk_id="foundations:article",
+            doc_id="foundations",
+            doc_title="FOUNDATIONS LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:6",
+            text=(
+                "If rights are assigned under Article 10(6), the person assigning the rights must within a "
+                "period of thirty (30) days provide a copy of the assignment to the Registered Agent or, "
+                "if there is no Registered Agent, to the Registrar. A person who fails to comply with this "
+                "requirement is liable to a fine, as set out in Schedule 3."
+            ),
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="This contract is the Foundations Law under DIFC Law No. 3 of 2018.",
+        ),
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question=(
+            "Under the Foundations Law DIFC Law No. 3 of 2018, what is the maximum fine for failing to "
+            "provide a copy of an assignment of rights to the Registered Agent or Registrar within 30 days?"
+        ),
+        chunks=chunks,
+        doc_refs=["Law No. 3 of 2018"],
+    )
+
+    assert answer == "The penalty is 1,500 USD (cite: foundations:schedule)"
+
+
+def test_build_structured_free_text_answer_handles_single_doc_liability_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="gp:liable",
+            doc_id="general-partnership",
+            doc_title="GENERAL PARTNERSHIP LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:22",
+            text=(
+                "GENERAL PARTNERSHIP LAW Terms and Definitions. "
+                "Liable jointly and severally liable. "
+                "Partner includes all Partners of a General Partnership."
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="This contract, titled General Partnership Law 2004, governs general partnerships.",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="What kind of liability do Partners have under Article 28(1) of the General Partnership Law 2004?",
+        chunks=chunks,
+        doc_refs=["General Partnership Law 2004"],
+    )
+
+    assert answer == "Partners are jointly and severally liable. (cite: gp:liable)"
+
+
+def test_build_structured_free_text_answer_handles_single_doc_enactment_date_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="personal:enactment",
+            doc_id="personal-property",
+            doc_title="PERSONAL PROPERTY LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                'This Law may be cited as the "Personal Property Law 2005". '
+                "Date of enactment. This Law is enacted on the date specified in the Enactment Notice in respect of this Law."
+            ),
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="**Document Title:** Personal Property Law 2005",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="On what date was the DIFC Personal Property Law 2005 enacted?",
+        chunks=chunks,
+        doc_refs=["DIFC Personal Property Law 2005"],
+    )
+
+    assert answer == (
+        "The date of enactment is the date specified in the Enactment Notice in respect of this Law "
+        "(cite: personal:enactment)"
     )
 
 

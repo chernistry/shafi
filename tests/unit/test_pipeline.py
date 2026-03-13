@@ -1068,6 +1068,89 @@ def test_apply_support_shape_policy_forces_title_page_chunk_for_named_metadata_q
     assert flags == ["explicit_page_reference_forced", "explicit_page_reference_pruned"]
 
 
+@pytest.mark.asyncio
+async def test_generate_augments_strict_context_for_explicit_page_claim_origin(mock_settings) -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+
+    generator = MagicMock()
+    generator.generate = AsyncMock(return_value=("Claim No. CA 008/2023", []))
+    generator.extract_citations = MagicMock(return_value=[])
+    generator.extract_cited_chunk_ids = MagicMock(return_value=[])
+
+    builder = RAGPipelineBuilder(
+        retriever=MagicMock(),
+        reranker=MagicMock(),
+        generator=generator,
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="claim-origin", question_id="claim-origin", answer_type="name")
+    collector.set_retrieved_ids(["ca009:10:context", "ca009:1:origin"])
+    collector.set_context_ids(["ca009:10:context"])
+
+    result = await builder._generate(
+        {
+            "query": "According to page 2 of the judgment, from which specific claim number did the appeal in CA 009/2024 originate?",
+            "request_id": "claim-origin",
+            "question_id": "claim-origin",
+            "collector": collector,
+            "answer_type": "name",
+            "context_chunks": [
+                RankedChunk(
+                    chunk_id="ca009:10:context",
+                    doc_id="ca009",
+                    doc_title="CA 009/2024 Oskar v Oron",
+                    doc_type=DocType.CASE_LAW,
+                    section_path="page:11",
+                    text="Argument sections discussing officers and shareholders.",
+                    retrieval_score=0.96,
+                    rerank_score=0.96,
+                    doc_summary="",
+                )
+            ],
+            "retrieved": [
+                RetrievedChunk(
+                    chunk_id="ca009:10:context",
+                    doc_id="ca009",
+                    doc_title="CA 009/2024 Oskar v Oron",
+                    doc_type=DocType.CASE_LAW,
+                    section_path="page:11",
+                    text="Argument sections discussing officers and shareholders.",
+                    score=0.96,
+                    doc_summary="",
+                ),
+                RetrievedChunk(
+                    chunk_id="ca009:1:origin",
+                    doc_id="ca009",
+                    doc_title="CA 009/2024 Oskar v Oron",
+                    doc_type=DocType.CASE_LAW,
+                    section_path="page:2",
+                    text=(
+                        "UPON the hearing of the Appellant's appeal against the Order granting the relief "
+                        "sought by the Respondents in their Urgent Application of 1 April 2024 in Claim No. "
+                        'ENF-316-2023/2, (the "Application").'
+                    ),
+                    score=0.94,
+                    doc_summary="",
+                ),
+            ],
+            "doc_refs": ["CA 009/2024"],
+            "model": "gpt-4.1-mini",
+            "max_tokens": 64,
+            "complexity": QueryComplexity.SIMPLE,
+        }
+    )
+
+    telemetry = collector.finalize()
+
+    assert result["answer"] == "ENF-316-2023/2"
+    assert result["cited_chunk_ids"] == ["ca009:1:origin"]
+    assert "ca009:1:origin" in telemetry.context_chunk_ids
+    assert "ca009_2" in telemetry.context_page_ids
+    assert generator.generate.await_count == 0
+
+
 def test_apply_support_shape_policy_prunes_nonrequested_title_page_noise_when_title_page_already_present() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
