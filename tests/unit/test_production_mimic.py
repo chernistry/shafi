@@ -285,7 +285,11 @@ def test_estimate_production_mimic_penalizes_page_trace_and_citation_floor_failu
         cheap_eval_payload={
             "summary": {
                 "citation_coverage": 0.9,
-                "citation_coverage_by_answer_type": {"boolean": 0.75, "free_text": 0.7},
+                "citation_coverage_by_answer_type": {
+                    "boolean": 0.75,
+                    "free_text_structured": 0.65,
+                    "free_text_model": 0.62,
+                },
                 "answer_type_format_compliance": 1.0,
                 "grounding_g_score_beta_2_5": 0.83,
                 "judge": {
@@ -326,11 +330,76 @@ def test_estimate_production_mimic_penalizes_page_trace_and_citation_floor_failu
     )
 
     assert result["eval"]["citation_floor_failures"] == [
-        {"answer_type": "boolean", "observed": 0.75, "floor": 0.8, "gap": 0.05}
+        {"answer_type": "boolean", "observed": 0.75, "floor": 0.8, "gap": 0.05},
+        {"answer_type": "free_text_structured", "observed": 0.65, "floor": 0.7, "gap": 0.05},
     ]
+    assert result["eval"]["citation_hard_floor_blocked"] is True
+    assert result["eval"]["citation_page_trace_disagreement"] is True
+    assert result["eval"]["citation_page_trace_disagreement_penalty"] > 0.0
     assert result["page_trace"]["page_precision"] == 2 / 9
     assert result["page_trace"]["page_recall"] == 0.4
     assert result["submit_eligibility"] is False
     assert "citation floor miss" in str(result["no_submit_reason"])
+    assert "citation/page-trace disagreement requires explanation" in str(result["no_submit_reason"])
     assert "page-id precision below strict local floor" in str(result["no_submit_reason"])
     assert "changed-set page trace has no trusted page-id cases" in str(result["no_submit_reason"])
+
+
+def test_estimate_production_mimic_does_not_block_clean_strict_run_on_citation_floor() -> None:
+    result = estimate_production_mimic(
+        subject_summary={"total": 0.74156},
+        candidate_row={
+            "label": "clean_strict_candidate",
+            "strict_total_estimate": 0.79,
+            "upper_total_estimate": 0.80,
+            "paranoid_total_estimate": 0.785,
+            "hidden_g_trusted_delta": 0.02,
+            "page_drift": 0,
+            "lineage_ok": True,
+        },
+        exactness_report={"resolved_incorrect_qids": [], "still_mismatched_incorrect_qids": []},
+        equivalence_report={"safe_baselines": ["v6"]},
+        cheap_eval_payload={
+            "summary": {
+                "citation_coverage": 0.88,
+                "citation_coverage_by_answer_type": {"boolean": 0.82, "name": 0.9},
+                "answer_type_format_compliance": 1.0,
+                "grounding_g_score_beta_2_5": 0.9,
+                "judge": {
+                    "cases": 2,
+                    "pass_rate": 1.0,
+                    "avg_accuracy": 5.0,
+                    "avg_grounding": 5.0,
+                    "avg_clarity": 5.0,
+                    "avg_uncertainty_handling": 5.0,
+                    "judge_failures": 0,
+                },
+            }
+        },
+        strict_eval_payload=None,
+        calibration={},
+        page_trace_payload={
+            "summary": {
+                "cases_scored": 5,
+                "trusted_case_count": 5,
+                "gold_in_retrieved_count": 5,
+                "gold_in_reranked_count": 5,
+                "gold_in_used_count": 5,
+                "false_positive_case_count": 0,
+                "failure_stage_counts": {"retained_to_used": 5},
+                "stage_examples": {"retained_to_used": ["q1", "q2"]},
+                "explained_ratio": 1.0,
+            },
+            "records": [
+                {"qid": "q1", "gold_pages": ["docA_1"], "used_pages": ["docA_1"], "trust_tier": "trusted"},
+                {"qid": "q2", "gold_pages": ["docB_1"], "used_pages": ["docB_1"], "trust_tier": "trusted"},
+                {"qid": "q3", "gold_pages": ["docC_1"], "used_pages": ["docC_1"], "trust_tier": "trusted"},
+                {"qid": "q4", "gold_pages": ["docD_1"], "used_pages": ["docD_1"], "trust_tier": "trusted"},
+                {"qid": "q5", "gold_pages": ["docE_1"], "used_pages": ["docE_1"], "trust_tier": "trusted"},
+            ],
+        },
+    )
+
+    assert result["eval"]["citation_floor_failures"] == []
+    assert result["eval"]["citation_hard_floor_blocked"] is False
+    assert result["eval"]["citation_page_trace_disagreement"] is False

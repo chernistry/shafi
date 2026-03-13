@@ -13,7 +13,11 @@ _CITATION_FLOORS_BY_ANSWER_TYPE: dict[str, float] = {
     "names": 0.85,
     "date": 0.85,
     "number": 0.85,
+    "free_text_structured": 0.70,
+    "structured_free_text": 0.70,
     "free_text": 0.60,
+    "free_text_model": 0.60,
+    "model_free_text": 0.60,
 }
 
 
@@ -619,19 +623,45 @@ def build_public_history_calibration(rows: list[JsonDict]) -> JsonDict:
 
 def _citation_floor_failures(citation_coverage_by_answer_type: dict[str, float]) -> list[JsonDict]:
     failures: list[JsonDict] = []
+    seen: set[str] = set()
     for answer_type, floor in _CITATION_FLOORS_BY_ANSWER_TYPE.items():
+        canonical = "free_text_model" if answer_type in {"free_text", "free_text_model", "model_free_text"} else (
+            "free_text_structured" if answer_type in {"free_text_structured", "structured_free_text"} else answer_type
+        )
+        if canonical in seen:
+            continue
         observed = citation_coverage_by_answer_type.get(answer_type)
         if observed is None or observed + 1e-9 >= floor:
             continue
+        seen.add(canonical)
         failures.append(
             {
-                "answer_type": answer_type,
+                "answer_type": canonical,
                 "observed": round(observed, 4),
                 "floor": floor,
                 "gap": round(floor - observed, 4),
             }
         )
     return failures
+
+
+def _citation_page_trace_disagreement(
+    *,
+    citation_coverage: object,
+    page_trace: JsonDict,
+) -> tuple[bool, float]:
+    overall_citation = _as_float(citation_coverage, default=-1.0)
+    cases_scored = _as_int(page_trace.get("cases_scored"))
+    page_precision = _as_float(page_trace.get("page_precision"))
+    page_recall = _as_float(page_trace.get("page_recall"))
+    if overall_citation < 0.0 or cases_scored < 5:
+        return False, 0.0
+    if overall_citation < 0.75:
+        return False, 0.0
+    if page_precision >= 0.35 and page_recall >= 0.50:
+        return False, 0.0
+    penalty = min(0.01, 0.004 + 0.01 * max(0.0, overall_citation - min(page_precision, page_recall)))
+    return True, penalty
 
 
 def estimate_production_mimic(
@@ -688,6 +718,11 @@ def estimate_production_mimic(
         scaffold_payload=scaffold_payload,
     )
     citation_floor_failures = _citation_floor_failures(citation_coverage_by_answer_type)
+    citation_hard_floor_blocked = bool(citation_floor_failures)
+    citation_page_trace_disagreement, citation_page_trace_disagreement_penalty = _citation_page_trace_disagreement(
+        citation_coverage=citation_coverage,
+        page_trace=page_trace,
+    )
 
     extra_penalty = 0.0
     no_submit_reasons: list[str] = []
@@ -710,6 +745,9 @@ def estimate_production_mimic(
             "citation floor miss: "
             + ", ".join(f"{item.get('answer_type') or ''}<{_as_float(item.get('floor')):.2f}" for item in citation_floor_failures)
         )
+    if citation_page_trace_disagreement:
+        extra_penalty += citation_page_trace_disagreement_penalty
+        no_submit_reasons.append("citation/page-trace disagreement requires explanation")
     if grounding_g_score is not None and _as_float(grounding_g_score) < 0.8:
         extra_penalty += 0.004 * (0.8 - _as_float(grounding_g_score))
         no_submit_reasons.append("grounding score below strict local bar")
@@ -792,7 +830,7 @@ def estimate_production_mimic(
         and _as_float(candidate_row.get("hidden_g_trusted_delta")) >= 0.0
         and lineage_confidence == "high"
         and not unresolved_qids
-        and not citation_floor_failures
+        and not citation_hard_floor_blocked
         and not _as_bool(hybrid_judge.get("judge_timeout_or_failure"))
         and (pass_rate is None or _as_float(pass_rate) >= 1.0)
     )
@@ -836,6 +874,9 @@ def estimate_production_mimic(
             "citation_coverage": citation_coverage,
             "citation_coverage_by_answer_type": citation_coverage_by_answer_type,
             "citation_floor_failures": citation_floor_failures,
+            "citation_hard_floor_blocked": citation_hard_floor_blocked,
+            "citation_page_trace_disagreement": citation_page_trace_disagreement,
+            "citation_page_trace_disagreement_penalty": citation_page_trace_disagreement_penalty,
             "answer_type_format_compliance": format_compliance,
             "grounding_g_score_beta_2_5": grounding_g_score,
         },

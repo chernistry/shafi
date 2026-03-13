@@ -233,18 +233,26 @@ def _decide(
         hidden_g_trusted = cast("dict[str, object]", production_mimic.get("hidden_g_trusted") or {})
         exactness_block = cast("dict[str, object]", production_mimic.get("exactness") or {})
         judge_block = cast("dict[str, object]", production_mimic.get("judge") or {})
+        eval_block = cast("dict[str, object]", production_mimic.get("eval") or {})
         unresolved_qids = cast("list[object]", exactness_block.get("still_mismatched_incorrect_qids") or [])
         judge_timeout = bool(judge_block.get("judge_timeout_or_failure"))
+        citation_hard_floor_blocked = bool(eval_block.get("citation_hard_floor_blocked"))
+        citation_page_trace_disagreement = bool(eval_block.get("citation_page_trace_disagreement"))
         rationale.append(
             "production-like eval "
             f"candidate_class={candidate_class} lineage={lineage_confidence} "
             f"platform_like={platform_like_total:.6f} strict={strict_total:.6f} paranoid={paranoid_total:.6f}"
         )
+        if citation_hard_floor_blocked:
+            rationale.append("citation hard floor blocked promotion")
+        if citation_page_trace_disagreement:
+            rationale.append("citation/page-trace disagreement still requires explanation")
         if (
             platform_like_total > _as_float(subject_summary.get("total")) + 1e-9
             and _as_float(hidden_g_trusted.get("delta")) >= 0.0
             and not unresolved_qids
             and not judge_timeout
+            and not citation_hard_floor_blocked
         ):
             if lineage_confidence != "high":
                 rationale.append("candidate clears strict local bar except for lineage confidence")
