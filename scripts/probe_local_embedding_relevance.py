@@ -47,12 +47,14 @@ class CaseProbeResult:
 class ModelProbeSummary:
     model: str
     evaluated_cases: int
+    skipped_cases: int
     gold_top1_rate: float
     gold_top3_rate: float
     mean_best_gold_rank: float
     mean_gold_margin: float
     median_gold_margin: float
     failed_top1_question_ids: list[str]
+    skipped_question_ids: list[str]
 
 
 def _load_json(path: Path) -> JsonDict:
@@ -139,6 +141,50 @@ def _load_benchmark_cases(path: Path, *, trust_tier: str, question_ids: set[str]
         if str(case.get("trust_tier") or "").strip().lower() != trust_tier:
             continue
         out.append(case)
+    return out
+
+
+def _load_scaffold_cases(
+    path: Path,
+    *,
+    question_ids: set[str] | None,
+    manual_verdicts: set[str] | None,
+    failure_classes: set[str] | None,
+    max_cases: int | None,
+) -> list[JsonDict]:
+    payload = _load_json(path)
+    records_obj = payload.get("records")
+    if not isinstance(records_obj, list):
+        raise ValueError(f"Expected 'records' list in {path}")
+    out: list[JsonDict] = []
+    for raw_case in cast("list[object]", records_obj):
+        if not isinstance(raw_case, dict):
+            continue
+        case = cast("JsonDict", raw_case)
+        question_id = str(case.get("question_id") or "").strip()
+        if not question_id:
+            continue
+        if question_ids is not None and question_id not in question_ids:
+            continue
+        verdict = str(case.get("manual_verdict") or "").strip().lower()
+        if manual_verdicts is not None and verdict not in manual_verdicts:
+            continue
+        failure_class = str(case.get("failure_class") or "").strip()
+        if failure_classes is not None and failure_class not in failure_classes:
+            continue
+        gold_page_ids = _coerce_str_list(case.get("minimal_required_support_pages"))
+        if not gold_page_ids:
+            continue
+        out.append(
+            {
+                "question_id": question_id,
+                "gold_page_ids": gold_page_ids,
+                "source_manual_verdict": verdict,
+                "source_failure_class": failure_class,
+            }
+        )
+        if max_cases is not None and len(out) >= max_cases:
+            break
     return out
 
 
@@ -307,6 +353,7 @@ async def _probe_model(
     page_cache: dict[str, str] = {}
     page_count_cache: dict[str, int] = {}
     case_results: list[CaseProbeResult] = []
+    skipped_question_ids: list[str] = []
     for case in cases:
         question_id = str(case.get("question_id") or "").strip()
         question = question_map.get(question_id, "").strip()
@@ -343,14 +390,18 @@ async def _probe_model(
         if not distractor_page_ids:
             continue
         candidates: list[CandidatePage] = []
-        for page_id in gold_page_ids:
-            text = _extract_page_text(page_id, dataset_dir=dataset_dir, cache=page_cache)
-            if text:
-                candidates.append(CandidatePage(page_id=page_id, text=text, is_gold=True))
-        for page_id in distractor_page_ids:
-            text = _extract_page_text(page_id, dataset_dir=dataset_dir, cache=page_cache)
-            if text:
-                candidates.append(CandidatePage(page_id=page_id, text=text, is_gold=False))
+        try:
+            for page_id in gold_page_ids:
+                text = _extract_page_text(page_id, dataset_dir=dataset_dir, cache=page_cache)
+                if text:
+                    candidates.append(CandidatePage(page_id=page_id, text=text, is_gold=True))
+            for page_id in distractor_page_ids:
+                text = _extract_page_text(page_id, dataset_dir=dataset_dir, cache=page_cache)
+                if text:
+                    candidates.append(CandidatePage(page_id=page_id, text=text, is_gold=False))
+        except (FileNotFoundError, ValueError):
+            skipped_question_ids.append(question_id)
+            continue
         if len(candidates) <= len(gold_page_ids):
             continue
         embeddings = await _embed_texts(base_url, model=model, texts=[question, *[candidate.text for candidate in candidates]])
@@ -376,19 +427,22 @@ async def _probe_model(
     summary = ModelProbeSummary(
         model=model,
         evaluated_cases=len(case_results),
+        skipped_cases=len(skipped_question_ids),
         gold_top1_rate=top1_count / len(case_results),
         gold_top3_rate=top3_count / len(case_results),
         mean_best_gold_rank=mean_rank,
         mean_gold_margin=sum(result.gold_margin for result in case_results) / len(case_results),
         median_gold_margin=median_margin,
         failed_top1_question_ids=[result.question_id for result in case_results if not result.gold_top1],
+        skipped_question_ids=skipped_question_ids,
     )
     return summary, case_results
 
 
 def _render_report(
     *,
-    benchmark_path: Path,
+    case_source: str,
+    case_source_path: Path,
     raw_results_path: Path,
     summaries: list[ModelProbeSummary],
     case_results_by_model: dict[str, list[CaseProbeResult]],
@@ -406,7 +460,8 @@ def _render_report(
     lines = [
         "# Local Embedding Relevance Probe",
         "",
-        f"- benchmark: `{benchmark_path}`",
+        f"- case_source: `{case_source}`",
+        f"- case_source_path: `{case_source_path}`",
         f"- raw_results: `{raw_results_path}`",
         f"- models_compared: `{len(ranked)}`",
         f"- recommended_model: `{ranked[0].model}`",
@@ -430,6 +485,7 @@ def _render_report(
                 f"## {summary.model}",
                 "",
                 f"- evaluated_cases: `{summary.evaluated_cases}`",
+                f"- skipped_cases: `{summary.skipped_cases}`",
                 f"- top1_rate: `{summary.gold_top1_rate:.3f}`",
                 f"- top3_rate: `{summary.gold_top3_rate:.3f}`",
                 f"- mean_gold_margin: `{summary.mean_gold_margin:.4f}`",
@@ -447,7 +503,18 @@ def _render_report(
 async def _main_async(args: argparse.Namespace) -> tuple[list[ModelProbeSummary], dict[str, list[CaseProbeResult]]]:
     selected_qids = set(args.question_id or [])
     question_ids = selected_qids if selected_qids else None
-    cases = _load_benchmark_cases(args.benchmark, trust_tier=args.trust_tier, question_ids=question_ids)
+    if args.case_source == "benchmark":
+        cases = _load_benchmark_cases(args.benchmark, trust_tier=args.trust_tier, question_ids=question_ids)
+    else:
+        manual_verdicts = {value.strip().lower() for value in args.manual_verdict if value.strip()} if args.manual_verdict else None
+        failure_classes = {value.strip() for value in args.failure_class if value.strip()} if args.failure_class else None
+        cases = _load_scaffold_cases(
+            args.scaffold,
+            question_ids=question_ids,
+            manual_verdicts=manual_verdicts,
+            failure_classes=failure_classes,
+            max_cases=args.max_cases,
+        )
     question_map = _load_questions(args.questions)
     raw_results_by_qid = _load_raw_results(args.raw_results)
     summaries: list[ModelProbeSummary] = []
@@ -470,12 +537,17 @@ async def _main_async(args: argparse.Namespace) -> tuple[list[ModelProbeSummary]
 def main() -> None:
     parser = argparse.ArgumentParser(description="Probe local embedding models on trusted gold-page relevance.")
     parser.add_argument("--model", action="append", required=True, help="Embedding model to evaluate. Repeat for multiple models.")
+    parser.add_argument("--case-source", choices=("benchmark", "scaffold"), default="benchmark")
     parser.add_argument("--benchmark", type=Path, default=ROOT / "tests/fixtures/internal_hidden_g_benchmark_seed.json")
+    parser.add_argument("--scaffold", type=Path, default=ROOT / "platform_runs/warmup/truth_audit_scaffold.json")
     parser.add_argument("--questions", type=Path, default=ROOT / "platform_runs/warmup/questions.json")
     parser.add_argument("--raw-results", type=Path, default=ROOT / "platform_runs/warmup/raw_results_v6_context_seed.json")
     parser.add_argument("--dataset-dir", type=Path, default=ROOT / "dataset/dataset_documents")
     parser.add_argument("--base-url", default="http://127.0.0.1:11434")
     parser.add_argument("--trust-tier", default="trusted")
+    parser.add_argument("--manual-verdict", action="append", default=None, help="Optional scaffold manual verdict filter.")
+    parser.add_argument("--failure-class", action="append", default=None, help="Optional scaffold failure_class filter.")
+    parser.add_argument("--max-cases", type=int, default=None)
     parser.add_argument("--question-id", action="append", default=None, help="Optional question id filter. Repeat for multiple.")
     parser.add_argument("--max-distractors", type=int, default=6)
     parser.add_argument("--out", type=Path, default=None)
@@ -484,7 +556,8 @@ def main() -> None:
 
     summaries, case_results_by_model = asyncio.run(_main_async(args))
     report = _render_report(
-        benchmark_path=args.benchmark,
+        case_source=args.case_source,
+        case_source_path=args.benchmark if args.case_source == "benchmark" else args.scaffold,
         raw_results_path=args.raw_results,
         summaries=summaries,
         case_results_by_model=case_results_by_model,
