@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class ChunkPageMismatch:
     chunk_id: str
-    page_from_chunk_id: int
-    page_number: int
-    page_type: str | None
+    section_idx: int | None
+    chunk_section_path: str
+    parsed_section_path: str
 
 
 @dataclass(frozen=True)
@@ -36,37 +36,67 @@ class DocumentAudit:
     chunk_page_mismatches: list[ChunkPageMismatch]
 
 
-def _chunk_id_page_number(chunk_id: str) -> int | None:
+def _chunk_id_section_idx(chunk_id: str) -> int | None:
     parts = str(chunk_id).split(":")
     if len(parts) < 2:
         return None
     if not parts[1].isdigit():
         return None
-    return int(parts[1]) + 1
+    return int(parts[1])
+
+
+def _section_page_number(section: DocumentSection) -> int | None:
+    return _section_page_number_from_path(section.section_path)
+
+
+def _section_page_number_from_path(section_path: str) -> int | None:
+    raw = str(section_path or "").strip()
+    if not raw.startswith("page:"):
+        return None
+    page = raw.removeprefix("page:").strip()
+    return int(page) if page.isdigit() else None
 
 
 def _is_contiguous_page_numbers(sections: list[DocumentSection]) -> bool:
-    numbers = [section.page_number for section in sections if section.page_number is not None]
+    numbers = [_section_page_number(section) for section in sections]
+    numbers = [number for number in numbers if number is not None]
     if not numbers:
         return True
     return numbers == list(range(1, len(numbers) + 1))
 
 
-def _find_chunk_page_mismatches(chunks: list[Chunk]) -> list[ChunkPageMismatch]:
+def _find_chunk_page_mismatches(chunks: list[Chunk], *, sections: list[DocumentSection]) -> list[ChunkPageMismatch]:
     mismatches: list[ChunkPageMismatch] = []
     for chunk in chunks:
-        if chunk.page_number is None:
-            continue
-        page_from_chunk_id = _chunk_id_page_number(chunk.chunk_id)
-        if page_from_chunk_id is None:
-            continue
-        if page_from_chunk_id != chunk.page_number:
+        section_idx = _chunk_id_section_idx(chunk.chunk_id)
+        if section_idx is None:
             mismatches.append(
                 ChunkPageMismatch(
                     chunk_id=chunk.chunk_id,
-                    page_from_chunk_id=page_from_chunk_id,
-                    page_number=chunk.page_number,
-                    page_type=chunk.page_type,
+                    section_idx=None,
+                    chunk_section_path=chunk.section_path,
+                    parsed_section_path="",
+                )
+            )
+            continue
+        if section_idx < 0 or section_idx >= len(sections):
+            mismatches.append(
+                ChunkPageMismatch(
+                    chunk_id=chunk.chunk_id,
+                    section_idx=section_idx,
+                    chunk_section_path=chunk.section_path,
+                    parsed_section_path="",
+                )
+            )
+            continue
+        parsed_section_path = sections[section_idx].section_path
+        if parsed_section_path != chunk.section_path:
+            mismatches.append(
+                ChunkPageMismatch(
+                    chunk_id=chunk.chunk_id,
+                    section_idx=section_idx,
+                    chunk_section_path=chunk.section_path,
+                    parsed_section_path=parsed_section_path,
                 )
             )
     return mismatches
@@ -102,8 +132,12 @@ def _audit_document(path: Path, *, parser: DocumentParser, chunker: LegalChunker
 
     doc = parser.parse_file(path)
     chunks = chunker.chunk_document(doc)
-    mismatches = _find_chunk_page_mismatches(chunks)
-    section_page_numbers = [section.page_number for section in doc.sections if section.page_number is not None]
+    mismatches = _find_chunk_page_mismatches(chunks, sections=doc.sections)
+    section_page_numbers = [
+        page_number
+        for page_number in (_section_page_number(section) for section in doc.sections)
+        if page_number is not None
+    ]
 
     return DocumentAudit(
         document=path.name,
@@ -114,7 +148,7 @@ def _audit_document(path: Path, *, parser: DocumentParser, chunker: LegalChunker
         section_page_numbers=section_page_numbers,
         contiguous_section_pages=_is_contiguous_page_numbers(doc.sections),
         chunk_count=len(chunks),
-        page_numbered_chunk_count=sum(1 for chunk in chunks if chunk.page_number is not None),
+        page_numbered_chunk_count=sum(1 for chunk in chunks if _section_page_number_from_path(chunk.section_path) is not None),
         chunk_page_mismatches=mismatches,
     )
 
@@ -128,7 +162,7 @@ def _render_markdown(*, audits: list[DocumentAudit], root: Path) -> str:
     if fallback_docs or blank_docs or noncontiguous_docs or mismatch_docs:
         verdict = "RISK_PRESENT"
     else:
-        verdict = "NO_WARMUP_PAGE_BOUNDARY_EVIDENCE"
+        verdict = "NO_PAGE_BOUNDARY_EVIDENCE"
 
     lines = [
         "# Page Mapping Integrity Audit",
@@ -143,15 +177,14 @@ def _render_markdown(*, audits: list[DocumentAudit], root: Path) -> str:
         "",
     ]
 
-    if verdict == "NO_WARMUP_PAGE_BOUNDARY_EVIDENCE":
+    if verdict == "NO_PAGE_BOUNDARY_EVIDENCE":
         lines.extend(
             [
                 "## Conclusion",
                 "",
-                "- No evidence that warm-up PDF chunks span page boundaries.",
-                "- No evidence that `chunk_id -> page_id` is off-by-one on the warm-up corpus.",
-                "- No OCR fallback collapse was triggered on the warm-up corpus.",
-                "- Ticket `00` should be treated as a private-risk watchpoint unless new evidence appears.",
+                "- No evidence that the audited PDF chunks span page boundaries.",
+                "- No evidence that `chunk_id -> parsed section_path` drifted on the audited PDFs.",
+                "- No OCR fallback collapse was triggered on the audited PDFs.",
                 "",
             ]
         )
@@ -176,14 +209,16 @@ def _render_markdown(*, audits: list[DocumentAudit], root: Path) -> str:
             lines.append(f"- `{audit.document}`")
             for mismatch in audit.chunk_page_mismatches[:10]:
                 lines.append(
-                    f"  - `{mismatch.chunk_id}` id_page=`{mismatch.page_from_chunk_id}` page_number=`{mismatch.page_number}` page_type=`{mismatch.page_type or ''}`"
+                    f"  - `{mismatch.chunk_id}` section_idx=`{mismatch.section_idx}` "
+                    f"chunk_section_path=`{mismatch.chunk_section_path}` "
+                    f"parsed_section_path=`{mismatch.parsed_section_path}`"
                 )
         lines.append("")
     return "\n".join(lines) + "\n"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit warm-up page mapping integrity for PDF chunk/page IDs.")
+    parser = argparse.ArgumentParser(description="Audit PDF page mapping integrity for parser/chunker page IDs.")
     parser.add_argument("--documents", type=Path, required=True, help="Directory of PDF documents to audit.")
     parser.add_argument("--markdown-out", type=Path, required=True, help="Markdown report output path.")
     parser.add_argument("--json-out", type=Path, required=True, help="JSON report output path.")
