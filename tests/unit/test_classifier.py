@@ -137,6 +137,19 @@ def test_extract_query_refs_includes_law_titles():
     assert "Trust Law 2018" in refs
 
 
+def test_extract_exact_legal_refs_returns_statute_style_refs_only():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    refs = QueryClassifier.extract_exact_legal_refs(
+        "According to Article 16 ( 1 ) of the Operating Law 2018 in CFI 010/2024, what applies under law no 7 of 2018?"
+    )
+
+    assert "Article 16(1)" in refs
+    assert "Operating Law 2018" in refs
+    assert "Law No. 7 of 2018" in refs
+    assert "CFI 010/2024" not in refs
+
+
 def test_extract_explicit_page_reference_detects_title_page():
     from rag_challenge.core.classifier import QueryClassifier
 

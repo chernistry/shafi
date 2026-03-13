@@ -9,6 +9,7 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 
 from rag_challenge.config import get_settings
 from rag_challenge.core.circuit_breaker import CircuitBreaker
+from rag_challenge.core.classifier import QueryClassifier
 from rag_challenge.core.sparse_bm25 import BM25SparseEncoder
 from rag_challenge.models import DocType, RetrievedChunk
 
@@ -84,6 +85,7 @@ class HybridRetriever:
     ) -> list[RetrievedChunk]:
         extracted_refs = [ref.strip() for ref in (list(doc_refs) if doc_refs is not None else []) if str(ref).strip()]
         expanded_refs = self._expand_doc_ref_variants(extracted_refs)
+        sparse_query = self._build_sparse_query(query=query, extracted_refs=extracted_refs)
 
         if doc_type_filter is None and extracted_refs:
             case_ref_prefixes = {"CFI", "CA", "SCT", "ENF", "DEC", "TCD", "ARB"}
@@ -107,7 +109,7 @@ class HybridRetriever:
         )
         if sparse_only and self._bm25_enabled:
             try:
-                result = await self._query_sparse_only(query=query, limit=limit, where=where)
+                result = await self._query_sparse_only(query=sparse_query, limit=limit, where=where)
             except Exception as exc:
                 logger.warning("Sparse-only retrieval failed; degrading to standard retrieval path: %s", exc)
                 sparse_only = False
@@ -130,7 +132,7 @@ class HybridRetriever:
                     raise RetrieverError(f"Qdrant dense retrieval failed: {exc}") from exc
             else:
                 prefetch = self._build_prefetch(
-                    query=query,
+                    query=sparse_query,
                     query_vector=query_vector,
                     prefetch_dense=dense_limit,
                     prefetch_sparse=sparse_limit,
@@ -170,7 +172,7 @@ class HybridRetriever:
             if query_vector is None:
                 query_vector = await self._embedder.embed_query(query)
             if sparse_only and self._bm25_enabled:
-                result = await self._query_sparse_only(query=query, limit=limit, where=fallback_where)
+                result = await self._query_sparse_only(query=sparse_query, limit=limit, where=fallback_where)
             elif not self._bm25_enabled:
                 result = await self._query_dense_only(
                     query_vector=query_vector,
@@ -179,7 +181,7 @@ class HybridRetriever:
                 )
             else:
                 prefetch = self._build_prefetch(
-                    query=query,
+                    query=sparse_query,
                     query_vector=query_vector,
                     prefetch_dense=dense_limit,
                     prefetch_sparse=sparse_limit,
@@ -207,7 +209,7 @@ class HybridRetriever:
                 )
             else:
                 prefetch = self._build_prefetch(
-                    query=query,
+                    query=sparse_query,
                     query_vector=query_vector,
                     prefetch_dense=dense_limit,
                     prefetch_sparse=sparse_limit,
@@ -364,6 +366,24 @@ class HybridRetriever:
     def _resolve_fusion_method(self) -> models.Fusion:
         fusion_name = str(getattr(self._qdrant_settings, "fusion_method", "RRF")).upper()
         return cast("models.Fusion", getattr(models.Fusion, fusion_name, models.Fusion.RRF))
+
+    @classmethod
+    def _build_sparse_query(cls, *, query: str, extracted_refs: list[str] | tuple[str, ...]) -> str:
+        base_query = str(query or "").strip()
+        if not base_query:
+            return ""
+        if any(_DIFC_CASE_RE.match(str(ref).strip()) is not None for ref in extracted_refs):
+            return base_query
+
+        exact_refs = QueryClassifier.extract_exact_legal_refs(base_query)
+        if not exact_refs:
+            return base_query
+
+        capped_refs = exact_refs[:4]
+        boosted_tail = " ".join([*capped_refs, *capped_refs]).strip()
+        if not boosted_tail:
+            return base_query
+        return f"{base_query}\n{boosted_tail}".strip()
 
     @staticmethod
     def _is_qdrant_inference_unavailable(exc: Exception) -> bool:

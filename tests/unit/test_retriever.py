@@ -25,7 +25,12 @@ def mock_settings():
         reranker=SimpleNamespace(rerank_candidates=80),
         pipeline=SimpleNamespace(retry_dense_bias=40, retry_sparse_bias=90),
     )
-    with patch("rag_challenge.core.retriever.get_settings", return_value=settings):
+    sparse_encoder = MagicMock()
+    sparse_encoder.encode_query.return_value = models.SparseVector(indices=[1], values=[0.7])
+    with (
+        patch("rag_challenge.core.retriever.get_settings", return_value=settings),
+        patch("rag_challenge.core.retriever.BM25SparseEncoder", return_value=sparse_encoder),
+    ):
         yield settings
 
 
@@ -185,6 +190,28 @@ def test_expand_doc_ref_variants_adds_yearless_title_variants():
 
     assert "Employment Law 2019" in variants
     assert "Employment Law" in variants
+
+
+def test_build_sparse_query_boosts_exact_legal_refs_for_statute_queries():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    sparse_query = HybridRetriever._build_sparse_query(
+        query="According to Article 16 ( 1 ) of the Operating Law 2018, what document must be filed?",
+        extracted_refs=["Operating Law 2018"],
+    )
+
+    assert "According to Article 16 ( 1 ) of the Operating Law 2018" in sparse_query
+    assert sparse_query.count("Article 16(1)") >= 2
+    assert sparse_query.count("Operating Law 2018") >= 2
+
+
+def test_build_sparse_query_skips_case_law_queries():
+    from rag_challenge.core.retriever import HybridRetriever
+
+    query = "What happened in CFI 010/2024?"
+    sparse_query = HybridRetriever._build_sparse_query(query=query, extracted_refs=["CFI 010/2024"])
+
+    assert sparse_query == query
 
 
 @pytest.mark.asyncio

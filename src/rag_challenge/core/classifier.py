@@ -36,6 +36,10 @@ _REG_TITLE_RE = re.compile(
     re.IGNORECASE,
 )
 _ARTICLE_SUB_RE = re.compile(r"\barticle\s+(\d+)\s*\(\s*([^)]+?)\s*\)", re.IGNORECASE)
+_STRUCTURAL_REF_RE = re.compile(
+    r"\b(?:Article|Section|Clause|Part|Schedule|Appendix)\s+\d+(?:\s*\([^)]+\))*",
+    re.IGNORECASE,
+)
 _MULTI_WS_RE = re.compile(r"\s+")
 _TITLE_PAGE_RE = re.compile(r"\b(?:title|cover)\s+page\b", re.IGNORECASE)
 _CAPTION_HEADER_RE = re.compile(r"\b(?:caption|header)\b", re.IGNORECASE)
@@ -216,6 +220,23 @@ class QueryClassifier:
         text = re.sub(r"\s*\)\s*", ")", text)
         return text.strip()
 
+    @staticmethod
+    def _normalize_structural_ref(raw: str) -> str:
+        text = _MULTI_WS_RE.sub(" ", raw.strip())
+        if not text:
+            return ""
+        match = re.match(r"(?i)(article|section|clause|part|schedule|appendix)\b", text)
+        if match is None:
+            return text
+        label = match.group(1).capitalize()
+        tail = text[match.end() :].strip()
+        tail = re.sub(r"\s*\(\s*", "(", tail)
+        tail = re.sub(r"\s*\)\s*", ")", tail)
+        tail = re.sub(r"\s+", "", tail)
+        if not tail:
+            return label
+        return f"{label} {tail}"
+
     @classmethod
     def extract_doc_refs(cls, query: str) -> list[str]:
         """Extract DIFC-style document identifiers from a query for retrieval filtering.
@@ -270,6 +291,36 @@ class QueryClassifier:
             if ref in seen:
                 continue
             seen.add(ref)
+            out.append(ref)
+        return out
+
+    @classmethod
+    def extract_exact_legal_refs(cls, query: str) -> list[str]:
+        """Extract statute-style exact references suitable for sparse retrieval boosting.
+
+        This intentionally excludes DIFC case references so case-law queries do not get
+        extra sparse bias from citation duplication.
+        """
+        normalized = cls.normalize_query(query)
+        refs: list[str] = []
+
+        for match in _STRUCTURAL_REF_RE.finditer(normalized):
+            structural_ref = cls._normalize_structural_ref(match.group(0))
+            if structural_ref:
+                refs.append(structural_ref)
+
+        for ref in cls.extract_query_refs(normalized):
+            if _DIFC_CASE_RE.fullmatch(ref):
+                continue
+            refs.append(ref)
+
+        seen: set[str] = set()
+        out: list[str] = []
+        for ref in refs:
+            key = ref.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
             out.append(ref)
         return out
 
