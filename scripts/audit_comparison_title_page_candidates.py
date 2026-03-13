@@ -14,8 +14,6 @@ try:
         _DIFC_CASE_ID_RE,
         RAGPipelineBuilder,
         _is_case_issue_date_name_compare_query,
-        _is_case_monetary_claim_compare_query,
-        _is_case_party_overlap_compare_query,
         _is_common_judge_compare_query,
     )
 except ModuleNotFoundError:  # pragma: no cover
@@ -24,12 +22,62 @@ except ModuleNotFoundError:  # pragma: no cover
         _DIFC_CASE_ID_RE,
         RAGPipelineBuilder,
         _is_case_issue_date_name_compare_query,
-        _is_case_monetary_claim_compare_query,
-        _is_case_party_overlap_compare_query,
         _is_common_judge_compare_query,
     )
 
 JsonDict = dict[str, Any]
+
+
+def _is_case_monetary_claim_compare_query(question: str, *, answer_type: str) -> bool:
+    q = " ".join((question or "").strip().lower().split())
+    if answer_type.strip().lower() != "name":
+        return False
+    if len(_DIFC_CASE_ID_RE.findall(question or "")) != 2:
+        return False
+    if "claim" not in q:
+        return False
+    return any(
+        phrase in q
+        for phrase in (
+            "higher monetary claim",
+            "lower monetary claim",
+            "greater monetary claim",
+            "largest monetary claim",
+            "smallest monetary claim",
+            "higher claim",
+            "lower claim",
+        )
+    )
+
+
+def _is_case_party_overlap_compare_query(question: str, *, answer_type: str) -> bool:
+    q = " ".join((question or "").strip().lower().split())
+    if answer_type.strip().lower() not in {"boolean", "name"}:
+        return False
+    if len(_DIFC_CASE_ID_RE.findall(question or "")) < 2:
+        return False
+    if any(
+        phrase in q
+        for phrase in (
+            "same legal",
+            "same parties",
+            "same party",
+            "same entities",
+            "main party common to both",
+            "main party to both",
+            "appeared in both",
+            "appears in both",
+            "appears as a main party in both",
+            "named as a main party in both",
+            "as parties",
+        )
+    ):
+        return True
+    has_party_subject = any(
+        token in q for token in ("party", "parties", "claimant", "defendant", "entity", "entities", "individual")
+    )
+    has_overlap_signal = any(token in q for token in ("common", "same", "appeared", "appears", "named", "both"))
+    return has_party_subject and has_overlap_signal
 
 
 @dataclass(frozen=True)
