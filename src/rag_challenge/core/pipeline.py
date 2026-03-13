@@ -6201,20 +6201,30 @@ class RAGPipelineBuilder:
             chunk_ids=[*ordered_ids, *extras],
             context_chunks=context_chunks,
         )
+        context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+        explicit_page_pruned = False
+        if explicit_page_ref is not None and explicit_page_ref.requested_page is not None:
+            requested_page_ids = [
+                chunk_id
+                for chunk_id in shaped_ids
+                if cls._page_num(str(getattr(context_by_id.get(chunk_id), "section_path", "") or ""))
+                == explicit_page_ref.requested_page
+            ]
+            if requested_page_ids and len(requested_page_ids) < len(shaped_ids):
+                shaped_ids = requested_page_ids
+                explicit_page_pruned = True
 
         shaped_doc_ids = cls._doc_ids_for_chunk_ids(chunk_ids=shaped_ids, context_chunks=context_chunks)
         if compare_doc_ids and len(shaped_doc_ids.intersection(compare_doc_ids)) < min(2, len(compare_doc_ids)):
             flags.append("comparison_support_missing_side")
         if metadata_doc_ids and not shaped_doc_ids.intersection(metadata_doc_ids):
             flags.append("named_metadata_title_missing")
-        if costs_query:
-            context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
-            if not any(
-                re.search(r"\bcosts?\b|\bno order as to costs\b", str(context_by_id[chunk_id].text or ""), re.IGNORECASE)
-                for chunk_id in shaped_ids
-                if chunk_id in context_by_id
-            ):
-                flags.append("outcome_costs_support_missing")
+        if costs_query and not any(
+            re.search(r"\bcosts?\b|\bno order as to costs\b", str(context_by_id[chunk_id].text or ""), re.IGNORECASE)
+            for chunk_id in shaped_ids
+            if chunk_id in context_by_id
+        ):
+            flags.append("outcome_costs_support_missing")
         if explicit_page_ref is not None and explicit_page_ref.requested_page is not None:
             explicit_page_present = any(
                 cls._page_num(str(getattr(chunk, "section_path", "") or "")) == explicit_page_ref.requested_page
@@ -6225,6 +6235,8 @@ class RAGPipelineBuilder:
                 flags.append("explicit_page_reference_forced")
             elif not explicit_page_present:
                 flags.append("explicit_page_reference_missing")
+            if explicit_page_present and explicit_page_pruned:
+                flags.append("explicit_page_reference_pruned")
 
         return shaped_ids, flags
 

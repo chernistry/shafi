@@ -1023,8 +1023,8 @@ def test_apply_support_shape_policy_forces_explicit_second_page_chunk() -> None:
         support_ids=["judgment:page1"],
     )
 
-    assert set(shaped_ids) == {"judgment:page1", "judgment:page2"}
-    assert flags == ["explicit_page_reference_forced"]
+    assert shaped_ids == ["judgment:page2"]
+    assert flags == ["explicit_page_reference_forced", "explicit_page_reference_pruned"]
 
 
 def test_apply_support_shape_policy_forces_title_page_chunk_for_named_metadata_query() -> None:
@@ -1064,8 +1064,60 @@ def test_apply_support_shape_policy_forces_title_page_chunk_for_named_metadata_q
         support_ids=["law:update"],
     )
 
-    assert set(shaped_ids) == {"law:title", "law:update"}
-    assert flags == ["explicit_page_reference_forced"]
+    assert shaped_ids == ["law:title"]
+    assert flags == ["explicit_page_reference_forced", "explicit_page_reference_pruned"]
+
+
+def test_apply_support_shape_policy_prunes_nonrequested_title_page_noise_when_title_page_already_present() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:title",
+            doc_id="civil-commercial-law",
+            doc_title="DIFC Law on the Application of Civil and Commercial Laws",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="This is DIFC Law No. 3 of 2004.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:page3",
+            doc_id="civil-commercial-law",
+            doc_title="DIFC Law on the Application of Civil and Commercial Laws",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text="Interpretation clause on page 3.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:page7",
+            doc_id="civil-commercial-law",
+            doc_title="DIFC Law on the Application of Civil and Commercial Laws",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text="Later operative clause on page 7.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+    ]
+
+    shaped_ids, flags = RAGPipelineBuilder._apply_support_shape_policy(
+        answer_type="number",
+        answer="Law No. 3 of 2004",
+        query="According to the title page of the DIFC Law on the Application of Civil and Commercial Laws, what is its official law number?",
+        context_chunks=context_chunks,
+        cited_ids=["law:page7", "law:title"],
+        support_ids=["law:page3"],
+    )
+
+    assert shaped_ids == ["law:title"]
+    assert flags == ["explicit_page_reference_pruned"]
 
 
 def test_expand_page_spanning_support_chunk_ids_includes_adjacent_continuation_page() -> None:
