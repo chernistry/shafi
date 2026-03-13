@@ -1,0 +1,51 @@
+{
+  "ticket": 62,
+  "created_at": "2026-03-13",
+  "cases": [
+    {
+      "document": "scan-short-multipage.pdf",
+      "actual_pdf_pages": 4,
+      "pymupdf_pages": [
+        "short"
+      ],
+      "text_sufficient": false,
+      "expected_fallback_triggered": true,
+      "expected_page_identity_collapsed": true,
+      "expected_mode": "docling_merged_single_page"
+    },
+    {
+      "document": "scan-low-density-multipage.pdf",
+      "actual_pdf_pages": 3,
+      "pymupdf_pages": [
+        "_____ _____ _____ !!!!!"
+      ],
+      "text_sufficient": false,
+      "expected_fallback_triggered": true,
+      "expected_page_identity_collapsed": true,
+      "expected_mode": "docling_merged_single_page"
+    },
+    {
+      "document": "text-rich-multipage.pdf",
+      "actual_pdf_pages": 5,
+      "pymupdf_pages": [
+        "This page contains enough extracted text to stay on the PyMuPDF path.",
+        "Additional extracted text from page two."
+      ],
+      "text_sufficient": true,
+      "expected_fallback_triggered": false,
+      "expected_page_identity_collapsed": false,
+      "expected_mode": "pymupdf_pages_preserved"
+    },
+    {
+      "document": "single-page-ocr.pdf",
+      "actual_pdf_pages": 1,
+      "pymupdf_pages": [
+        "short"
+      ],
+      "text_sufficient": false,
+      "expected_fallback_triggered": true,
+      "expected_page_identity_collapsed": false,
+      "expected_mode": "not_applicable_single_page"
+    }
+  ]
+}
