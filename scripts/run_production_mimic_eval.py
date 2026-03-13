@@ -93,6 +93,7 @@ def _render_markdown(
     hidden_g_all = cast("JsonDict", production_mimic.get("hidden_g_all") or {})
     exactness = cast("JsonDict", production_mimic.get("exactness") or {})
     judge = cast("JsonDict", production_mimic.get("judge") or {})
+    judge_penalties = cast("JsonDict", production_mimic.get("judge_penalties") or {})
     eval_block = cast("JsonDict", production_mimic.get("eval") or {})
     page_trace = cast("JsonDict", production_mimic.get("page_trace") or {})
     platform_like_total = cast("float", production_mimic.get("platform_like_total_estimate", 0.0))
@@ -130,6 +131,21 @@ def _render_markdown(
         f"- avg_accuracy: `{judge.get('avg_accuracy')}`",
         f"- judge_failures: `{judge.get('judge_failures')}`",
         f"- disagreement: `{judge.get('disagreement')}`",
+        f"- strict_requested: `{judge.get('strict_requested')}`",
+        f"- strict_used: `{judge.get('strict_used')}`",
+        f"- strict_skip_reason: `{judge.get('strict_skip_reason') or 'none'}`",
+        f"- cache_hit_count: `{cast('JsonDict', judge.get('cache') or {}).get('cache_hit_count')}`",
+        f"- cache_miss_count: `{cast('JsonDict', judge.get('cache') or {}).get('cache_miss_count')}`",
+        f"- shared_cache_key_count: `{cast('JsonDict', judge.get('cache') or {}).get('shared_cache_key_count')}`",
+        "",
+        "## Judge Penalties",
+        "",
+        f"- pass_rate_penalty: `{judge_penalties.get('pass_rate_penalty')}`",
+        f"- grounding_penalty: `{judge_penalties.get('grounding_penalty')}`",
+        f"- accuracy_penalty: `{judge_penalties.get('accuracy_penalty')}`",
+        f"- disagreement_penalty: `{judge_penalties.get('disagreement_penalty')}`",
+        f"- timeout_penalty: `{judge_penalties.get('timeout_penalty')}`",
+        f"- total: `{judge_penalties.get('total')}`",
         "",
         "## Eval Aggregates",
         "",

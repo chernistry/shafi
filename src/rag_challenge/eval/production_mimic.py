@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import cast
 
 JsonDict = dict[str, object]
@@ -73,6 +75,14 @@ def _as_float_dict(value: object) -> dict[str, float]:
             continue
         out[key] = _as_float(raw_value)
     return out
+
+
+def _sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _canonical_json(payload: object) -> str:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _page_doc(page_id: str) -> str:
@@ -287,6 +297,75 @@ def extract_judge_summary(payload: JsonDict | None) -> JsonDict:
     return {}
 
 
+def _judge_case_rows(payload: JsonDict | None) -> list[JsonDict]:
+    if payload is None:
+        return []
+    for key in ("cases", "judge_cases", "records", "judge_records"):
+        rows_obj = payload.get(key)
+        if isinstance(rows_obj, list):
+            return [cast("JsonDict", item) for item in cast("list[object]", rows_obj) if isinstance(item, dict)]
+    summary = _eval_summary(payload)
+    judge = cast("JsonDict", summary.get("judge") or {})
+    for key in ("cases", "judge_cases", "records", "judge_records"):
+        rows_obj = judge.get(key)
+        if isinstance(rows_obj, list):
+            return [cast("JsonDict", item) for item in cast("list[object]", rows_obj) if isinstance(item, dict)]
+    return []
+
+
+def _judge_context_fingerprint(case: JsonDict) -> str:
+    explicit = str(case.get("context_fingerprint") or "").strip()
+    if explicit:
+        return explicit
+    for key in ("context_ids", "context_page_ids", "used_page_ids", "retrieved_page_ids"):
+        values = _as_str_list(case.get(key))
+        if values:
+            return _sha256_text(_canonical_json(values))
+    context = case.get("context")
+    if context is not None:
+        return _sha256_text(_canonical_json(context))
+    return ""
+
+
+def _judge_cache_key(case: JsonDict) -> str:
+    answer = str(case.get("answer") or case.get("answer_text") or "").strip()
+    cited_ids = _as_str_list(case.get("cited_ids") or case.get("cited_chunk_ids"))
+    prompt_version = str(case.get("judge_prompt_version") or case.get("prompt_version") or "").strip()
+    payload = {
+        "answer": answer,
+        "cited_ids": cited_ids,
+        "context_fingerprint": _judge_context_fingerprint(case),
+        "judge_prompt_version": prompt_version,
+    }
+    return _sha256_text(_canonical_json(payload))
+
+
+def _judge_cache_summary(
+    *,
+    cheap_payload: JsonDict | None,
+    strict_payload: JsonDict | None,
+    use_strict_judge: bool,
+    strict_skip_reason: str | None,
+) -> JsonDict:
+    cheap_keys = {_judge_cache_key(case) for case in _judge_case_rows(cheap_payload)}
+    strict_requested_keys = {_judge_cache_key(case) for case in _judge_case_rows(strict_payload)}
+    strict_used_keys: set[str] = strict_requested_keys if use_strict_judge else set()
+    shared = cheap_keys.intersection(strict_used_keys)
+    return {
+        "cheap_case_count": len(cheap_keys),
+        "strict_case_count_requested": len(strict_requested_keys),
+        "strict_case_count_used": len(strict_used_keys),
+        "cheap_cache_key_count": len(cheap_keys),
+        "strict_cache_key_count": len(strict_used_keys),
+        "shared_cache_key_count": len(shared),
+        "cache_hit_count": len(shared),
+        "cache_miss_count": len(cheap_keys.union(strict_used_keys) - shared),
+        "strict_requested": bool(strict_requested_keys) or strict_payload is not None,
+        "strict_used": use_strict_judge and bool(strict_requested_keys or strict_payload is not None),
+        "strict_skip_reason": strict_skip_reason or "",
+    }
+
+
 def extract_eval_metrics(payload: JsonDict | None) -> JsonDict:
     summary = _eval_summary(payload)
     return {
@@ -302,9 +381,17 @@ def aggregate_hybrid_strict_judge(
     *,
     cheap_payload: JsonDict | None,
     strict_payload: JsonDict | None,
+    use_strict_judge: bool = True,
+    strict_skip_reason: str | None = None,
 ) -> JsonDict:
     cheap = extract_judge_summary(cheap_payload)
-    strict = extract_judge_summary(strict_payload)
+    strict = extract_judge_summary(strict_payload) if use_strict_judge else {}
+    cache = _judge_cache_summary(
+        cheap_payload=cheap_payload,
+        strict_payload=strict_payload,
+        use_strict_judge=use_strict_judge,
+        strict_skip_reason=strict_skip_reason,
+    )
 
     def _pick_min(key: str) -> float | None:
         values = [
@@ -346,8 +433,12 @@ def aggregate_hybrid_strict_judge(
         "judge_failures": failures,
         "strict_present": strict_present,
         "cheap_present": cheap_present,
+        "strict_requested": bool(cache.get("strict_requested")),
+        "strict_used": bool(cache.get("strict_used")),
+        "strict_skip_reason": str(cache.get("strict_skip_reason") or ""),
         "disagreement": disagreement,
         "judge_timeout_or_failure": failures > 0 or not cheap_present,
+        "cache": cache,
         "top_fails": strict.get("top_fails") or cheap.get("top_fails") or [],
     }
 
@@ -356,6 +447,8 @@ def aggregate_hybrid_strict_eval(
     *,
     cheap_payload: JsonDict | None,
     strict_payload: JsonDict | None,
+    use_strict_judge: bool = True,
+    strict_skip_reason: str | None = None,
 ) -> JsonDict:
     cheap = extract_eval_metrics(cheap_payload)
     strict = extract_eval_metrics(strict_payload)
@@ -387,8 +480,18 @@ def aggregate_hybrid_strict_eval(
         "judge": aggregate_hybrid_strict_judge(
             cheap_payload=cheap_payload,
             strict_payload=strict_payload,
+            use_strict_judge=use_strict_judge,
+            strict_skip_reason=strict_skip_reason,
         ),
     }
+
+
+def should_run_strict_judge(*, subject_summary: JsonDict, candidate_row: JsonDict) -> tuple[bool, str | None]:
+    current_total = _as_float(subject_summary.get("total"))
+    upper_total = _as_float(candidate_row.get("upper_total_estimate"), default=_as_float(candidate_row.get("strict_total_estimate")))
+    if upper_total <= current_total + 1e-9:
+        return False, "candidate_not_near_promote"
+    return True, None
 
 
 def build_page_trace_summary(page_trace_payload: JsonDict | None) -> JsonDict:
@@ -545,9 +648,15 @@ def estimate_production_mimic(
     page_trace_payload: JsonDict | None = None,
 ) -> JsonDict:
     calibration_block = calibration or {}
+    use_strict_judge, strict_skip_reason = should_run_strict_judge(
+        subject_summary=subject_summary,
+        candidate_row=candidate_row,
+    )
     hybrid_eval = aggregate_hybrid_strict_eval(
         cheap_payload=cheap_eval_payload,
         strict_payload=strict_eval_payload,
+        use_strict_judge=use_strict_judge,
+        strict_skip_reason=strict_skip_reason,
     )
     hybrid_judge = cast("JsonDict", hybrid_eval.get("judge") or {})
 
@@ -610,20 +719,31 @@ def estimate_production_mimic(
     avg_accuracy = hybrid_judge.get("avg_accuracy")
     judge_failures = _as_int(hybrid_judge.get("judge_failures"))
 
+    judge_pass_rate_penalty = 0.0
+    judge_grounding_penalty = 0.0
+    judge_accuracy_penalty = 0.0
+    judge_disagreement_penalty = 0.0
+    judge_timeout_penalty = 0.0
+
     if pass_rate is not None and _as_float(pass_rate) < 1.0:
-        extra_penalty += 0.01 * (1.0 - _as_float(pass_rate))
+        judge_pass_rate_penalty = 0.01 * (1.0 - _as_float(pass_rate))
+        extra_penalty += judge_pass_rate_penalty
         no_submit_reasons.append("judge pass rate below perfect")
     if avg_grounding is not None and _as_float(avg_grounding) < 5.0:
-        extra_penalty += 0.002 * (5.0 - _as_float(avg_grounding))
+        judge_grounding_penalty = 0.002 * (5.0 - _as_float(avg_grounding))
+        extra_penalty += judge_grounding_penalty
         no_submit_reasons.append("judge grounding below perfect")
     if avg_accuracy is not None and _as_float(avg_accuracy) < 5.0:
-        extra_penalty += 0.0015 * (5.0 - _as_float(avg_accuracy))
+        judge_accuracy_penalty = 0.0015 * (5.0 - _as_float(avg_accuracy))
+        extra_penalty += judge_accuracy_penalty
         no_submit_reasons.append("judge accuracy below perfect")
     if _as_bool(hybrid_judge.get("disagreement")):
-        extra_penalty += 0.002
+        judge_disagreement_penalty = 0.002
+        extra_penalty += judge_disagreement_penalty
         no_submit_reasons.append("cheap/strict judge disagree")
     if _as_bool(hybrid_judge.get("judge_timeout_or_failure")) or judge_failures > 0:
-        extra_penalty += 0.004
+        judge_timeout_penalty = 0.004
+        extra_penalty += judge_timeout_penalty
         no_submit_reasons.append("judge timeout/failure present")
 
     if _as_int(candidate_row.get("page_drift")) > 0 and _as_float(candidate_row.get("hidden_g_trusted_delta")) <= 0.0:
@@ -698,6 +818,20 @@ def estimate_production_mimic(
             "still_mismatched_incorrect_qids": unresolved_qids,
         },
         "judge": hybrid_judge,
+        "judge_penalties": {
+            "pass_rate_penalty": judge_pass_rate_penalty,
+            "grounding_penalty": judge_grounding_penalty,
+            "accuracy_penalty": judge_accuracy_penalty,
+            "disagreement_penalty": judge_disagreement_penalty,
+            "timeout_penalty": judge_timeout_penalty,
+            "total": (
+                judge_pass_rate_penalty
+                + judge_grounding_penalty
+                + judge_accuracy_penalty
+                + judge_disagreement_penalty
+                + judge_timeout_penalty
+            ),
+        },
         "eval": {
             "citation_coverage": citation_coverage,
             "citation_coverage_by_answer_type": citation_coverage_by_answer_type,
