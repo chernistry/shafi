@@ -15,6 +15,7 @@ except ModuleNotFoundError:  # pragma: no cover
 from rag_challenge.eval.production_mimic import (
     JsonDict,
     JsonList,
+    build_page_trace_summary,
     build_public_history_calibration,
     estimate_production_mimic,
 )
@@ -94,6 +95,7 @@ def _render_markdown(
     exactness = cast("JsonDict", production_mimic.get("exactness") or {})
     judge = cast("JsonDict", production_mimic.get("judge") or {})
     eval_block = cast("JsonDict", production_mimic.get("eval") or {})
+    page_trace = cast("JsonDict", production_mimic.get("page_trace") or {})
     platform_like_total = cast("float", production_mimic.get("platform_like_total_estimate", 0.0))
     strict_total = cast("float", production_mimic.get("strict_total_estimate", 0.0))
     paranoid_total = cast("float", production_mimic.get("paranoid_total_estimate", 0.0))
@@ -136,6 +138,16 @@ def _render_markdown(
         f"- answer_type_format_compliance: `{eval_block.get('answer_type_format_compliance')}`",
         f"- grounding_g_score_beta_2_5: `{eval_block.get('grounding_g_score_beta_2_5')}`",
         "",
+        "## Page Trace",
+        "",
+        f"- cases_scored: `{page_trace.get('cases_scored')}`",
+        f"- trusted_case_count: `{page_trace.get('trusted_case_count')}`",
+        f"- gold_in_retrieved_count: `{page_trace.get('gold_in_retrieved_count')}`",
+        f"- gold_in_reranked_count: `{page_trace.get('gold_in_reranked_count')}`",
+        f"- gold_in_used_count: `{page_trace.get('gold_in_used_count')}`",
+        f"- false_positive_case_count: `{page_trace.get('false_positive_case_count')}`",
+        f"- explained_ratio: `{page_trace.get('explained_ratio')}`",
+        "",
         "## Score Envelope",
         "",
         f"- platform_like_total_estimate: `{platform_like_total:.6f}`",
@@ -160,6 +172,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--strict-eval-json", type=Path, default=None)
     parser.add_argument("--history-json", type=Path, default=None)
     parser.add_argument("--scaffold-json", type=Path, default=None)
+    parser.add_argument("--page-trace-json", type=Path, default=None)
     parser.add_argument("--out-json", type=Path, required=True)
     parser.add_argument("--out-md", type=Path, required=True)
     return parser.parse_args()
@@ -198,6 +211,7 @@ def main() -> int:
         team_name=args.team,
         total=cast("float", result.get("paranoid_total_estimate", 0.0)),
     )
+    result["page_trace"] = build_page_trace_summary(_load_json(args.page_trace_json))
     payload: JsonDict = {
         "leaderboard": str(args.leaderboard),
         "team_name": args.team,

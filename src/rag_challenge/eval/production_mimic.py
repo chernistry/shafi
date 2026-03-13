@@ -359,6 +359,46 @@ def aggregate_hybrid_strict_eval(
     }
 
 
+def build_page_trace_summary(page_trace_payload: JsonDict | None) -> JsonDict:
+    if page_trace_payload is None:
+        return {
+            "cases_scored": 0,
+            "trusted_case_count": 0,
+            "gold_in_retrieved_count": 0,
+            "gold_in_reranked_count": 0,
+            "gold_in_used_count": 0,
+            "false_positive_case_count": 0,
+            "failure_stage_counts": {},
+            "stage_examples": {},
+            "explained_ratio": 0.0,
+        }
+    summary_obj = page_trace_payload.get("summary")
+    if not isinstance(summary_obj, dict):
+        return {
+            "cases_scored": 0,
+            "trusted_case_count": 0,
+            "gold_in_retrieved_count": 0,
+            "gold_in_reranked_count": 0,
+            "gold_in_used_count": 0,
+            "false_positive_case_count": 0,
+            "failure_stage_counts": {},
+            "stage_examples": {},
+            "explained_ratio": 0.0,
+        }
+    summary = cast("JsonDict", summary_obj)
+    return {
+        "cases_scored": _as_int(summary.get("cases_scored")),
+        "trusted_case_count": _as_int(summary.get("trusted_case_count")),
+        "gold_in_retrieved_count": _as_int(summary.get("gold_in_retrieved_count")),
+        "gold_in_reranked_count": _as_int(summary.get("gold_in_reranked_count")),
+        "gold_in_used_count": _as_int(summary.get("gold_in_used_count")),
+        "false_positive_case_count": _as_int(summary.get("false_positive_case_count")),
+        "failure_stage_counts": cast("dict[str, object]", summary.get("failure_stage_counts") or {}),
+        "stage_examples": cast("dict[str, object]", summary.get("stage_examples") or {}),
+        "explained_ratio": _as_float(summary.get("explained_ratio")),
+    }
+
+
 def infer_lineage_confidence(
     *,
     candidate_row: JsonDict,
