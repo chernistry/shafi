@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.compare_candidate_family_debug import _parse_candidate, _render_markdown
+from scripts.compare_candidate_family_debug import _candidate_sort_key, _parse_candidate, _render_markdown
 
 
 def test_parse_candidate_resolves_label_and_path(tmp_path: Path) -> None:
@@ -21,6 +21,7 @@ def test_render_markdown_orders_rows_by_delta() -> None:
     rows = [
         {
             "label": "core",
+            "judge_timeout": False,
             "judge_pass_rate": 0.5,
             "judge_pass_delta": 0.5,
             "judge_grounding": 3.0,
@@ -32,6 +33,7 @@ def test_render_markdown_orders_rows_by_delta() -> None:
         },
         {
             "label": "best",
+            "judge_timeout": False,
             "judge_pass_rate": 1.0,
             "judge_pass_delta": 1.0,
             "judge_grounding": 5.0,
@@ -52,6 +54,7 @@ def test_render_markdown_orders_rows_by_delta() -> None:
     lines = markdown.splitlines()
     ranked_line = next(line for line in lines if "`best`" in line)
     assert ranked_line.startswith("| 1 |")
+    assert "Judge Timeout" in markdown
 
 
 def test_payload_shape_is_json_serializable(tmp_path: Path) -> None:
@@ -65,6 +68,7 @@ def test_payload_shape_is_json_serializable(tmp_path: Path) -> None:
             {
                 "label": "best",
                 "candidate_raw_results": "/tmp/raw.json",
+                "judge_timeout": False,
                 "judge_pass_rate": 1.0,
                 "judge_pass_delta": 1.0,
                 "judge_grounding": 5.0,
@@ -83,3 +87,20 @@ def test_payload_shape_is_json_serializable(tmp_path: Path) -> None:
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     restored = json.loads(out.read_text(encoding="utf-8"))
     assert restored["ranked_candidates"][0]["label"] == "best"
+
+
+def test_candidate_sort_key_penalizes_timeout_when_scores_tie() -> None:
+    completed = {
+        "label": "completed",
+        "judge_timeout": False,
+        "judge_pass_delta": 0.0,
+        "judge_grounding_delta": 0.0,
+        "judge_accuracy_delta": 0.0,
+        "citation_delta": 0.0,
+        "ttft_p50_delta_ms": 0.0,
+    }
+    timed_out = dict(completed)
+    timed_out["label"] = "timed-out"
+    timed_out["judge_timeout"] = True
+
+    assert _candidate_sort_key(completed) > _candidate_sort_key(timed_out)
