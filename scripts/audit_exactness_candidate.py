@@ -111,6 +111,20 @@ def _changed_answer_qids(
     return sorted(out)
 
 
+def _incorrect_scaffold_qids(
+    baseline_submission: dict[str, JsonDict],
+    candidate_submission: dict[str, JsonDict],
+    scaffold_records: dict[str, JsonDict],
+) -> list[str]:
+    common_qids = set(baseline_submission).intersection(candidate_submission)
+    out = [
+        qid
+        for qid in common_qids
+        if str(scaffold_records.get(qid, {}).get("manual_verdict") or "").strip() == "incorrect"
+    ]
+    return sorted(out)
+
+
 def _matches_expected(answer: str, expected_answers: list[str]) -> bool:
     normalized = answer.strip()
     return any(normalized == expected.strip() for expected in expected_answers)
@@ -290,6 +304,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--docs-dir", type=Path)
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--judge-scope", choices=("all", "free_text", "none"), default="all")
+    parser.add_argument("--case-scope", choices=("changed", "all-incorrect"), default="changed")
     return parser.parse_args()
 
 
@@ -299,7 +314,14 @@ def main() -> int:
     baseline_submission = _submission_answers_by_id(args.baseline_submission.resolve())
     candidate_submission = _submission_answers_by_id(args.candidate_submission.resolve())
     scaffold_records = _scaffold_records_by_id(args.truth_audit_scaffold.resolve())
-    changed_qids = _changed_answer_qids(baseline_submission, candidate_submission)
+    if str(args.case_scope) == "all-incorrect":
+        changed_qids = _incorrect_scaffold_qids(
+            baseline_submission,
+            candidate_submission,
+            scaffold_records,
+        )
+    else:
+        changed_qids = _changed_answer_qids(baseline_submission, candidate_submission)
     rows = _build_exactness_rows(
         changed_qids=changed_qids,
         baseline_submission=baseline_submission,
@@ -336,6 +358,7 @@ def main() -> int:
     payload: JsonDict = {
         "baseline_label": args.baseline_label,
         "candidate_label": args.candidate_label,
+        "case_scope": args.case_scope,
         "answer_changed_qids": changed_qids,
         "resolved_incorrect_qids": [
             row.question_id
