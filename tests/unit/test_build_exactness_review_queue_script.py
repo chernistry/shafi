@@ -3,15 +3,16 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_build_exactness_review_queue_script_prioritizes_page_specific_model_cases(tmp_path: Path) -> None:
     scaffold = tmp_path / "scaffold.json"
     out = tmp_path / "queue.md"
+    out_json = tmp_path / "queue.json"
+    out_qids = tmp_path / "queue.qids"
     scaffold.write_text(
         json.dumps(
             {
@@ -66,20 +67,30 @@ def test_build_exactness_review_queue_script_prioritizes_page_specific_model_cas
             "10",
             "--out",
             str(out),
+            "--out-json",
+            str(out_json),
+            "--out-qids-file",
+            str(out_qids),
         ],
-        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
     )
 
     report = out.read_text(encoding="utf-8")
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
     assert "Exactness Review Queue" in report
     assert "## q-page" in report
     assert "risk_score:" in report
     assert "platform_exact_risk, page_specific_exact_risk" in report
+    assert "reasons:" in report
     assert "## q-name" in report
     assert "q-free" not in report
+    assert payload["candidate_count"] == 2
+    assert payload["candidates"][0]["question_id"] == "q-page"
+    assert "required_page_anchor" in payload["candidates"][0]["reasons"]
+    assert out_qids.read_text(encoding="utf-8").splitlines() == ["q-page", "q-name"]
 
 
 def test_build_exactness_review_queue_script_downranks_reviewed_semantic_correct_cases(tmp_path: Path) -> None:
@@ -134,7 +145,7 @@ def test_build_exactness_review_queue_script_downranks_reviewed_semantic_correct
             "--out",
             str(out),
         ],
-        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
