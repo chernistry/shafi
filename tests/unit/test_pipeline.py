@@ -758,6 +758,89 @@ def test_localize_strict_name_support_matches_law_title_without_year_in_chunk_te
     assert localized == ["employment:article16"]
 
 
+def test_localize_strict_name_support_prefers_page_one_for_claimant_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="cfi-010:title",
+            doc_id="cfi-010-2024",
+            doc_title="CFI 010/2024 Fursa Consulting v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="CFI 010/2024 Fursa Consulting Claimant v Example Defendant.",
+            retrieval_score=0.91,
+            rerank_score=0.91,
+            doc_summary="",
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        RankedChunk(
+            chunk_id="cfi-010:detail",
+            doc_id="cfi-010-2024",
+            doc_title="CFI 010/2024 Fursa Consulting v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:3",
+            text="Fursa Consulting submitted witness evidence in support of the claim.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+            page_number=3,
+        ),
+    ]
+
+    localized = RAGPipelineBuilder._localize_strict_support_chunk_ids(
+        answer_type="name",
+        answer="Fursa Consulting",
+        query="Who were the claimants in case CFI 010/2024?",
+        context_chunks=context_chunks,
+    )
+
+    assert localized == ["cfi-010:title"]
+
+
+def test_localize_strict_names_support_prefers_page_one_for_listed_claimants_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="sct-295:title",
+            doc_id="sct-295-2025",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="SCT 295/2025 Olexa Claimant v Odon Defendant.",
+            retrieval_score=0.90,
+            rerank_score=0.90,
+            doc_summary="",
+            page_number=1,
+            page_type="title_anchor",
+        ),
+        RankedChunk(
+            chunk_id="sct-295:merits",
+            doc_id="sct-295-2025",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:6",
+            text="Olexa was cross-examined during the merits hearing.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+            page_number=6,
+        ),
+    ]
+
+    localized = RAGPipelineBuilder._localize_strict_support_chunk_ids(
+        answer_type="names",
+        answer="Olexa",
+        query="Who are listed as the claimants in the case documents for SCT 295/2025?",
+        context_chunks=context_chunks,
+    )
+
+    assert localized == ["sct-295:title"]
+
+
 def test_localize_strict_boolean_support_can_keep_exception_companion_page() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
@@ -802,6 +885,72 @@ def test_localize_strict_boolean_support_can_keep_exception_companion_page() -> 
     )
 
     assert localized == ["operating:exception", "operating:rule"]
+
+
+def test_localize_boolean_compare_support_prefers_page_one_for_party_overlap_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    context_chunks = [
+        RankedChunk(
+            chunk_id="ca-004:title",
+            doc_id="ca-004-2025",
+            doc_title="CA 004/2025 Alpha v Beta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="CA 004/2025 Alpha Claimant v Beta Defendant.",
+            retrieval_score=0.92,
+            rerank_score=0.92,
+            doc_summary="",
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        RankedChunk(
+            chunk_id="ca-004:detail",
+            doc_id="ca-004-2025",
+            doc_title="CA 004/2025 Alpha v Beta",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:5",
+            text="Alpha relied on merits submissions.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+            page_number=5,
+        ),
+        RankedChunk(
+            chunk_id="sct-295:title",
+            doc_id="sct-295-2025",
+            doc_title="SCT 295/2025 Alpha v Odon",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="SCT 295/2025 Alpha Claimant v Odon Defendant.",
+            retrieval_score=0.91,
+            rerank_score=0.91,
+            doc_summary="",
+            page_number=1,
+            page_type="title_anchor",
+        ),
+        RankedChunk(
+            chunk_id="sct-295:detail",
+            doc_id="sct-295-2025",
+            doc_title="SCT 295/2025 Alpha v Odon",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:7",
+            text="Odon denied the claim.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+            page_number=7,
+        ),
+    ]
+
+    localized = RAGPipelineBuilder._localize_boolean_support_chunk_ids(
+        answer="Yes",
+        query="Do cases CA 004/2025 and SCT 295/2025 involve any of the same legal entities or individuals as parties?",
+        context_chunks=context_chunks,
+    )
+
+    assert set(localized) == {"ca-004:title", "sct-295:title"}
 
 
 def test_localize_free_text_support_keeps_multiple_pages_for_composite_item() -> None:

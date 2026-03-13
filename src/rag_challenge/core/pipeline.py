@@ -361,6 +361,45 @@ def _is_case_party_overlap_compare_query(query: str, *, answer_type: str) -> boo
     return has_party_subject and has_overlap_signal
 
 
+def _is_case_party_role_name_query(query: str, *, answer_type: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if answer_type.strip().lower() not in {"name", "names"}:
+        return False
+    if len(_DIFC_CASE_ID_RE.findall(query or "")) < 1:
+        return False
+    has_party_subject = any(
+        token in q
+        for token in (
+            "claimant",
+            "claimants",
+            "defendant",
+            "defendants",
+            "appellant",
+            "appellants",
+            "respondent",
+            "respondents",
+            "applicant",
+            "applicants",
+            "party",
+            "parties",
+        )
+    )
+    if not has_party_subject:
+        return False
+    return any(
+        phrase in q
+        for phrase in (
+            "who were",
+            "who are",
+            "who is",
+            "listed as",
+            "listed in",
+            "listed on",
+            "named in",
+        )
+    )
+
+
 def _is_interpretation_sections_common_elements_query(query: str) -> bool:
     q = re.sub(r"\s+", " ", (query or "").strip()).lower()
     return _is_common_elements_query(query) and "interpretation section" in q
@@ -6231,6 +6270,125 @@ class RAGPipelineBuilder:
         return ordered
 
     @classmethod
+    def _case_party_anchor_terms(cls, query: str) -> tuple[str, ...]:
+        q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+        ordered_terms = (
+            "claimant",
+            "defendant",
+            "appellant",
+            "respondent",
+            "applicant",
+            "party",
+        )
+        matched = tuple(term for term in ordered_terms if term in q)
+        return matched or ("party",)
+
+    @classmethod
+    def _case_party_anchor_chunk_score(
+        cls,
+        *,
+        query: str,
+        chunk: RetrievedChunk | RankedChunk,
+        ref: str | None = None,
+        fragment: str | None = None,
+    ) -> int:
+        text = cls._normalize_support_text(str(getattr(chunk, "text", "") or "")).casefold()
+        doc_title = cls._normalize_support_text(str(getattr(chunk, "doc_title", "") or "")).casefold()
+        if not text and not doc_title:
+            return 0
+
+        page_type = str(getattr(chunk, "page_type", "") or "").strip().casefold()
+        page_num = getattr(chunk, "page_number", None)
+        if page_num is None:
+            page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+        if page_num != 1 and page_type not in {"title_anchor", "caption_anchor"}:
+            return 0
+
+        score = 0
+        if ref is not None:
+            ref_score = cls._named_commencement_title_match_score(ref, chunk)
+            if ref_score <= 0:
+                return 0
+            score += ref_score
+
+        if fragment is not None:
+            fragment_score = cls._chunk_support_score(
+                answer_type="name",
+                query=query,
+                fragment=fragment,
+                chunk=cast("RankedChunk", chunk),
+            )
+            if fragment_score <= 0:
+                return 0
+            score += fragment_score
+
+        role_terms = cls._case_party_anchor_terms(query)
+        blob = f"{doc_title} {text}"
+        if any(term in blob for term in role_terms):
+            score += 120
+        if page_num == 1:
+            score += 160
+        if page_type == "title_anchor":
+            score += 180
+        if page_type == "caption_anchor":
+            score += 240
+        if bool(getattr(chunk, "has_caption_terms", False)):
+            score += 80
+        if " v " in blob or " and " in blob:
+            score += 20
+        return score
+
+    @classmethod
+    def _best_case_party_name_support_chunk_id(
+        cls,
+        *,
+        query: str,
+        fragment: str,
+        context_chunks: Sequence[RankedChunk],
+    ) -> str:
+        best_chunk_id = ""
+        best_score = 0
+        for chunk in context_chunks:
+            score = cls._case_party_anchor_chunk_score(
+                query=query,
+                chunk=chunk,
+                fragment=fragment,
+            )
+            if score > best_score:
+                best_score = score
+                best_chunk_id = chunk.chunk_id
+        return best_chunk_id if best_score > 0 else ""
+
+    @classmethod
+    def _best_case_party_compare_chunk_id(
+        cls,
+        *,
+        query: str,
+        ref: str,
+        context_chunks: Sequence[RankedChunk],
+        seen_doc_ids: set[str],
+    ) -> tuple[str, str]:
+        best_chunk_id = ""
+        best_doc_id = ""
+        best_score = 0
+        for chunk in context_chunks:
+            doc_id = str(getattr(chunk, "doc_id", "") or chunk.chunk_id).strip()
+            if doc_id in seen_doc_ids:
+                continue
+            score = cls._case_party_anchor_chunk_score(
+                query=query,
+                chunk=chunk,
+                ref=ref,
+            )
+            if score > best_score:
+                best_score = score
+                best_chunk_id = chunk.chunk_id
+                best_doc_id = doc_id
+        if best_score <= 0:
+            return ("", "")
+        return (best_chunk_id, best_doc_id)
+
+    @classmethod
     def _is_named_metadata_support_query(cls, query: str) -> bool:
         q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
         if not q or _is_broad_enumeration_query(query):
@@ -6467,13 +6625,21 @@ class RAGPipelineBuilder:
         localized: list[str] = []
         seen: set[str] = set()
         for fragment in fragments:
-            chunk_id = cls._best_support_chunk_id(
-                answer_type=kind,
-                query=query,
-                fragment=fragment,
-                context_chunks=context_chunks,
-                allow_first_chunk_fallback=False,
-            )
+            chunk_id = ""
+            if _is_case_party_role_name_query(query, answer_type=answer_type):
+                chunk_id = cls._best_case_party_name_support_chunk_id(
+                    query=query,
+                    fragment=fragment,
+                    context_chunks=context_chunks,
+                )
+            if not chunk_id:
+                chunk_id = cls._best_support_chunk_id(
+                    answer_type=kind,
+                    query=query,
+                    fragment=fragment,
+                    context_chunks=context_chunks,
+                    allow_first_chunk_fallback=False,
+                )
             if chunk_id and chunk_id not in seen:
                 seen.add(chunk_id)
                 localized.append(chunk_id)
@@ -6617,6 +6783,25 @@ class RAGPipelineBuilder:
                 if clause_score <= 0:
                     return 0
                 return cls._boolean_admin_seed_chunk_score(ref=ref, chunk=chunk) + clause_score
+        elif _is_case_party_overlap_compare_query(query, answer_type="boolean"):
+            localized: list[str] = []
+            seen_chunk_ids: set[str] = set()
+            seen_doc_ids: set[str] = set()
+            for ref in refs[:2]:
+                best_chunk_id, best_doc_id = cls._best_case_party_compare_chunk_id(
+                    query=query,
+                    ref=ref,
+                    context_chunks=context_chunks,
+                    seen_doc_ids=seen_doc_ids,
+                )
+                if not best_chunk_id:
+                    continue
+                if best_chunk_id not in seen_chunk_ids:
+                    localized.append(best_chunk_id)
+                    seen_chunk_ids.add(best_chunk_id)
+                if best_doc_id:
+                    seen_doc_ids.add(best_doc_id)
+            return localized if len(localized) >= 2 else []
         else:
             return []
 
