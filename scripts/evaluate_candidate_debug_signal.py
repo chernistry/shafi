@@ -4,16 +4,61 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from rag_challenge.config import get_settings
 from rag_challenge.eval.judge import JudgeClient, JudgeOutcome
 from rag_challenge.eval.metrics import AnswerTypeFormatCompliance, CitationCoverage
 from rag_challenge.eval.sources import PdfPageTextProvider, build_sources_text, select_used_pages
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 JsonDict = dict[str, Any]
+_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9./-]*")
+_OVERLAP_STOPWORDS = {
+    "the",
+    "and",
+    "for",
+    "that",
+    "with",
+    "from",
+    "into",
+    "this",
+    "there",
+    "question",
+    "according",
+    "under",
+    "law",
+    "article",
+    "page",
+    "pages",
+    "judgment",
+    "specific",
+    "claim",
+    "number",
+    "case",
+    "cases",
+    "legal",
+    "entity",
+    "entities",
+    "individual",
+    "individuals",
+    "party",
+    "parties",
+    "date",
+    "court",
+    "appeal",
+    "originated",
+    "involve",
+    "same",
+    "yes",
+    "no",
+    "null",
+}
 
 
 def _coerce_float(value: object, *, default: float | None = None) -> float | None:
@@ -74,6 +119,29 @@ class CandidateEvalArtifacts:
     payload: JsonDict
 
 
+@dataclass(frozen=True)
+class AttributionSignalRow:
+    question_id: str
+    gold_pages: list[str]
+    false_positive_pages: list[str]
+    gold_scores: list[float]
+    false_positive_scores: list[float]
+    signal_terms: list[str]
+    signal_source: str
+
+
+@dataclass(frozen=True)
+class AttributionSignalSummary:
+    verdict: str
+    evaluated_cases: int
+    pairwise_comparisons: int
+    gold_beats_false_positive_rate: float
+    mean_gold_overlap: float
+    mean_false_positive_overlap: float
+    mean_gap: float
+    rows: list[AttributionSignalRow]
+
+
 def _load_questions(path: Path) -> dict[str, tuple[str, str]]:
     rows_obj = json.loads(path.read_text(encoding="utf-8"))
     rows = _coerce_object_list(rows_obj)
@@ -97,6 +165,83 @@ def _normalize_answer_text(value: object) -> str:
         return "null"
     text = str(value).strip()
     return text if text else "null"
+
+
+def _normalize_signal_tokens(text: str) -> list[str]:
+    seen: set[str] = set()
+    tokens: list[str] = []
+    for raw in _TOKEN_RE.findall(str(text or "")):
+        token = raw.strip().lower().strip(".,;:()[]{}")
+        if len(token) < 2 or token in _OVERLAP_STOPWORDS:
+            continue
+        if token not in seen:
+            seen.add(token)
+            tokens.append(token)
+    return tokens
+
+
+def _page_overlap_score(*, answer_text: str, page_text: str) -> tuple[float, list[str]]:
+    answer_terms = _normalize_signal_tokens(answer_text)
+    if not answer_terms:
+        return 0.0, []
+    page_tokens = set(_normalize_signal_tokens(page_text))
+    hits = [token for token in answer_terms if token in page_tokens]
+    return len(hits) / max(1, len(answer_terms)), hits
+
+
+def _is_unanswerable_answer(answer_text: str) -> bool:
+    normalized = answer_text.strip().lower()
+    return (
+        normalized in {"", "null", "none"}
+        or normalized.startswith("there is no information on this question")
+        or "insufficient sources retrieved" in normalized
+    )
+
+
+def _signal_text_for_case(case: CandidateCase) -> tuple[str, list[str], str]:
+    answer_text = case.answer_text.strip()
+    answer_terms = _normalize_signal_tokens(answer_text)
+    answer_type = case.answer_type.strip().lower()
+    if answer_terms and not (answer_type == "boolean" and answer_text.lower() in {"yes", "no", "true", "false"}):
+        return answer_text, answer_terms, "answer"
+
+    combined_text = " ".join(part for part in (case.question.strip(), answer_text) if part).strip()
+    combined_terms = _normalize_signal_tokens(combined_text)
+    if combined_terms:
+        return combined_text, combined_terms, "question+answer"
+
+    return answer_text, answer_terms, "answer"
+
+
+def _load_page_benchmark(path: Path) -> dict[str, list[str]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    rows_obj = payload.get("cases", [])
+    rows = _coerce_object_list(rows_obj)
+    out: dict[str, list[str]] = {}
+    for row_obj in rows:
+        if not isinstance(row_obj, dict):
+            continue
+        row = cast("JsonDict", row_obj)
+        if str(row.get("trust_tier") or "").strip().lower() != "trusted":
+            continue
+        qid = str(row.get("question_id") or "").strip()
+        gold_pages = _coerce_str_list(row.get("gold_page_ids"))
+        if qid and gold_pages:
+            out[qid] = gold_pages
+    return out
+
+
+def _parse_page_id(page_id: str) -> tuple[str, int] | None:
+    raw = page_id.strip()
+    if not raw or "_" not in raw:
+        return None
+    doc_id, _, page_raw = raw.rpartition("_")
+    if not doc_id or not page_raw.isdigit():
+        return None
+    page = int(page_raw)
+    if page <= 0:
+        return None
+    return doc_id, page
 
 
 def _load_raw_results(path: Path, *, questions: dict[str, tuple[str, str]]) -> dict[str, CandidateCase]:
@@ -130,8 +275,7 @@ def _load_raw_results(path: Path, *, questions: dict[str, tuple[str, str]]) -> d
 
 
 def _used_pages(case: CandidateCase) -> list[str]:
-    settings = get_settings()
-    return select_used_pages(case.telemetry, max_pages=int(getattr(settings.judge, "sources_max_pages", 12)))
+    return select_used_pages(case.telemetry, max_pages=12)
 
 
 def _answer_changed(baseline: CandidateCase, candidate: CandidateCase) -> bool:
@@ -260,6 +404,105 @@ async def _evaluate_single_case(
     return record, judge_record
 
 
+def _classify_attribution_signal(
+    *,
+    pairwise_comparisons: int,
+    gold_beats_false_positive_rate: float,
+    mean_gap: float,
+) -> str:
+    if pairwise_comparisons >= 5 and gold_beats_false_positive_rate >= 0.75 and mean_gap >= 0.10:
+        return "real signal"
+    if pairwise_comparisons >= 3 and gold_beats_false_positive_rate >= 0.60 and mean_gap >= 0.03:
+        return "weak signal"
+    return "noise"
+
+
+def _build_answer_to_page_attribution_signal(
+    *,
+    cases_by_qid: dict[str, CandidateCase],
+    selected_qids: list[str],
+    gold_pages_by_qid: dict[str, list[str]],
+    page_text_for: Callable[[str], str | None],
+) -> AttributionSignalSummary | None:
+    rows: list[AttributionSignalRow] = []
+    gold_scores_flat: list[float] = []
+    false_positive_scores_flat: list[float] = []
+    pairwise_wins = 0
+    pairwise_total = 0
+
+    for qid in selected_qids:
+        gold_pages = gold_pages_by_qid.get(qid, [])
+        case = cases_by_qid.get(qid)
+        if case is None or not gold_pages or _is_unanswerable_answer(case.answer_text):
+            continue
+
+        used_pages = _used_pages(case)
+        false_positive_pages = [page_id for page_id in used_pages if page_id not in set(gold_pages)]
+        if not false_positive_pages:
+            continue
+
+        signal_text, signal_terms, signal_source = _signal_text_for_case(case)
+        if not signal_terms:
+            continue
+
+        gold_scores: list[float] = []
+        for page_id in gold_pages:
+            page_text = page_text_for(page_id) or ""
+            score, _ = _page_overlap_score(answer_text=signal_text, page_text=page_text)
+            gold_scores.append(round(score, 4))
+
+        false_positive_scores: list[float] = []
+        for page_id in false_positive_pages:
+            page_text = page_text_for(page_id) or ""
+            score, _ = _page_overlap_score(answer_text=signal_text, page_text=page_text)
+            false_positive_scores.append(round(score, 4))
+
+        if not gold_scores or not false_positive_scores:
+            continue
+
+        for gold_score in gold_scores:
+            for false_positive_score in false_positive_scores:
+                if gold_score > false_positive_score:
+                    pairwise_wins += 1
+                pairwise_total += 1
+
+        gold_scores_flat.extend(gold_scores)
+        false_positive_scores_flat.extend(false_positive_scores)
+        rows.append(
+            AttributionSignalRow(
+                question_id=qid,
+                gold_pages=gold_pages,
+                false_positive_pages=false_positive_pages,
+                gold_scores=gold_scores,
+                false_positive_scores=false_positive_scores,
+                signal_terms=signal_terms,
+                signal_source=signal_source,
+            )
+        )
+
+    if not rows or not gold_scores_flat or not false_positive_scores_flat:
+        return None
+
+    mean_gold = sum(gold_scores_flat) / len(gold_scores_flat)
+    mean_false = sum(false_positive_scores_flat) / len(false_positive_scores_flat)
+    mean_gap = mean_gold - mean_false
+    pairwise_rate = pairwise_wins / max(1, pairwise_total)
+    return AttributionSignalSummary(
+        verdict=_classify_attribution_signal(
+            pairwise_comparisons=pairwise_total,
+            gold_beats_false_positive_rate=pairwise_rate,
+            mean_gap=mean_gap,
+        ),
+        evaluated_cases=len(rows),
+        pairwise_comparisons=pairwise_total,
+        gold_beats_false_positive_rate=pairwise_rate,
+        mean_gold_overlap=mean_gold,
+        mean_false_positive_overlap=mean_false,
+        mean_gap=mean_gap,
+        rows=rows,
+    )
+
+
 async def _evaluate_artifact(
     *,
     label: str,
@@ -269,16 +512,16 @@ async def _evaluate_artifact(
     docs_dir: Path,
     out_dir: Path,
 ) -> CandidateEvalArtifacts:
-    settings = get_settings()
-    judge_enabled = (
-        judge_scope.strip().lower() != "none"
-        and bool(settings.judge.enabled)
-        and bool(settings.judge.api_key.get_secret_value().strip())
-    )
+    max_chars_per_page = 20000
+    judge_enabled = False
+    if judge_scope.strip().lower() != "none":
+        settings = get_settings()
+        max_chars_per_page = int(getattr(settings.judge, "sources_max_chars_per_page", 20000))
+        judge_enabled = bool(settings.judge.enabled) and bool(settings.judge.api_key.get_secret_value().strip())
     judge_client: JudgeClient | None = JudgeClient() if judge_enabled else None
     pdf_provider = PdfPageTextProvider(
         docs_dir,
-        max_chars_per_page=int(getattr(settings.judge, "sources_max_chars_per_page", 20000)),
+        max_chars_per_page=max_chars_per_page,
     )
     ttft_values: list[float] = []
     coverage_sum = 0.0
@@ -402,6 +645,8 @@ def _build_compare_markdown(
     baseline: CandidateEvalArtifacts,
     candidate: CandidateEvalArtifacts,
     selected_qids: list[str],
+    baseline_attribution: JsonDict | None,
+    candidate_attribution: JsonDict | None,
 ) -> str:
     baseline_summary = cast("JsonDict", baseline.payload.get("summary", {}))
     candidate_summary = cast("JsonDict", candidate.payload.get("summary", {}))
@@ -422,12 +667,30 @@ def _build_compare_markdown(
         f"| `{baseline.label}` | {baseline_summary.get('total_cases', 0)} | {baseline_judge.get('pass_rate', 'n/a')} | {baseline_judge.get('avg_grounding', 'n/a')} | {baseline_judge.get('avg_accuracy', 'n/a')} | {baseline_judge.get('avg_clarity', 'n/a')} | {baseline_summary.get('citation_coverage', 'n/a')} | {baseline_summary.get('answer_type_format_compliance', 'n/a')} | {baseline_summary.get('ttft_p50_ms', 'n/a')} |",
         f"| `{candidate.label}` | {candidate_summary.get('total_cases', 0)} | {candidate_judge.get('pass_rate', 'n/a')} | {candidate_judge.get('avg_grounding', 'n/a')} | {candidate_judge.get('avg_accuracy', 'n/a')} | {candidate_judge.get('avg_clarity', 'n/a')} | {candidate_summary.get('citation_coverage', 'n/a')} | {candidate_summary.get('answer_type_format_compliance', 'n/a')} | {candidate_summary.get('ttft_p50_ms', 'n/a')} |",
         "",
+        "## Attribution Falsifier",
+        "",
+        "| Artifact | Verdict | Cases | Pairwise | Gold>FP Rate | Mean Gold | Mean FP | Mean Gap |",
+        "|:--|:--|--:|--:|--:|--:|--:|--:|",
+        _attribution_markdown_row(label=baseline.label, payload=baseline_attribution),
+        _attribution_markdown_row(label=candidate.label, payload=candidate_attribution),
+        "",
         "## Per-Case Delta",
         "",
     ]
     for qid in selected_qids:
         lines.append(_diff_case_rows(qid=qid, baseline_eval=baseline.payload, candidate_eval=candidate.payload))
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _attribution_markdown_row(*, label: str, payload: JsonDict | None) -> str:
+    if payload is None:
+        return f"| `{label}` | `not_run` | 0 | 0 | n/a | n/a | n/a | n/a |"
+    return (
+        f"| `{label}` | `{payload.get('verdict', 'n/a')}` | {payload.get('evaluated_cases', 0)} | "
+        f"{payload.get('pairwise_comparisons', 0)} | {payload.get('gold_beats_false_positive_rate', 'n/a')} | "
+        f"{payload.get('mean_gold_overlap', 'n/a')} | {payload.get('mean_false_positive_overlap', 'n/a')} | "
+        f"{payload.get('mean_gap', 'n/a')} |"
+    )
 
 
 def _load_qids_file(path: Path | None) -> set[str]:
@@ -448,6 +711,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--case-scope", choices=("changed", "all"), default="changed")
     parser.add_argument("--judge-scope", choices=("all", "free_text", "none"), default="all")
     parser.add_argument("--include-qids-file", type=Path, default=None)
+    parser.add_argument("--page-benchmark", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -483,6 +747,83 @@ async def _async_main(args: argparse.Namespace) -> None:
         out_dir=out_dir,
     )
 
+    baseline_attribution_payload: JsonDict | None = None
+    candidate_attribution_payload: JsonDict | None = None
+    page_benchmark = getattr(args, "page_benchmark", None)
+    if page_benchmark is not None:
+        gold_pages_by_qid = _load_page_benchmark(page_benchmark.resolve())
+        pdf_provider = PdfPageTextProvider(
+            args.docs_dir.resolve(),
+            max_chars_per_page=20000,
+        )
+        try:
+            def _page_text_for(page_id: str) -> str | None:
+                parsed = _parse_page_id(page_id)
+                if parsed is None:
+                    return None
+                doc_id, page = parsed
+                return pdf_provider.get_page_text(doc_id=doc_id, page=page)
+
+            baseline_attribution = _build_answer_to_page_attribution_signal(
+                cases_by_qid=baseline_cases,
+                selected_qids=selected_qids,
+                gold_pages_by_qid=gold_pages_by_qid,
+                page_text_for=_page_text_for,
+            )
+            candidate_attribution = _build_answer_to_page_attribution_signal(
+                cases_by_qid=candidate_cases,
+                selected_qids=selected_qids,
+                gold_pages_by_qid=gold_pages_by_qid,
+                page_text_for=_page_text_for,
+            )
+        finally:
+            pdf_provider.close()
+
+        if baseline_attribution is not None:
+            baseline_attribution_payload = {
+                "verdict": baseline_attribution.verdict,
+                "evaluated_cases": baseline_attribution.evaluated_cases,
+                "pairwise_comparisons": baseline_attribution.pairwise_comparisons,
+                "gold_beats_false_positive_rate": round(baseline_attribution.gold_beats_false_positive_rate, 4),
+                "mean_gold_overlap": round(baseline_attribution.mean_gold_overlap, 4),
+                "mean_false_positive_overlap": round(baseline_attribution.mean_false_positive_overlap, 4),
+                "mean_gap": round(baseline_attribution.mean_gap, 4),
+                "cases": [
+                    {
+                        "question_id": row.question_id,
+                        "gold_pages": row.gold_pages,
+                        "false_positive_pages": row.false_positive_pages,
+                        "gold_scores": row.gold_scores,
+                        "false_positive_scores": row.false_positive_scores,
+                        "signal_terms": row.signal_terms,
+                        "signal_source": row.signal_source,
+                    }
+                    for row in baseline_attribution.rows
+                ],
+            }
+        if candidate_attribution is not None:
+            candidate_attribution_payload = {
+                "verdict": candidate_attribution.verdict,
+                "evaluated_cases": candidate_attribution.evaluated_cases,
+                "pairwise_comparisons": candidate_attribution.pairwise_comparisons,
+                "gold_beats_false_positive_rate": round(candidate_attribution.gold_beats_false_positive_rate, 4),
+                "mean_gold_overlap": round(candidate_attribution.mean_gold_overlap, 4),
+                "mean_false_positive_overlap": round(candidate_attribution.mean_false_positive_overlap, 4),
+                "mean_gap": round(candidate_attribution.mean_gap, 4),
+                "cases": [
+                    {
+                        "question_id": row.question_id,
+                        "gold_pages": row.gold_pages,
+                        "false_positive_pages": row.false_positive_pages,
+                        "gold_scores": row.gold_scores,
+                        "false_positive_scores": row.false_positive_scores,
+                        "signal_terms": row.signal_terms,
+                        "signal_source": row.signal_source,
+                    }
+                    for row in candidate_attribution.rows
+                ],
+            }
+
     compare_payload: JsonDict = {
         "baseline_label": baseline_eval.label,
         "candidate_label": candidate_eval.label,
@@ -494,6 +835,8 @@ async def _async_main(args: argparse.Namespace) -> None:
         "candidate_eval": str(candidate_eval.eval_path),
         "baseline_judge": str(baseline_eval.judge_path),
         "candidate_judge": str(candidate_eval.judge_path),
+        "baseline_answer_to_page_signal": baseline_attribution_payload,
+        "candidate_answer_to_page_signal": candidate_attribution_payload,
     }
     compare_json = out_dir / f"candidate_debug_compare_{args.candidate_label}_vs_{args.baseline_label}.json"
     compare_md = out_dir / f"candidate_debug_compare_{args.candidate_label}_vs_{args.baseline_label}.md"
@@ -503,6 +846,8 @@ async def _async_main(args: argparse.Namespace) -> None:
             baseline=baseline_eval,
             candidate=candidate_eval,
             selected_qids=selected_qids,
+            baseline_attribution=baseline_attribution_payload,
+            candidate_attribution=candidate_attribution_payload,
         ),
         encoding="utf-8",
     )

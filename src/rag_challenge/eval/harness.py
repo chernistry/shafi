@@ -70,6 +70,10 @@ def _cases_factory() -> list[dict[str, object]]:
     return []
 
 
+def _counts_factory() -> dict[str, int]:
+    return {}
+
+
 @dataclass
 class EvalResult:
     total_cases: int = 0
@@ -103,6 +107,12 @@ class EvalResult:
     judge_grounding_sum: int = 0
     judge_clarity_sum: int = 0
     judge_uncertainty_sum: int = 0
+    support_page_checked_cases: int = 0
+    zero_support_cases: int = 0
+    justified_zero_support_cases: int = 0
+    unjustified_zero_support_cases: int = 0
+    zero_support_reason_counts: dict[str, int] = field(default_factory=_counts_factory)
+    unjustified_zero_support_examples: list[dict[str, object]] = field(default_factory=_cases_factory)
     cases: list[dict[str, object]] = field(default_factory=_cases_factory)
 
     @property
@@ -252,6 +262,14 @@ class EvalResult:
             "top_10_boolean_slowest": top_10_boolean,
             "hallucination_suspects": hallucination_suspects,
             "failures": len(self.failures),
+            "support_page_guard": {
+                "checked_cases": self.support_page_checked_cases,
+                "zero_support_cases": self.zero_support_cases,
+                "justified_zero_support_cases": self.justified_zero_support_cases,
+                "unjustified_zero_support_cases": self.unjustified_zero_support_cases,
+                "zero_support_reason_counts": dict(sorted(self.zero_support_reason_counts.items())),
+                "top_unjustified_zero_support_cases": self.unjustified_zero_support_examples[:10],
+            },
         }
 
         if self.judge_cases > 0 or self.judge_failures > 0:
@@ -371,6 +389,9 @@ async def run_evaluation(
             judge_outcome: JudgeOutcome | None = None
             judge_sources_sha256 = ""
             judge_failure = ""
+            used_pages: list[str] = []
+            zero_support_allowed = False
+            zero_support_reason = ""
 
             try:
                 elapsed_ms = 0.0
@@ -472,6 +493,13 @@ async def run_evaluation(
 
                         ttft_value: object = payload.get("ttft_ms", elapsed_ms)
                         ttft_ms = _coerce_float(ttft_value, default=elapsed_ms)
+                        used_pages = select_used_pages(payload, max_pages=0)
+                        zero_support_allowed, zero_support_reason = _classify_zero_support_case(
+                            answer_text=token_text,
+                            answer_type=case.answer_type,
+                            failure=failure,
+                            used_pages=used_pages,
+                        )
 
                         if doc_refs and qdrant_client is not None and context_ids:
                             doc_ref_hit_rate = await _doc_ref_hit_rate(
@@ -580,6 +608,26 @@ async def run_evaluation(
                 result.citation_coverage_count_by_answer_type[answer_type_key] = (
                     result.citation_coverage_count_by_answer_type.get(answer_type_key, 0) + 1
                 )
+                result.support_page_checked_cases += 1
+                if not used_pages:
+                    result.zero_support_cases += 1
+                    result.zero_support_reason_counts[zero_support_reason] = (
+                        result.zero_support_reason_counts.get(zero_support_reason, 0) + 1
+                    )
+                    if zero_support_allowed:
+                        result.justified_zero_support_cases += 1
+                    else:
+                        result.unjustified_zero_support_cases += 1
+                        if len(result.unjustified_zero_support_examples) < 10:
+                            result.unjustified_zero_support_examples.append(
+                                {
+                                    "case_id": case.case_id,
+                                    "answer_type": case.answer_type,
+                                    "reason": zero_support_reason,
+                                    "question": case.question[:300],
+                                    "answer": token_text.strip()[:300],
+                                }
+                            )
                 for stage_name, stage_value in stage_values.items():
                     result.stage_values_ms.setdefault(stage_name, []).append(stage_value)
                 if citation_hallucination_rate is not None:
@@ -618,6 +666,10 @@ async def run_evaluation(
                             None if citation_hallucination_rate is None else round(citation_hallucination_rate, 4)
                         ),
                         "format_compliance": round(format_compliance, 4) if has_answer_type else None,
+                        "used_pages": list(used_pages),
+                        "used_page_count": len(used_pages),
+                        "zero_support_allowed": bool(zero_support_allowed),
+                        "zero_support_reason": zero_support_reason,
                         "context_chunk_count": len(context_ids),
                         "cited_chunk_count": len(cited_ids),
                         "stage_ms": {key: round(value, 1) for key, value in stage_values.items()},
@@ -758,6 +810,29 @@ def _is_retryable_eval_exception(exc: Exception) -> bool:
         "temporarily unavailable",
     )
     return any(marker in message for marker in retry_markers)
+
+
+def _classify_zero_support_case(
+    *,
+    answer_text: str,
+    answer_type: str,
+    failure: str | None,
+    used_pages: list[str],
+) -> tuple[bool, str]:
+    if used_pages:
+        return True, "support_present"
+    if failure is not None:
+        return False, "eval_failure"
+
+    normalized_answer = " ".join(str(answer_text or "").strip().lower().split())
+    normalized_type = str(answer_type or "").strip().lower()
+    if normalized_type != "free_text" and normalized_answer in {"null", "none"}:
+        return True, "strict_unanswerable"
+    if normalized_answer.startswith("there is no information on this question"):
+        return True, "no_information"
+    if "insufficient sources retrieved" in normalized_answer:
+        return True, "insufficient_sources"
+    return False, "missing_support_pages"
 
 
 def _judge_top_fails(cases: list[dict[str, object]]) -> list[dict[str, object]]:
