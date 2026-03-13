@@ -622,7 +622,9 @@ def _hydrate_row(
 
 
 def _best_offline_row(rows: list[JsonDict]) -> JsonDict | None:
-    candidates = [row for row in rows if str(row.get("status")) in {"candidate", "ceiling", "rejected"}]
+    candidates = [row for row in rows if str(row.get("status")) in {"candidate", "ceiling"}]
+    if not candidates:
+        candidates = [row for row in rows if str(row.get("status")) == "rejected"]
     if not candidates:
         return None
     return max(

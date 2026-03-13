@@ -140,6 +140,17 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
                         "lineage_confidence": "high",
                         "notes": "best offline candidate",
                     },
+                    {
+                        "label": "v10_local_page_reranker_r1",
+                        "date": "2026-03-13",
+                        "status": "rejected",
+                        "branch_class": "real_page_reranker_bounded_candidates",
+                        "git_commit": "a9ad8a7",
+                        "baseline": "triad_f331_e0798_plus_dotted",
+                        "candidate_label": "v10_local_page_reranker_r1",
+                        "lineage_confidence": "medium",
+                        "notes": "rejected bounded page reranker candidate",
+                    },
                 ]
             }
         ),
@@ -164,6 +175,16 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
                         "answer_drift": 2,
                         "page_drift": 4,
                         "recommendation": "PROMISING",
+                    },
+                    {
+                        "label": "v10_local_page_reranker_r1",
+                        "strict_total_estimate": 0.728266,
+                        "paranoid_total_estimate": 0.717766,
+                        "hidden_g_trusted_delta": -0.0198,
+                        "hidden_g_all_delta": -0.0144,
+                        "answer_drift": 0,
+                        "page_drift": 2,
+                        "recommendation": "NO_SUBMIT",
                     }
                 ]
             }
