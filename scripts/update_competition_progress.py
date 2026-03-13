@@ -239,6 +239,15 @@ def _load_candidate_cycle_index(path: Path | None) -> dict[str, JsonDict]:
     return index
 
 
+def _discover_spec_paths(root: Path) -> list[Path]:
+    research = root / ".sdd" / "researches"
+    if not research.exists():
+        return []
+    paths = sorted(research.glob("matrix_specs_with_ticket*.json"))
+    paths.extend(sorted(research.glob("ticket*_*/spec.json")))
+    return [path.resolve() for path in paths]
+
+
 def _load_lineage(path: Path | None) -> JsonDict | None:
     if path is None or not path.exists():
         return None
@@ -497,24 +506,51 @@ def _matrix_default_specs(root: Path) -> list[JsonDict]:
     ]
 
 
-def _load_specs(path: Path | None, *, root: Path) -> list[JsonDict]:
-    default_specs = _matrix_default_specs(root)
-    if path is None or not path.exists():
-        return default_specs
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    rows_obj = payload.get("rows") if isinstance(payload, dict) else payload
-    if not isinstance(rows_obj, list):
-        raise ValueError(f"Expected list/rows object in {path}")
+def _known_row_overrides(root: Path) -> dict[str, JsonDict]:
+    research = root / ".sdd" / "researches"
+    return {
+        "v10_local_page_localizer_r1": {
+            "production_mimic_json": str(research / "production_mimic_v10_local_page_localizer_r1_2026-03-13" / "production_mimic.json"),
+        },
+        "v10_local_page_reranker_r1": {
+            "production_mimic_json": str(research / "ticket21_support_shape_v2_2026-03-13" / "production_mimic_rejected_page_reranker.json"),
+        },
+        "v10_local_support_shape_v2_r1": {
+            "production_mimic_json": str(research / "ticket21_support_shape_v2_2026-03-13" / "production_mimic_current_leader.json"),
+        },
+        "v10_local_docfamily_collapse_r1": {
+            "production_mimic_json": str(research / "ticket22_docfamily_collapse_r1_2026-03-13" / "production_mimic_v10_local_docfamily_collapse_r1.json"),
+        },
+        "v10_local_page_candidates_r1": {
+            "production_mimic_json": str(research / "ticket23_page_candidates_r1_2026-03-13" / "production_mimic_v10_local_page_candidates_r1.json"),
+        },
+    }
+
+
+def _merge_specs(
+    base_specs: list[JsonDict],
+    extra_paths: list[Path],
+    *,
+    root: Path,
+) -> list[JsonDict]:
     merged_specs: dict[str, JsonDict] = {}
     ordered_labels: list[str] = []
-    for spec in default_specs:
+    for spec in base_specs:
         label = str(spec.get("label") or "").strip()
         if not label:
             continue
         merged_specs[label] = dict(spec)
         ordered_labels.append(label)
-    for item in cast("list[object]", rows_obj):
-        if isinstance(item, dict):
+    for path in extra_paths:
+        if not path.exists():
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        rows_obj = payload.get("rows") if isinstance(payload, dict) else payload
+        if not isinstance(rows_obj, list):
+            raise ValueError(f"Expected list/rows object in {path}")
+        for item in cast("list[object]", rows_obj):
+            if not isinstance(item, dict):
+                continue
             spec = cast("JsonDict", item)
             label = str(spec.get("label") or "").strip()
             if not label:
@@ -522,7 +558,18 @@ def _load_specs(path: Path | None, *, root: Path) -> list[JsonDict]:
             merged_specs[label] = {**merged_specs.get(label, {}), **spec}
             if label not in ordered_labels:
                 ordered_labels.append(label)
+    for label, override in _known_row_overrides(root).items():
+        if label in merged_specs:
+            merged_specs[label] = {**merged_specs[label], **override}
     return [merged_specs[label] for label in ordered_labels if label in merged_specs]
+
+
+def _load_specs(path: Path | None, *, root: Path) -> list[JsonDict]:
+    default_specs = _matrix_default_specs(root)
+    extra_paths = _discover_spec_paths(root)
+    if path is not None and path.exists():
+        extra_paths.append(path.resolve())
+    return _merge_specs(default_specs, extra_paths, root=root)
 
 
 def _resolve_path(value: object) -> Path | None:
@@ -539,7 +586,8 @@ def _hydrate_row(
     *,
     spec: JsonDict,
     history_rows: dict[str, JsonDict],
-    cycle_index: dict[str, JsonDict],
+    global_cycle_index: dict[str, JsonDict],
+    cycle_index_cache: dict[str, dict[str, JsonDict]],
     global_production_mimic: JsonDict | None,
     supervisor_action: str | None,
 ) -> JsonDict:
@@ -583,6 +631,13 @@ def _hydrate_row(
         row.update(_status_metrics(status_payload))
 
     candidate_label = str(spec.get("candidate_label") or "").strip()
+    cycle_path = _resolve_path(spec.get("candidate_cycle_json"))
+    cycle_index = global_cycle_index
+    if cycle_path is not None:
+        cache_key = str(cycle_path.resolve())
+        if cache_key not in cycle_index_cache:
+            cycle_index_cache[cache_key] = _load_candidate_cycle_index(cycle_path)
+        cycle_index = cycle_index_cache[cache_key]
     if candidate_label and candidate_label in cycle_index:
         candidate_row = cycle_index[candidate_label]
         row["answer_drift"] = candidate_row.get("answer_drift")
@@ -622,15 +677,20 @@ def _hydrate_row(
         row["exactness_resolved_qids"] = exactness_payload.get("resolved_incorrect_qids") or []
         row["exactness_unresolved_qids"] = exactness_payload.get("still_mismatched_incorrect_qids") or []
 
-    if global_production_mimic is not None and candidate_label and candidate_label == str(global_production_mimic.get("candidate_class") or candidate_label):
-        row["lineage_confidence"] = global_production_mimic.get("lineage_confidence", row["lineage_confidence"])
-        row["judge_pass_rate"] = cast("JsonDict", global_production_mimic.get("judge") or {}).get("pass_rate")
-        row["judge_grounding"] = cast("JsonDict", global_production_mimic.get("judge") or {}).get("avg_grounding")
-        row["judge_accuracy"] = cast("JsonDict", global_production_mimic.get("judge") or {}).get("avg_accuracy")
-        row["platform_like_total_estimate"] = global_production_mimic.get("platform_like_total_estimate")
-        row["strict_total_estimate"] = global_production_mimic.get("strict_total_estimate")
-        row["paranoid_total_estimate"] = global_production_mimic.get("paranoid_total_estimate")
-        row["supervisor_action"] = supervisor_action or row["supervisor_action"]
+    row_production_mimic = _load_production_mimic(_resolve_path(spec.get("production_mimic_json")))
+    effective_production_mimic = row_production_mimic
+    if effective_production_mimic is None and global_production_mimic is not None and candidate_label and candidate_label == str(global_production_mimic.get("candidate_class") or candidate_label):
+        effective_production_mimic = global_production_mimic
+    if effective_production_mimic is not None:
+        row["lineage_confidence"] = effective_production_mimic.get("lineage_confidence", row["lineage_confidence"])
+        row["judge_pass_rate"] = cast("JsonDict", effective_production_mimic.get("judge") or {}).get("pass_rate")
+        row["judge_grounding"] = cast("JsonDict", effective_production_mimic.get("judge") or {}).get("avg_grounding")
+        row["judge_accuracy"] = cast("JsonDict", effective_production_mimic.get("judge") or {}).get("avg_accuracy")
+        row["platform_like_total_estimate"] = effective_production_mimic.get("platform_like_total_estimate")
+        row["strict_total_estimate"] = effective_production_mimic.get("strict_total_estimate")
+        row["paranoid_total_estimate"] = effective_production_mimic.get("paranoid_total_estimate")
+        if row_production_mimic is None:
+            row["supervisor_action"] = supervisor_action or row["supervisor_action"]
 
     return row
 
@@ -795,6 +855,7 @@ def build_competition_matrix(
     leaderboard_summary = build_leaderboard_summary(load_leaderboard_rows(leaderboard_path), team_name=team_name)
     history_rows = _parse_public_history_rows(history_path)
     cycle_index = _load_candidate_cycle_index(candidate_cycle_json)
+    cycle_index_cache: dict[str, dict[str, JsonDict]] = {}
     production_mimic = _load_production_mimic(production_mimic_json)
     supervisor_action = _load_supervisor_action(supervisor_runs_json)
     specs = _load_specs(specs_path, root=ROOT)
@@ -803,7 +864,8 @@ def build_competition_matrix(
         _hydrate_row(
             spec=spec,
             history_rows=history_rows,
-            cycle_index=cycle_index,
+            global_cycle_index=cycle_index,
+            cycle_index_cache=cycle_index_cache,
             global_production_mimic=production_mimic
             if production_mimic is not None
             and (

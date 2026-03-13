@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from pathlib import Path
+
+def _load_update_competition_progress_module():
+    scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    return importlib.import_module("update_competition_progress")
 
 
 def test_update_competition_progress_script_renders_budget_and_estimate(tmp_path: Path) -> None:
@@ -391,3 +396,118 @@ def test_update_competition_progress_script_merges_partial_specs_with_defaults(t
     assert "v10_local_page_candidates_r1" in labels
     assert matrix_payload["summary"]["current_best_offline_label"] == "triad_f331_e0798_plus_dotted"
     assert "Current best offline candidate: `triad_f331_e0798_plus_dotted`" in matrix_report
+
+
+def test_load_specs_autodiscovers_ticket_specs_and_applies_known_overrides(tmp_path: Path) -> None:
+    module = _load_update_competition_progress_module()
+    root = tmp_path
+    research = root / ".sdd" / "researches"
+    ticket_dir = research / "ticket23_page_candidates_r1_2026-03-13"
+    ticket_dir.mkdir(parents=True)
+    page_localizer_dir = research / "matrix_specs_with_ticket19_2026-03-13.json"
+    prod_dir = research / "production_mimic_v10_local_page_localizer_r1_2026-03-13"
+    prod_dir.mkdir(parents=True)
+    (prod_dir / "production_mimic.json").write_text("{}", encoding="utf-8")
+    page_localizer_dir.write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "label": "v10_local_page_localizer_r1",
+                        "status": "rejected",
+                        "branch_class": "page_localizer_doc_to_page_rerank",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (research / "ticket23_page_candidates_r1_2026-03-13" / "spec.json").write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "label": "v10_local_page_candidates_r1",
+                        "status": "rejected",
+                        "branch_class": "page_candidate_generator_family_aware",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    specs = module._load_specs(None, root=root)
+    by_label = {str(spec["label"]): spec for spec in specs}
+
+    assert "v10_local_page_candidates_r1" in by_label
+    assert by_label["v10_local_page_candidates_r1"]["status"] == "rejected"
+    assert by_label["v10_local_page_localizer_r1"]["production_mimic_json"] == str(
+        root / ".sdd" / "researches" / "production_mimic_v10_local_page_localizer_r1_2026-03-13" / "production_mimic.json"
+    )
+
+
+def test_hydrate_row_prefers_row_specific_cycle_and_production_mimic(tmp_path: Path) -> None:
+    module = _load_update_competition_progress_module()
+    cycle_path = tmp_path / "cycle.json"
+    cycle_path.write_text(
+        json.dumps(
+            {
+                "ranked_candidates": [
+                    {
+                        "label": "v10_local_page_localizer_r1",
+                        "strict_total_estimate": 0.77,
+                        "paranoid_total_estimate": 0.38,
+                        "hidden_g_trusted_delta": -0.04,
+                        "hidden_g_all_delta": 0.03,
+                        "answer_drift": 97,
+                        "page_drift": 93,
+                        "recommendation": "NO_SUBMIT",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    production_path = tmp_path / "production_mimic.json"
+    production_path.write_text(
+        json.dumps(
+            {
+                "production_mimic": {
+                    "candidate_class": "v10_local_page_localizer_r1",
+                    "lineage_confidence": "low",
+                    "platform_like_total_estimate": 0.7595,
+                    "strict_total_estimate": 0.7700,
+                    "paranoid_total_estimate": 0.3830,
+                    "judge": {
+                        "pass_rate": 0.0,
+                        "avg_grounding": 1.0,
+                        "avg_accuracy": 1.0,
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    spec = {
+        "label": "v10_local_page_localizer_r1",
+        "status": "rejected",
+        "candidate_label": "v10_local_page_localizer_r1",
+        "candidate_cycle_json": str(cycle_path),
+        "production_mimic_json": str(production_path),
+    }
+
+    row = module._hydrate_row(
+        spec=spec,
+        history_rows={},
+        global_cycle_index={},
+        cycle_index_cache={},
+        global_production_mimic=None,
+        supervisor_action=None,
+    )
+
+    assert row["answer_drift"] == 97
+    assert row["page_drift"] == 93
+    assert row["platform_like_total_estimate"] == 0.7595
+    assert row["strict_total_estimate"] == 0.77
+    assert row["paranoid_total_estimate"] == 0.383
+    assert row["judge_pass_rate"] == 0.0
