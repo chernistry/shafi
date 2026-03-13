@@ -16,6 +16,7 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/legalbenchrag_mini_bootstrap/corpus/operating_law.txt"],
         "doc_refs": ["Operating Law"],
         "provision_refs": ["Article 16(1)"],
+        "gold_texts": ["Article 16(1) requires filing a notice with the Registrar."],
         "expected_behavior": "retrieve_exact_ref",
     },
     {
@@ -27,6 +28,7 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/legalbenchrag_mini_bootstrap/corpus/employment_law.txt"],
         "doc_refs": ["Employment Law"],
         "provision_refs": ["Article 11(2)(b)"],
+        "gold_texts": ["Article 11(2)(b) prohibits dismissing an employee without notice."],
         "expected_behavior": "retrieve_exact_ref",
     },
     {
@@ -38,6 +40,9 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/docs/limitation_act.txt"],
         "doc_refs": ["Limitation Act 2020"],
         "provision_refs": ["Section 4"],
+        "gold_texts": [
+            "The prescribed period for actions in tort shall be three (3) years from the date on which the cause of action accrued, or from the date on which the plaintiff first had knowledge of the cause of action, whichever is later."
+        ],
         "expected_behavior": "retrieve_exact_ref",
     },
     {
@@ -49,6 +54,7 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/docs/limitation_act.txt"],
         "doc_refs": ["Limitation Act 2020"],
         "provision_refs": ["Section 1"],
+        "gold_texts": ["This Act may be cited as the Limitation Act 2020."],
         "expected_behavior": "retrieve_exact_ref",
     },
     {
@@ -63,6 +69,10 @@ _PACK_CASES: list[dict[str, object]] = [
         ],
         "doc_refs": ["Smith v. Jones [2021] UKSC 45", "Service Agreement"],
         "provision_refs": [],
+        "gold_texts": [
+            "The agreement contained a termination clause requiring 90 days' notice.",
+            "Either party may terminate this Agreement upon thirty (30) days' written notice."
+        ],
         "expected_behavior": "multi_doc_compare",
     },
     {
@@ -74,6 +84,7 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/unsupported_synthetic_pack.json"],
         "doc_refs": ["Foundations Law 2018"],
         "provision_refs": [],
+        "gold_texts": [],
         "expected_behavior": "unsupported_free_text",
     },
     {
@@ -85,6 +96,7 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/unsupported_synthetic_pack.json"],
         "doc_refs": [],
         "provision_refs": ["Article 8(1)"],
+        "gold_texts": [],
         "expected_behavior": "unsupported_strict_null",
     },
     {
@@ -96,6 +108,7 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/ocr_fallback_synthetic_pack.json"],
         "doc_refs": ["scan-short-multipage.pdf"],
         "provision_refs": [],
+        "gold_texts": [],
         "expected_behavior": "parser_ocr_watchpoint",
     },
     {
@@ -107,6 +120,7 @@ _PACK_CASES: list[dict[str, object]] = [
         "source_fixtures": ["tests/fixtures/ocr_fallback_synthetic_pack.json"],
         "doc_refs": ["text-rich-multipage.pdf"],
         "provision_refs": [],
+        "gold_texts": [],
         "expected_behavior": "parser_page_identity_control",
     },
 ]

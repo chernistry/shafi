@@ -260,6 +260,26 @@ def _precision_recall(retrieved: list[RetrievedSnippet], gold: tuple[BenchmarkSn
     return precision, recall
 
 
+def build_chunk_index(
+    corpus: dict[str, str],
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> dict[str, list[tuple[tuple[int, int], str]]]:
+    return _build_chunk_index(corpus, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
+
+def score_chunk(query: str, chunk_text: str) -> float:
+    return _score_chunk(query, chunk_text)
+
+
+def compute_precision_recall(
+    retrieved: list[RetrievedSnippet],
+    gold: tuple[BenchmarkSnippet, ...],
+) -> tuple[float, float]:
+    return _precision_recall(retrieved, gold)
+
+
 def _run_case(case: BenchmarkCase, chunk_index: dict[str, list[tuple[tuple[int, int], str]]], *, top_k: int) -> dict[str, object]:
     ranked: list[RetrievedSnippet] = []
     for file_path, chunks in chunk_index.items():
