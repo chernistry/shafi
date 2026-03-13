@@ -1178,6 +1178,91 @@ def test_doc_family_page_localizer_prefers_outcome_page_for_single_case_query() 
     assert localized[0].chunk_id == "cfi067:page1"
 
 
+def test_doc_family_page_localizer_prefers_unseen_doc_tail_before_same_doc_spam() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="ca:page7",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Alpha v Beta",
+            section_path="page:7",
+            text="Later merits page mentioning Alpha only.",
+            score=0.98,
+            page_number=7,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="ca:page1",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Alpha v Beta",
+            section_path="page:1",
+            text="CA 004/2025 Alpha Claimant v Beta Defendant.",
+            score=0.81,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="ca:page9",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Alpha v Beta",
+            section_path="page:9",
+            text="Another later page from the same case.",
+            score=0.96,
+            page_number=9,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct:page6",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Alpha v Odon",
+            section_path="page:6",
+            text="Odon denied the claim on a later page.",
+            score=0.97,
+            page_number=6,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct:page1",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Alpha v Odon",
+            section_path="page:1",
+            text="SCT 295/2025 Alpha Claimant v Odon Defendant.",
+            score=0.8,
+            page_number=1,
+            page_type="title_anchor",
+        ),
+        _make_retrieved_chunk(
+            chunk_id="third:page1",
+            doc_id="cfi-111",
+            doc_title="CFI 111/2025 Gamma v Delta",
+            section_path="page:1",
+            text="CFI 111/2025 Gamma Claimant v Delta Defendant.",
+            score=0.79,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+    ]
+    reranked = [
+        RAGPipelineBuilder._raw_to_ranked(retrieved[0]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[3]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[2]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[5]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[1]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[4]),
+    ]
+
+    localized = RAGPipelineBuilder._ensure_doc_family_page_localizer_context(
+        query="Were any of the same parties named in both CA 004/2025 and SCT 295/2025?",
+        answer_type="boolean",
+        doc_refs=["CA 004/2025", "SCT 295/2025"],
+        reranked=reranked,
+        retrieved=retrieved,
+        top_n=4,
+    )
+
+    assert [chunk.chunk_id for chunk in localized[:3]] == ["ca:page1", "sct:page1", "third:page1"]
+
+
 def test_localize_free_text_support_keeps_multiple_pages_for_composite_item() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 

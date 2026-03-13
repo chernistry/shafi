@@ -2947,6 +2947,51 @@ class RAGPipelineBuilder:
         return score
 
     @classmethod
+    def _case_doc_family_identity_key(
+        cls,
+        *,
+        ref: str,
+        doc_chunks: Sequence[RetrievedChunk],
+    ) -> tuple[int, int, float, int] | None:
+        best: tuple[int, int, float, int] | None = None
+        for raw in doc_chunks:
+            identity_score = cls._case_ref_identity_score(ref=ref, chunk=raw)
+            if identity_score <= 0:
+                continue
+            family_adjustment = cls._ref_doc_family_consistency_adjustment(ref=ref, chunk=raw)
+            title_match = cls._named_commencement_title_match_score(ref, raw)
+            page_num = cls._page_num(str(getattr(raw, "section_path", "") or ""))
+            candidate = (
+                identity_score + family_adjustment,
+                title_match,
+                float(raw.score),
+                -max(page_num, 0),
+            )
+            if best is None or candidate > best:
+                best = candidate
+        return best
+
+    @classmethod
+    def _case_doc_family_page_selection_key(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        ref: str,
+        chunk: RetrievedChunk,
+    ) -> tuple[int, int, float] | None:
+        score = cls._case_doc_family_page_localizer_score(
+            query=query,
+            answer_type=answer_type,
+            ref=ref,
+            chunk=chunk,
+        )
+        if score <= 0:
+            return None
+        page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+        return (score, -max(page_num, 0), float(chunk.score))
+
+    @classmethod
     def _ensure_doc_family_page_localizer_context(
         cls,
         *,
@@ -2975,39 +3020,76 @@ class RAGPipelineBuilder:
             return reranked[: max(0, int(top_n))]
 
         reranked_by_id = {chunk.chunk_id: chunk for chunk in reranked}
+        retrieved_by_doc: dict[str, list[RetrievedChunk]] = {}
+        for raw in retrieved:
+            doc_key = str(raw.doc_id or "").strip() or raw.chunk_id
+            retrieved_by_doc.setdefault(doc_key, []).append(raw)
+
         selected: list[RankedChunk] = []
         seen_chunk_ids: set[str] = set()
         matched_doc_ids: set[str] = set()
 
         for ref in refs[:4]:
             best_raw: RetrievedChunk | None = None
-            best_key: tuple[int, int, float] | None = None
-            for raw in retrieved:
-                doc_id = str(raw.doc_id or "").strip()
-                if doc_id and doc_id in matched_doc_ids:
+            best_key: tuple[int, int, int, float, int, float] | None = None
+            best_doc_key = ""
+            for doc_key, doc_chunks in retrieved_by_doc.items():
+                if doc_key in matched_doc_ids:
                     continue
-                score = cls._case_doc_family_page_localizer_score(
-                    query=query,
-                    answer_type=answer_type,
+                family_identity_key = cls._case_doc_family_identity_key(
                     ref=ref,
-                    chunk=raw,
+                    doc_chunks=doc_chunks,
                 )
-                if score <= 0:
+                if family_identity_key is None:
                     continue
-                page_num = cls._page_num(str(getattr(raw, "section_path", "") or ""))
-                candidate = (score, -max(page_num, 0), float(raw.score))
+                best_doc_raw: RetrievedChunk | None = None
+                best_doc_page_key: tuple[int, int, float] | None = None
+                for raw in doc_chunks:
+                    page_key = cls._case_doc_family_page_selection_key(
+                        query=query,
+                        answer_type=answer_type,
+                        ref=ref,
+                        chunk=raw,
+                    )
+                    if page_key is None:
+                        continue
+                    if best_doc_page_key is None or page_key > best_doc_page_key:
+                        best_doc_page_key = page_key
+                        best_doc_raw = raw
+                if best_doc_raw is None or best_doc_page_key is None:
+                    continue
+                candidate = (
+                    family_identity_key[0],
+                    family_identity_key[1],
+                    best_doc_page_key[0],
+                    family_identity_key[2],
+                    best_doc_page_key[1],
+                    best_doc_page_key[2],
+                )
                 if best_key is None or candidate > best_key:
                     best_key = candidate
-                    best_raw = raw
+                    best_raw = best_doc_raw
+                    best_doc_key = doc_key
             if best_raw is None:
                 continue
-            doc_id = str(best_raw.doc_id or "").strip()
-            if doc_id:
-                matched_doc_ids.add(doc_id)
+            if best_doc_key:
+                matched_doc_ids.add(best_doc_key)
             if best_raw.chunk_id in seen_chunk_ids:
                 continue
             selected.append(reranked_by_id.get(best_raw.chunk_id) or cls._raw_to_ranked(best_raw))
             seen_chunk_ids.add(best_raw.chunk_id)
+            if len(selected) >= top_n:
+                return selected[:top_n]
+
+        for chunk in reranked:
+            if chunk.chunk_id in seen_chunk_ids:
+                continue
+            doc_key = str(getattr(chunk, "doc_id", "") or "").strip()
+            if not doc_key or doc_key in matched_doc_ids:
+                continue
+            selected.append(chunk)
+            seen_chunk_ids.add(chunk.chunk_id)
+            matched_doc_ids.add(doc_key)
             if len(selected) >= top_n:
                 return selected[:top_n]
 
