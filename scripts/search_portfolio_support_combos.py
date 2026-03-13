@@ -125,6 +125,17 @@ def _load_portfolio(path: Path) -> list[PortfolioItem]:
     return items
 
 
+def _load_required_qids(path: Path | None) -> set[str]:
+    if path is None:
+        return set()
+    out: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        text = line.strip()
+        if text and not text.startswith("#"):
+            out.add(text)
+    return out
+
+
 def _recommendation(
     *,
     answer_changed_count: int,
@@ -203,6 +214,7 @@ def _merge_combo(
             page_source_raw_results=page_source_raw_results,
             allowlisted_qids=set(),
             page_allowlisted_qids={item.qid},
+            page_source_pages_default="all",
         )
         merged_preflight = _build_preflight(
             merged_payload=answer_source_submission,
@@ -469,6 +481,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-size", type=int, default=4)
     parser.add_argument("--top-k", type=int, default=12)
     parser.add_argument("--judge-top-k", type=int, default=5)
+    parser.add_argument("--required-qids-file", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -490,6 +503,12 @@ async def _async_main(args: argparse.Namespace) -> None:
     baseline_page_p95 = _page_p95(baseline_preflight_path) or 0
 
     items = _load_portfolio(args.portfolio_json.resolve())
+    required_qids = _load_required_qids(args.required_qids_file.resolve() if args.required_qids_file is not None else None)
+    if required_qids:
+        known_qids = {item.qid for item in items}
+        missing = sorted(required_qids.difference(known_qids))
+        if missing:
+            raise ValueError(f"Required qids missing from portfolio: {missing}")
 
     results: list[ComboEvaluation] = []
     artifacts_by_label: dict[str, tuple[Path, Path, Path]] = {}
@@ -498,6 +517,8 @@ async def _async_main(args: argparse.Namespace) -> None:
     for size in range(min_size, min(max_size, len(items)) + 1):
         for combo_items in itertools.combinations(items, size):
             qids = [item.qid for item in combo_items]
+            if required_qids and not required_qids.issubset(set(qids)):
+                continue
             labels = [item.label for item in combo_items]
             label = _combo_label(qids)
             submission_path, raw_results_path, preflight_path = _merge_combo(
