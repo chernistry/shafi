@@ -953,6 +953,231 @@ def test_localize_boolean_compare_support_prefers_page_one_for_party_overlap_que
     assert set(localized) == {"ca-004:title", "sct-295:title"}
 
 
+def test_doc_family_page_localizer_prefers_page_one_for_party_overlap_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="ca:page7",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Alpha v Beta",
+            section_path="page:7",
+            text="Later merits page mentioning Alpha only.",
+            score=0.98,
+            page_number=7,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="ca:page1",
+            doc_id="ca-004",
+            doc_title="CA 004/2025 Alpha v Beta",
+            section_path="page:1",
+            text="CA 004/2025 Alpha Claimant v Beta Defendant.",
+            score=0.81,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct:page6",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Alpha v Odon",
+            section_path="page:6",
+            text="Odon denied the claim on a later page.",
+            score=0.97,
+            page_number=6,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct:page1",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Alpha v Odon",
+            section_path="page:1",
+            text="SCT 295/2025 Alpha Claimant v Odon Defendant.",
+            score=0.8,
+            page_number=1,
+            page_type="title_anchor",
+        ),
+    ]
+    reranked = [RAGPipelineBuilder._raw_to_ranked(chunk) for chunk in retrieved]
+
+    localized = RAGPipelineBuilder._ensure_doc_family_page_localizer_context(
+        query="Were any of the same parties named in both CA 004/2025 and SCT 295/2025?",
+        answer_type="boolean",
+        doc_refs=["CA 004/2025", "SCT 295/2025"],
+        reranked=reranked,
+        retrieved=retrieved,
+        top_n=4,
+    )
+
+    assert [chunk.chunk_id for chunk in localized[:2]] == ["ca:page1", "sct:page1"]
+
+
+def test_doc_family_page_localizer_prefers_page_two_for_issue_date_compare_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="sct169:page5",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            section_path="page:5",
+            text="Later procedural page without issue-date field.",
+            score=0.97,
+            page_number=5,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct169:page2",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            section_path="page:2",
+            text="Issued by: Delvin Sumo. Date of Issue: 24 December 2025.",
+            score=0.81,
+            page_number=2,
+            page_type="page2_anchor",
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct295:page7",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            section_path="page:7",
+            text="Later page mentioning the case title only.",
+            score=0.96,
+            page_number=7,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct295:page2",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            section_path="page:2",
+            text="Issued by: Delvin Sumo. Date of Issue: 10 December 2025.",
+            score=0.8,
+            page_number=2,
+            page_type="page2_anchor",
+        ),
+    ]
+    reranked = [RAGPipelineBuilder._raw_to_ranked(chunk) for chunk in retrieved]
+
+    localized = RAGPipelineBuilder._ensure_doc_family_page_localizer_context(
+        query="Which case has an earlier Date of Issue: SCT 169/2025 or SCT 295/2025?",
+        answer_type="name",
+        doc_refs=["SCT 169/2025", "SCT 295/2025"],
+        reranked=reranked,
+        retrieved=retrieved,
+        top_n=4,
+    )
+
+    assert [chunk.chunk_id for chunk in localized[:2]] == ["sct169:page2", "sct295:page2"]
+
+
+def test_doc_family_page_localizer_prefers_claim_pages_for_monetary_compare_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="sct169:title",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            section_path="page:1",
+            text="SCT 169/2025 Obasi v Oreana",
+            score=0.97,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct169:claim",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            section_path="page:2",
+            text="The Claimant filed a Claim seeking payment from the Defendant in the amount of AED 391,123.45.",
+            score=0.81,
+            page_number=2,
+            page_type="heading_window",
+            has_order_terms=True,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct295:title",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            section_path="page:1",
+            text="SCT 295/2025 Olexa v Odon",
+            score=0.96,
+            page_number=1,
+            page_type="caption_anchor",
+            has_caption_terms=True,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct295:claim",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            section_path="page:5",
+            text="The financial limit of AED 174,790 in the Claim Form was confirmed by the Court.",
+            score=0.78,
+            page_number=5,
+            page_type="heading_window",
+        ),
+    ]
+    reranked = [
+        RAGPipelineBuilder._raw_to_ranked(retrieved[0]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[2]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[1]),
+        RAGPipelineBuilder._raw_to_ranked(retrieved[3]),
+    ]
+
+    localized = RAGPipelineBuilder._ensure_doc_family_page_localizer_context(
+        query="Identify the case with the higher monetary claim: SCT 169/2025 or SCT 295/2025?",
+        answer_type="name",
+        doc_refs=["SCT 169/2025", "SCT 295/2025"],
+        reranked=reranked,
+        retrieved=retrieved,
+        top_n=4,
+    )
+
+    assert [chunk.chunk_id for chunk in localized[:2]] == ["sct169:claim", "sct295:claim"]
+
+
+def test_doc_family_page_localizer_prefers_outcome_page_for_single_case_query() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="cfi067:page2",
+            doc_id="cfi067",
+            doc_title="CFI 067/2025 Example v Example",
+            section_path="page:2",
+            text="This Order concerns the Defendant's Application for immediate judgment and/or strike out.",
+            score=0.93,
+            page_number=2,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="cfi067:page1",
+            doc_id="cfi067",
+            doc_title="CFI 067/2025 Example v Example",
+            section_path="page:1",
+            text=(
+                "ORDER WITH REASONS OF H.E. JUSTICE SHAMLAN AL SAWALEHI\n"
+                "IT IS HEREBY ORDERED THAT:\n"
+                "1. The Defendant's Application for immediate judgment and/or strike out is dismissed."
+            ),
+            score=0.82,
+            page_number=1,
+            page_type="heading_window",
+            has_order_terms=True,
+        ),
+    ]
+    reranked = [RAGPipelineBuilder._raw_to_ranked(chunk) for chunk in retrieved]
+
+    localized = RAGPipelineBuilder._ensure_doc_family_page_localizer_context(
+        query="What was the result of the application heard in case CFI 067/2025?",
+        answer_type="free_text",
+        doc_refs=["CFI 067/2025"],
+        reranked=reranked,
+        retrieved=retrieved,
+        top_n=2,
+    )
+
+    assert localized[0].chunk_id == "cfi067:page1"
+
+
 def test_localize_free_text_support_keeps_multiple_pages_for_composite_item() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 

@@ -2567,6 +2567,15 @@ class RAGPipelineBuilder:
                 must_include_chunk_ids=must_include,
                 top_n=top_n,
             )
+        if not is_strict:
+            reranked = self._ensure_doc_family_page_localizer_context(
+                query=str(state.get("query") or ""),
+                answer_type=answer_type_raw,
+                doc_refs=[str(ref).strip() for ref in state.get("doc_refs", []) if str(ref).strip()],
+                reranked=reranked,
+                retrieved=retrieved_all,
+                top_n=top_n,
+            )
         if (
             not is_strict
             and _is_broad_enumeration_query(str(state.get("query") or ""))
@@ -2869,6 +2878,148 @@ class RAGPipelineBuilder:
             has_order_terms=chunk.has_order_terms,
             doc_summary=chunk.doc_summary,
         )
+
+    @classmethod
+    def _should_apply_doc_family_page_localizer(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        doc_refs: Sequence[str],
+    ) -> bool:
+        refs = [ref for ref in doc_refs if str(ref).strip()] or cls._support_question_refs(query)
+        if not refs:
+            return False
+        q_lower = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        explicit_page_anchor = "page 2" in q_lower or "second page" in q_lower or any(
+            term in q_lower for term in ("title page", "cover page", "first page", "header", "caption")
+        )
+        return (
+            explicit_page_anchor
+            or _is_common_judge_compare_query(query)
+            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+            or _is_case_monetary_claim_compare_query(query, answer_type=answer_type)
+            or _is_case_party_overlap_compare_query(query, answer_type=answer_type)
+            or _is_case_party_role_name_query(query, answer_type=answer_type)
+            or _is_case_outcome_query(query)
+        )
+
+    @classmethod
+    def _case_doc_family_page_localizer_score(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        ref: str,
+        chunk: RetrievedChunk | RankedChunk,
+    ) -> int:
+        identity_score = cls._case_ref_identity_score(ref=ref, chunk=chunk)
+        if identity_score <= 0:
+            return 0
+
+        q_lower = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        score = identity_score
+        score += cls._anchor_candidate_score(
+            chunk=cast("RetrievedChunk", chunk),
+            needs_page_two="page 2" in q_lower or "second page" in q_lower,
+            needs_title_or_caption=any(
+                term in q_lower for term in ("title page", "cover page", "first page", "header", "caption")
+            ),
+            needs_outcome_anchor=_is_case_outcome_query(query),
+        )
+        if _is_case_party_overlap_compare_query(query, answer_type=answer_type) or _is_case_party_role_name_query(
+            query,
+            answer_type=answer_type,
+        ):
+            score += cls._case_party_anchor_chunk_score(
+                query=query,
+                chunk=chunk,
+                ref=ref,
+            )
+        if _is_common_judge_compare_query(query):
+            score += cls._case_judge_seed_chunk_score(chunk=chunk)
+        if _is_case_issue_date_name_compare_query(query, answer_type=answer_type):
+            score += cls._case_issue_date_seed_chunk_score(chunk=chunk)
+        if _is_case_monetary_claim_compare_query(query, answer_type=answer_type):
+            score += cls._case_monetary_claim_seed_chunk_score(chunk=chunk)
+        if _is_case_outcome_query(query):
+            score += cls._case_outcome_seed_chunk_score(chunk=chunk)
+        return score
+
+    @classmethod
+    def _ensure_doc_family_page_localizer_context(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        doc_refs: Sequence[str],
+        reranked: list[RankedChunk],
+        retrieved: list[RetrievedChunk],
+        top_n: int,
+    ) -> list[RankedChunk]:
+        if top_n <= 0 or not reranked or not retrieved:
+            return reranked[: max(0, int(top_n))]
+        if not cls._should_apply_doc_family_page_localizer(
+            query=query,
+            answer_type=answer_type,
+            doc_refs=doc_refs,
+        ):
+            return reranked[: max(0, int(top_n))]
+
+        refs = [ref for ref in doc_refs if str(ref).strip()]
+        if not refs:
+            refs = cls._paired_support_question_refs(query)
+        if not refs:
+            refs = cls._support_question_refs(query)
+        if not refs:
+            return reranked[: max(0, int(top_n))]
+
+        reranked_by_id = {chunk.chunk_id: chunk for chunk in reranked}
+        selected: list[RankedChunk] = []
+        seen_chunk_ids: set[str] = set()
+        matched_doc_ids: set[str] = set()
+
+        for ref in refs[:4]:
+            best_raw: RetrievedChunk | None = None
+            best_key: tuple[int, int, float] | None = None
+            for raw in retrieved:
+                doc_id = str(raw.doc_id or "").strip()
+                if doc_id and doc_id in matched_doc_ids:
+                    continue
+                score = cls._case_doc_family_page_localizer_score(
+                    query=query,
+                    answer_type=answer_type,
+                    ref=ref,
+                    chunk=raw,
+                )
+                if score <= 0:
+                    continue
+                page_num = cls._page_num(str(getattr(raw, "section_path", "") or ""))
+                candidate = (score, -max(page_num, 0), float(raw.score))
+                if best_key is None or candidate > best_key:
+                    best_key = candidate
+                    best_raw = raw
+            if best_raw is None:
+                continue
+            doc_id = str(best_raw.doc_id or "").strip()
+            if doc_id:
+                matched_doc_ids.add(doc_id)
+            if best_raw.chunk_id in seen_chunk_ids:
+                continue
+            selected.append(reranked_by_id.get(best_raw.chunk_id) or cls._raw_to_ranked(best_raw))
+            seen_chunk_ids.add(best_raw.chunk_id)
+            if len(selected) >= top_n:
+                return selected[:top_n]
+
+        for chunk in reranked:
+            if chunk.chunk_id in seen_chunk_ids:
+                continue
+            selected.append(chunk)
+            seen_chunk_ids.add(chunk.chunk_id)
+            if len(selected) >= top_n:
+                break
+
+        return selected[:top_n] if selected else reranked[: max(0, int(top_n))]
 
     @classmethod
     def _named_commencement_title_match_score(cls, ref: str, chunk: RetrievedChunk | RankedChunk) -> int:
