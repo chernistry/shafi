@@ -3874,6 +3874,212 @@ def test_ensure_account_effective_dates_context_keeps_enactment_notice_page(mock
     assert [chunk.chunk_id for chunk in filtered[:2]] == ["crs:effective", "crs:notice"]
 
 
+def test_collapse_doc_family_crowding_context_injects_second_doc_for_issue_date_compare(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    reranked = [
+        RankedChunk(
+            chunk_id="sct169:body1",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:5",
+            text="Later procedural page without issue-date field.",
+            retrieval_score=0.99,
+            rerank_score=0.99,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct169:body2",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:6",
+            text="Another later procedural page.",
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct169:body3",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:8",
+            text="Body-only page that crowds out the second case.",
+            retrieval_score=0.97,
+            rerank_score=0.97,
+            doc_summary="",
+        ),
+    ]
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="sct169:body1",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            section_path="page:5",
+            text="Later procedural page without issue-date field.",
+            score=0.99,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct169:body2",
+            doc_id="sct-169",
+            doc_title="SCT 169/2025 Obasi v Oreana",
+            section_path="page:6",
+            text="Another later procedural page.",
+            score=0.98,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct295:page7",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            section_path="page:7",
+            text="Later page mentioning the case title only.",
+            score=0.96,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="sct295:page2",
+            doc_id="sct-295",
+            doc_title="SCT 295/2025 Olexa v Odon",
+            section_path="page:2",
+            text="Issued by: Delvin Sumo. Date of Issue: 10 December 2025.",
+            score=0.8,
+        ),
+    ]
+
+    collapsed = RAGPipelineBuilder._collapse_doc_family_crowding_context(
+        query="Which case has an earlier Date of Issue: SCT 169/2025 or SCT 295/2025?",
+        answer_type="name",
+        doc_ref_count=2,
+        reranked=reranked,
+        retrieved=retrieved,
+        must_include_chunk_ids=[],
+        top_n=3,
+    )
+
+    assert [chunk.chunk_id for chunk in collapsed] == ["sct169:body1", "sct169:body2", "sct295:page2"]
+
+
+def test_collapse_doc_family_crowding_context_keeps_existing_doc_diversity(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    reranked = [
+        RankedChunk(
+            chunk_id="employment:title",
+            doc_id="employment",
+            doc_title="EMPLOYMENT LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="This Law may be cited as the Employment Law 2019.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="trust:title",
+            doc_id="trust",
+            doc_title="TRUST LAW NO. 4 OF 2018",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="This Law may be cited as the Trust Law No. 4 of 2018.",
+            retrieval_score=0.94,
+            rerank_score=0.94,
+            doc_summary="",
+        ),
+    ]
+
+    collapsed = RAGPipelineBuilder._collapse_doc_family_crowding_context(
+        query="What are the titles of the Employment Law 2019 and the Trust Law No. 4 of 2018?",
+        answer_type="free_text",
+        doc_ref_count=2,
+        reranked=reranked,
+        retrieved=[
+            _make_retrieved_chunk(
+                chunk_id="employment:title",
+                doc_id="employment",
+                doc_title="EMPLOYMENT LAW",
+                section_path="page:1",
+                text="This Law may be cited as the Employment Law 2019.",
+                score=0.95,
+            ),
+            _make_retrieved_chunk(
+                chunk_id="trust:title",
+                doc_id="trust",
+                doc_title="TRUST LAW NO. 4 OF 2018",
+                section_path="page:1",
+                text="This Law may be cited as the Trust Law No. 4 of 2018.",
+                score=0.94,
+            ),
+        ],
+        must_include_chunk_ids=[],
+        top_n=2,
+    )
+
+    assert [chunk.chunk_id for chunk in collapsed] == ["employment:title", "trust:title"]
+
+
+def test_collapse_doc_family_crowding_context_skips_explicit_page_queries(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    reranked = [
+        RankedChunk(
+            chunk_id="law-a:body1",
+            doc_id="law-a",
+            doc_title="LAW A",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text="Requested page is elsewhere.",
+            retrieval_score=0.99,
+            rerank_score=0.99,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law-a:body2",
+            doc_id="law-a",
+            doc_title="LAW A",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text="Another chunk from the same law.",
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="",
+        ),
+    ]
+    retrieved = [
+        _make_retrieved_chunk(
+            chunk_id="law-a:body1",
+            doc_id="law-a",
+            doc_title="LAW A",
+            section_path="page:3",
+            text="Requested page is elsewhere.",
+            score=0.99,
+        ),
+        _make_retrieved_chunk(
+            chunk_id="law-b:page2",
+            doc_id="law-b",
+            doc_title="LAW B",
+            section_path="page:2",
+            text="This would normally become the alternate doc representative.",
+            score=0.97,
+        ),
+    ]
+
+    collapsed = RAGPipelineBuilder._collapse_doc_family_crowding_context(
+        query="What is stated on page 2 of Law A and Law B?",
+        answer_type="free_text",
+        doc_ref_count=2,
+        reranked=reranked,
+        retrieved=retrieved,
+        must_include_chunk_ids=[],
+        top_n=2,
+    )
+
+    assert [chunk.chunk_id for chunk in collapsed] == ["law-a:body1", "law-a:body2"]
+
+
 def test_doc_shortlist_score_accepts_enactment_notice_surrogate_for_account_effective_query(mock_settings):
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 

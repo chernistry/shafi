@@ -2418,6 +2418,15 @@ class RAGPipelineBuilder:
                 retrieved=retrieved,
                 top_n=max(int(top_n), 3),
             )
+        reranked = self._collapse_doc_family_crowding_context(
+            query=str(state.get("query") or ""),
+            answer_type=answer_type_raw,
+            doc_ref_count=doc_ref_count,
+            reranked=reranked,
+            retrieved=retrieved,
+            must_include_chunk_ids=must_include,
+            top_n=top_n,
+        )
 
         collector.set_context_ids([chunk.chunk_id for chunk in reranked])
         rerank_model = "raw_retrieval_fallback" if not rerank_enabled else self._settings.reranker.primary_model
@@ -2543,6 +2552,131 @@ class RAGPipelineBuilder:
                 break
 
         return selected[:top_n]
+
+    @classmethod
+    def _doc_family_collapse_candidate_score(cls, *, query: str, chunk: RetrievedChunk | RankedChunk) -> tuple[int, int, float]:
+        normalized_query_refs = [ref.casefold() for ref in cls._support_question_refs(query)[:4]]
+        haystack = re.sub(
+            r"\s+",
+            " ",
+            " ".join(
+                part
+                for part in (
+                    str(getattr(chunk, "doc_title", "") or ""),
+                    str(getattr(chunk, "text", "") or "")[:500],
+                )
+                if part
+            ),
+        ).strip().casefold()
+        ref_bonus = 0
+        if haystack and any(ref in haystack for ref in normalized_query_refs):
+            ref_bonus = 2
+        page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+        if page_num <= 2:
+            page_bonus = 2
+        elif page_num <= 4:
+            page_bonus = 1
+        else:
+            page_bonus = 0
+        retrieval_score = float(
+            getattr(
+                chunk,
+                "score",
+                getattr(chunk, "retrieval_score", 0.0),
+            )
+        )
+        return ref_bonus, page_bonus, retrieval_score
+
+    @classmethod
+    def _collapse_doc_family_crowding_context(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        doc_ref_count: int,
+        reranked: list[RankedChunk],
+        retrieved: list[RetrievedChunk],
+        must_include_chunk_ids: Sequence[str],
+        top_n: int,
+    ) -> list[RankedChunk]:
+        bounded = reranked[: max(0, int(top_n))]
+        if top_n <= 1 or len(bounded) <= 1 or doc_ref_count < 2 or not retrieved:
+            return bounded
+        if QueryClassifier.extract_explicit_page_reference(query) is not None:
+            return bounded
+        if _is_broad_enumeration_query(query):
+            return bounded
+
+        q_lower = re.sub(r"\s+", " ", query).strip().lower()
+        normalized_answer_type = answer_type.strip().lower()
+        compare_like = normalized_answer_type in {"boolean", "name", "names", "date", "number"} and (
+            len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
+            or len(cls._support_question_refs(query)) >= 2
+            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+            or _is_common_judge_compare_query(query)
+            or "same year" in q_lower
+            or "same party" in q_lower
+            or "appeared in both" in q_lower
+            or "administ" in q_lower
+        )
+        metadata_like = (
+            cls._is_named_metadata_support_query(query)
+            or _is_named_multi_title_lookup_query(query)
+            or _is_named_commencement_query(query)
+        )
+        if not (compare_like or metadata_like):
+            return bounded
+
+        reranked_doc_ids = [
+            str(getattr(chunk, "doc_id", "") or "").strip()
+            for chunk in bounded
+            if str(getattr(chunk, "doc_id", "") or "").strip()
+        ]
+        if not reranked_doc_ids:
+            return bounded
+        distinct_reranked_doc_ids = list(dict.fromkeys(reranked_doc_ids))
+        target_doc_count = min(2, int(top_n))
+        if len(distinct_reranked_doc_ids) >= target_doc_count:
+            return bounded
+
+        dominant_doc_id = distinct_reranked_doc_ids[0]
+        alternative_by_doc: dict[str, RetrievedChunk] = {}
+        for raw in retrieved:
+            doc_id = str(getattr(raw, "doc_id", "") or "").strip()
+            if not doc_id or doc_id == dominant_doc_id:
+                continue
+            current = alternative_by_doc.get(doc_id)
+            if current is None or cls._doc_family_collapse_candidate_score(query=query, chunk=raw) > cls._doc_family_collapse_candidate_score(
+                query=query,
+                chunk=current,
+            ):
+                alternative_by_doc[doc_id] = raw
+        if not alternative_by_doc:
+            return bounded
+
+        replacement_index: int | None = None
+        must_include_set = {str(chunk_id).strip() for chunk_id in must_include_chunk_ids if str(chunk_id).strip()}
+        for idx in range(len(bounded) - 1, 0, -1):
+            chunk = bounded[idx]
+            if chunk.chunk_id in must_include_set:
+                continue
+            if str(getattr(chunk, "doc_id", "") or "").strip() == dominant_doc_id:
+                replacement_index = idx
+                break
+        if replacement_index is None:
+            return bounded
+
+        alternative = max(
+            alternative_by_doc.values(),
+            key=lambda raw: cls._doc_family_collapse_candidate_score(query=query, chunk=raw),
+        )
+        alternative_ranked = cls._raw_to_ranked(alternative)
+        if any(chunk.chunk_id == alternative_ranked.chunk_id for chunk in bounded):
+            return bounded
+
+        collapsed = list(bounded)
+        collapsed[replacement_index] = alternative_ranked
+        return collapsed[: max(0, int(top_n))]
 
     @staticmethod
     def _raw_to_ranked(chunk: RetrievedChunk) -> RankedChunk:
