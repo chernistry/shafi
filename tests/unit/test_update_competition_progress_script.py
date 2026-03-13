@@ -266,7 +266,12 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
     assert matrix_payload["summary"]["current_default_decision"] == "local_ceiling_reached_hold_budget"
     assert matrix_payload["summary"]["current_public_best_label"] == "v6_public_exactness_champion"
     assert matrix_payload["summary"]["current_best_offline_label"] == "triad_f331_e0798_plus_dotted"
+    rows = {row["label"]: row for row in matrix_payload["rows"]}
+    assert rows["triad_f331_e0798_plus_dotted"]["platform_like_rank_estimate"] is not None
+    assert rows["triad_f331_e0798_plus_dotted"]["strict_rank_estimate"] is not None
+    assert rows["triad_f331_e0798_plus_dotted"]["paranoid_rank_estimate"] is not None
     assert "# Competition Matrix" in matrix_report
+    assert "paranoid_rank=`" in matrix_report
     assert "Current default decision: `local_ceiling_reached_hold_budget`" in matrix_report
     assert "triad_f331_e0798_plus_dotted" in matrix_report
     assert "v6_public_exactness_champion" in matrix_report
