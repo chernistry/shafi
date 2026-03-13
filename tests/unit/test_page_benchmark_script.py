@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from typing import TYPE_CHECKING
+
+import fitz
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 REPO_ROOT = "/Users/sasha/IdeaProjects/.codex-worktrees/rag_challenge-main"
+
+
+def _write_pdf(path: Path, pages: list[str]) -> None:
+    pdf = fitz.open()
+    for text in pages:
+        page = pdf.new_page()
+        page.insert_text((72, 72), text)
+    pdf.save(path)
+    pdf.close()
 
 
 def test_score_page_benchmark_script_reports_f_beta_and_orphans(tmp_path: Path) -> None:
@@ -252,3 +264,225 @@ def test_score_page_benchmark_respects_include_qids_file(tmp_path: Path) -> None
 
     assert "- Cases: 1" in result.stdout
     assert "q2" not in result.stdout
+
+
+def test_score_page_benchmark_accepts_predictions_json(tmp_path: Path) -> None:
+    benchmark_path = tmp_path / "benchmark.json"
+    predictions_path = tmp_path / "predictions.json"
+
+    benchmark_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {"question_id": "q1", "gold_page_ids": ["doc_2"]},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    predictions_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {"question_id": "q1", "predicted_page_ids": ["doc_2"]},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/score_page_benchmark.py",
+            "--predictions-json",
+            str(predictions_path),
+            "--benchmark",
+            str(benchmark_path),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "## All Cases" in result.stdout
+    assert "Page-level F_beta(2.5): 1.0000" in result.stdout
+
+
+def test_cohere_page_falsifier_uses_stub_scores_on_cached_candidates(tmp_path: Path) -> None:
+    docs_dir = tmp_path / "documents"
+    docs_dir.mkdir()
+    _write_pdf(docs_dir / "docA.pdf", ["cover page", "gold page"])
+
+    benchmark_path = tmp_path / "benchmark.json"
+    miss_pack_path = tmp_path / "miss_pack.json"
+    ledger_path = tmp_path / "page_trace_ledger.json"
+    stub_scores_path = tmp_path / "stub_scores.json"
+    out_json = tmp_path / "out.json"
+    out_md = tmp_path / "out.md"
+    out_baseline = tmp_path / "baseline_predictions.json"
+    out_cohere = tmp_path / "cohere_predictions.json"
+
+    benchmark_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "question_id": "q1",
+                        "trust_tier": "trusted",
+                        "gold_page_ids": ["docA_2"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    miss_pack_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "qid": "q1",
+                        "miss_family": "explicit_page",
+                        "gold_pages": ["docA_2"],
+                        "used_pages": ["docA_1"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    ledger_path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "qid": "q1",
+                        "question": "What is on page 2?",
+                        "used_pages": ["docA_1"],
+                        "context_pages": ["docA_2"],
+                        "retrieved_pages": ["docA_1", "docA_2"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    stub_scores_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "question_id": "q1",
+                        "scores": {
+                            "docA_1": 0.1,
+                            "docA_2": 0.9,
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/cohere_page_falsifier.py",
+            "--miss-pack",
+            str(miss_pack_path),
+            "--page-trace-ledger",
+            str(ledger_path),
+            "--benchmark",
+            str(benchmark_path),
+            "--dataset-documents",
+            str(docs_dir),
+            "--stub-scores-json",
+            str(stub_scores_path),
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
+            "--out-baseline-predictions",
+            str(out_baseline),
+            "--out-cohere-predictions",
+            str(out_cohere),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["status"] == "complete"
+    assert payload["summary"]["verdict"] == "continue_local_page_reranker"
+    assert payload["cases"][0]["cohere_page_ids"] == ["docA_2"]
+    assert payload["summary"]["delta_f_beta"] > 0.0
+
+
+def test_cohere_page_falsifier_marks_missing_api_key_as_blocked(tmp_path: Path) -> None:
+    docs_dir = tmp_path / "documents"
+    docs_dir.mkdir()
+    _write_pdf(docs_dir / "docA.pdf", ["cover page", "gold page"])
+
+    benchmark_path = tmp_path / "benchmark.json"
+    miss_pack_path = tmp_path / "miss_pack.json"
+    ledger_path = tmp_path / "page_trace_ledger.json"
+    out_json = tmp_path / "out.json"
+    out_md = tmp_path / "out.md"
+
+    benchmark_path.write_text(
+        json.dumps({"cases": [{"question_id": "q1", "trust_tier": "trusted", "gold_page_ids": ["docA_2"]}]}),
+        encoding="utf-8",
+    )
+    miss_pack_path.write_text(
+        json.dumps({"cases": [{"qid": "q1", "gold_pages": ["docA_2"], "used_pages": ["docA_1"]}]}),
+        encoding="utf-8",
+    )
+    ledger_path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "qid": "q1",
+                        "question": "What is on page 2?",
+                        "used_pages": ["docA_1"],
+                        "context_pages": ["docA_2"],
+                        "retrieved_pages": ["docA_1", "docA_2"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/cohere_page_falsifier.py",
+            "--miss-pack",
+            str(miss_pack_path),
+            "--page-trace-ledger",
+            str(ledger_path),
+            "--benchmark",
+            str(benchmark_path),
+            "--dataset-documents",
+            str(docs_dir),
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={key: value for key, value in os.environ.items() if key not in {"COHERE_API_KEY", "CO_API_KEY"}},
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert payload["status"] == "blocked"
+    assert payload["summary"]["verdict"] == "blocked_missing_api_key"

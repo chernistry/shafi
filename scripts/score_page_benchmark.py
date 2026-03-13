@@ -197,6 +197,39 @@ def _eval_cases_by_question_id(eval_path: Path) -> dict[str, JsonDict]:
     return out
 
 
+def _prediction_record_to_eval_case(question_id: str, record: JsonDict) -> JsonDict:
+    predicted_pages = _coerce_str_list(record.get("predicted_page_ids"))
+    if not predicted_pages:
+        predicted_pages = _coerce_str_list(record.get("used_page_ids"))
+    cited_pages = _coerce_str_list(record.get("cited_page_ids"))
+    answer = str(record.get("answer") or "").strip()
+    return {
+        "question_id": question_id,
+        "answer": answer,
+        "telemetry": {
+            "used_page_ids": predicted_pages,
+            "cited_page_ids": cited_pages,
+        },
+    }
+
+
+def _prediction_cases_by_question_id(predictions_path: Path) -> dict[str, JsonDict]:
+    payload = _load_json(predictions_path)
+    cases_obj = payload.get("cases")
+    if not isinstance(cases_obj, list):
+        raise ValueError("Predictions JSON must contain a top-level 'cases' list")
+    out: dict[str, JsonDict] = {}
+    for raw_case in cast("list[object]", cases_obj):
+        if not isinstance(raw_case, dict):
+            continue
+        case_dict = cast("JsonDict", raw_case)
+        question_id = str(case_dict.get("question_id") or case_dict.get("qid") or "").strip()
+        if not question_id:
+            continue
+        out[question_id] = _prediction_record_to_eval_case(question_id, case_dict)
+    return out
+
+
 def _item_coverage(*, answer: str, gold_items: list[str]) -> float | None:
     if not gold_items:
         return None
@@ -273,6 +306,15 @@ def _score_case(case: BenchmarkCase, eval_case: JsonDict | None, *, beta: float)
         gold_origin=case.gold_origin,
         audit_note=case.audit_note,
     )
+
+
+def build_scores(
+    *,
+    cases: list[BenchmarkCase],
+    eval_cases: dict[str, JsonDict],
+    beta: float,
+) -> list[CaseScore]:
+    return [_score_case(case, eval_cases.get(case.question_id), beta=beta) for case in cases]
 
 
 def _summary_lines(*, scores: list[CaseScore], beta: float) -> list[str]:
@@ -368,9 +410,24 @@ def _build_report(*, scores: list[CaseScore], beta: float) -> str:
     return "\n".join(lines)
 
 
+def load_benchmark(path: Path) -> list[BenchmarkCase]:
+    return _load_benchmark(path)
+
+
+def build_report(*, scores: list[CaseScore], beta: float) -> str:
+    return _build_report(scores=scores, beta=beta)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score a manual page-level grounding benchmark against an eval JSON.")
-    parser.add_argument("--eval", type=Path, required=True, help="Path to eval_*.json produced by the harness.")
+    eval_group = parser.add_mutually_exclusive_group(required=True)
+    eval_group.add_argument("--eval", type=Path, help="Path to eval_*.json produced by the harness.")
+    eval_group.add_argument(
+        "--predictions-json",
+        type=Path,
+        default=None,
+        help="Path to a predictions JSON with cases[].predicted_page_ids or cases[].used_page_ids.",
+    )
     parser.add_argument("--benchmark", type=Path, required=True, help="Path to manual benchmark JSON.")
     parser.add_argument("--include-qids-file", type=Path, default=None, help="Optional file containing the only QIDs to score.")
     parser.add_argument("--out", type=Path, default=None, help="Optional markdown output path.")
@@ -381,8 +438,12 @@ def main() -> None:
     cases = _load_benchmark(args.benchmark)
     if include_qids is not None:
         cases = [case for case in cases if case.question_id in include_qids]
-    eval_cases = _eval_cases_by_question_id(args.eval)
-    scores = [_score_case(case, eval_cases.get(case.question_id), beta=args.beta) for case in cases]
+    eval_cases = (
+        _eval_cases_by_question_id(args.eval)
+        if args.eval is not None
+        else _prediction_cases_by_question_id(cast("Path", args.predictions_json))
+    )
+    scores = build_scores(cases=cases, eval_cases=eval_cases, beta=args.beta)
     report = _build_report(scores=scores, beta=args.beta)
 
     if args.out is not None:
