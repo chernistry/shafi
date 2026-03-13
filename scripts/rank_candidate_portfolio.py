@@ -79,6 +79,35 @@ def _page_p95(row: JsonDict) -> int:
     return _coerce_int(row.get("candidate_page_p95"))
 
 
+def _seed_improved_count(row: JsonDict) -> int:
+    value = row.get("improved_seed_cases")
+    if not isinstance(value, list):
+        return 0
+    return len(cast("list[object]", value))
+
+
+def _blindspot_improved_count(row: JsonDict) -> int:
+    value = row.get("blindspot_improved_cases")
+    if not isinstance(value, list):
+        return 0
+    return len(cast("list[object]", value))
+
+
+def _undercoverage_count(row: JsonDict) -> int:
+    value = row.get("blindspot_support_undercoverage_cases")
+    if not isinstance(value, list):
+        return 0
+    return len(cast("list[object]", value))
+
+
+def _portfolio_role(row: JsonDict) -> str:
+    trusted_delta = _hidden_trusted_delta(row)
+    all_delta = _hidden_all_delta(row)
+    if trusted_delta > 0.0 or all_delta > 0.0:
+        return "promotion_candidate"
+    return "defensive_only"
+
+
 def _budget_filter(
     row: JsonDict,
     *,
@@ -93,17 +122,23 @@ def _budget_filter(
     )
 
 
-def _combined_score(row: JsonDict) -> tuple[float, float, float, float, int, int]:
-    changed_count = len(cast("list[object]", row.get("changed_qids") or row.get("qids") or []))
+def _combined_score(row: JsonDict) -> tuple[float, float, float, float, int, int, int, int]:
+    seed_improved_count = _seed_improved_count(row)
+    blindspot_improved_count = _blindspot_improved_count(row)
+    undercoverage_count = _undercoverage_count(row)
     return (
         _hidden_trusted_delta(row) * 1000.0
         + _hidden_all_delta(row) * 300.0
         + _judge_pass_delta(row) * 10.0
         + _judge_grounding_delta(row)
-        + changed_count,
+        + seed_improved_count * 5.0
+        + blindspot_improved_count * 2.0
+        - undercoverage_count * 6.0,
         _hidden_trusted_delta(row),
         _hidden_all_delta(row),
-        float(changed_count),
+        float(seed_improved_count),
+        -undercoverage_count,
+        blindspot_improved_count,
         -_page_drift(row),
         -_answer_drift(row),
     )
@@ -141,6 +176,11 @@ def _render_markdown(*, source_path: Path, rows: list[JsonDict], limit: int) -> 
             f"{_judge_pass_delta(row):.4f} | {_judge_grounding_delta(row):.4f} | "
             f"{_answer_drift(row)} | {_page_drift(row)} | {_page_p95(row)} |"
         )
+        lines.append(
+            f"  role=`{_portfolio_role(row)}` seed_improved=`{_seed_improved_count(row)}` "
+            f"blindspot_improved=`{_blindspot_improved_count(row)}` "
+            f"undercoverage_blindspots=`{_undercoverage_count(row)}`"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -169,7 +209,20 @@ def main() -> None:
             max_page_p95=int(args.max_page_p95),
         )
     ]
-    ranked = _top_rows(filtered, limit=int(args.top_k))
+    ranked = [
+        {
+            **row,
+            "portfolio_role": _portfolio_role(row),
+            "seed_improved_count": _seed_improved_count(row),
+            "blindspot_improved_count": _blindspot_improved_count(row),
+            "undercoverage_count": _undercoverage_count(row),
+            "serious_candidate_eligible": (
+                (_hidden_trusted_delta(row) > 0.0 or _hidden_all_delta(row) > 0.0)
+                and _undercoverage_count(row) == 0
+            ),
+        }
+        for row in _top_rows(filtered, limit=int(args.top_k))
+    ]
     payload = {
         "source_json": str(args.source_json.resolve()),
         "candidate_count": len(rows),

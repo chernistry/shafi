@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_rank_candidate_portfolio_filters_and_orders(tmp_path: Path) -> None:
@@ -21,6 +20,9 @@ def test_rank_candidate_portfolio_filters_and_orders(tmp_path: Path) -> None:
                         "answer_changed_count": 0,
                         "retrieval_page_projection_changed_count": 2,
                         "candidate_page_p95": 4,
+                        "improved_seed_cases": ["q1"],
+                        "blindspot_improved_cases": [],
+                        "blindspot_support_undercoverage_cases": [],
                         "benchmark_trusted_baseline": 0.0,
                         "benchmark_trusted_candidate": 0.05,
                         "benchmark_all_baseline": 0.10,
@@ -34,12 +36,15 @@ def test_rank_candidate_portfolio_filters_and_orders(tmp_path: Path) -> None:
                         "qids": ["q2"],
                         "recommendation": "PROMISING",
                         "answer_changed_count": 0,
-                        "retrieval_page_projection_changed_count": 7,
+                        "retrieval_page_projection_changed_count": 3,
                         "candidate_page_p95": 4,
+                        "improved_seed_cases": ["q2"],
+                        "blindspot_improved_cases": ["q2"],
+                        "blindspot_support_undercoverage_cases": ["q2"],
                         "benchmark_trusted_baseline": 0.0,
-                        "benchmark_trusted_candidate": 0.08,
+                        "benchmark_trusted_candidate": 0.05,
                         "benchmark_all_baseline": 0.10,
-                        "benchmark_all_candidate": 0.13,
+                        "benchmark_all_candidate": 0.12,
                         "judge_pass_rate_baseline": 0.0,
                         "judge_pass_rate_candidate": 1.0,
                         "judge_grounding_baseline": 0.0,
@@ -67,10 +72,13 @@ def test_rank_candidate_portfolio_filters_and_orders(tmp_path: Path) -> None:
             "6",
         ],
         check=True,
-        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        cwd=str(REPO_ROOT),
     )
 
     payload = json.loads(out_json.read_text(encoding="utf-8"))
-    assert payload["filtered_count"] == 1
+    assert payload["filtered_count"] == 2
     assert payload["ranked_candidates"][0]["qids"] == ["q1"]
+    assert payload["ranked_candidates"][0]["portfolio_role"] == "promotion_candidate"
+    assert payload["ranked_candidates"][1]["portfolio_role"] == "promotion_candidate"
+    assert payload["ranked_candidates"][1]["undercoverage_count"] == 1
     assert "`q1`" in out_md.read_text(encoding="utf-8")
