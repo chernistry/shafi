@@ -487,6 +487,67 @@ def _render_report(
     return "\n".join(lines) + "\n"
 
 
+def _report_payload(
+    *,
+    label: str,
+    baseline_label: str,
+    answer_changed_count: int,
+    retrieval_projection_changed_count: int,
+    baseline_all: BenchmarkSummary,
+    candidate_all: BenchmarkSummary,
+    baseline_trusted: BenchmarkSummary,
+    candidate_trusted: BenchmarkSummary,
+    baseline_page_p95: int | None,
+    candidate_page_p95: int | None,
+    seed_deltas: list[SeedCaseDelta],
+    recommendation: str,
+    notes: list[str],
+) -> JsonDict:
+    improved = [
+        delta.question_id
+        for delta in seed_deltas
+        if (
+            (delta.candidate_used_hit and not delta.baseline_used_hit)
+            or (delta.candidate_context_hit and not delta.baseline_context_hit)
+        )
+    ]
+    equivalent = [
+        delta.question_id
+        for delta in seed_deltas
+        if (
+            (delta.candidate_used_equivalent_hit and not delta.candidate_used_hit)
+            or (delta.candidate_context_equivalent_hit and not delta.candidate_context_hit)
+        )
+    ]
+    regressed = [
+        delta.question_id
+        for delta in seed_deltas
+        if (
+            (delta.baseline_used_hit and not (delta.candidate_used_hit or delta.candidate_used_equivalent_hit))
+            or (delta.baseline_context_hit and not (delta.candidate_context_hit or delta.candidate_context_equivalent_hit))
+        )
+    ]
+    return {
+        "label": label,
+        "baseline_label": baseline_label,
+        "recommendation": recommendation,
+        "answer_changed_count": answer_changed_count,
+        "retrieval_page_projection_changed_count": retrieval_projection_changed_count,
+        "benchmark_all_baseline": baseline_all.page_f_beta,
+        "benchmark_all_candidate": candidate_all.page_f_beta,
+        "benchmark_trusted_baseline": baseline_trusted.page_f_beta,
+        "benchmark_trusted_candidate": candidate_trusted.page_f_beta,
+        "baseline_page_p95": baseline_page_p95,
+        "candidate_page_p95": candidate_page_p95,
+        "improved_seed_cases": improved,
+        "equivalent_seed_cases": equivalent,
+        "regressed_seed_cases": regressed,
+        "seed_deltas": [asdict(delta) for delta in seed_deltas],
+        "notes": notes,
+        "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
+    }
+
+
 def _append_ledger(path: Path, record: ExperimentRecord) -> None:
     if path.exists():
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -539,6 +600,7 @@ def main() -> None:
     parser.add_argument("--seed-qid", action="append", default=[])
     parser.add_argument("--seed-qids-file", "--seed-qid-file", dest="seed_qids_file", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--out-json", type=Path, default=None)
     parser.add_argument("--ledger-json", type=Path, default=None)
     args = parser.parse_args()
 
@@ -579,31 +641,30 @@ def main() -> None:
         recommendation=recommendation,
         notes=notes,
     )
+    report_payload = _report_payload(
+        label=args.label,
+        baseline_label=args.baseline_label,
+        answer_changed_count=answer_changed_count,
+        retrieval_projection_changed_count=retrieval_projection_changed_count,
+        baseline_all=baseline_all,
+        candidate_all=candidate_all,
+        baseline_trusted=baseline_trusted,
+        candidate_trusted=candidate_trusted,
+        baseline_page_p95=baseline_page_p95,
+        candidate_page_p95=candidate_page_p95,
+        seed_deltas=seed_deltas,
+        recommendation=recommendation,
+        notes=notes,
+    )
     if args.out is not None:
         args.out.write_text(report, encoding="utf-8")
     else:
         print(report)
+    if args.out_json is not None:
+        args.out_json.parent.mkdir(parents=True, exist_ok=True)
+        args.out_json.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     if args.ledger_json is not None:
-        improved = [
-            delta.question_id
-            for delta in seed_deltas
-            if (
-                (delta.candidate_used_hit and not delta.baseline_used_hit)
-                or (delta.candidate_context_hit and not delta.baseline_context_hit)
-            )
-        ]
-        regressed = [
-            delta.question_id
-            for delta in seed_deltas
-            if (
-                (delta.baseline_used_hit and not (delta.candidate_used_hit or delta.candidate_used_equivalent_hit))
-                or (
-                    delta.baseline_context_hit
-                    and not (delta.candidate_context_hit or delta.candidate_context_equivalent_hit)
-                )
-            )
-        ]
         record = ExperimentRecord(
             timestamp_utc=datetime.now(UTC).isoformat(),
             label=args.label,
@@ -617,8 +678,8 @@ def main() -> None:
             benchmark_trusted_candidate=candidate_trusted.page_f_beta,
             baseline_page_p95=baseline_page_p95,
             candidate_page_p95=candidate_page_p95,
-            improved_seed_cases=improved,
-            regressed_seed_cases=regressed,
+            improved_seed_cases=cast("list[str]", report_payload["improved_seed_cases"]),
+            regressed_seed_cases=cast("list[str]", report_payload["regressed_seed_cases"]),
             notes=notes,
         )
         _append_ledger(args.ledger_json, record)

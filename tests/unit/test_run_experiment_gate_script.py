@@ -19,6 +19,7 @@ def test_run_experiment_gate_script_reports_and_appends_ledger(tmp_path: Path) -
     baseline_preflight = tmp_path / "baseline_preflight.json"
     candidate_preflight = tmp_path / "candidate_preflight.json"
     report_path = tmp_path / "report.md"
+    report_json = tmp_path / "report.json"
     ledger_path = tmp_path / "ledger.json"
 
     baseline_submission.write_text(
@@ -168,6 +169,8 @@ def test_run_experiment_gate_script_reports_and_appends_ledger(tmp_path: Path) -
             "q1",
             "--out",
             str(report_path),
+            "--out-json",
+            str(report_json),
             "--ledger-json",
             str(ledger_path),
         ],
@@ -185,6 +188,16 @@ def test_run_experiment_gate_script_reports_and_appends_ledger(tmp_path: Path) -
     assert "- Baseline trusted F_beta(2.5): `0.0000`" in report
     assert "- Candidate trusted F_beta(2.5): `1.0000`" in report
     assert "Improved IDs: `q1`" in report
+
+    report_payload = json.loads(report_json.read_text(encoding="utf-8"))
+    assert report_payload["label"] == "candidate-a"
+    assert report_payload["recommendation"] == "PROMISING"
+    assert report_payload["answer_changed_count"] == 0
+    assert report_payload["retrieval_page_projection_changed_count"] == 1
+    assert report_payload["improved_seed_cases"] == ["q1"]
+    assert report_payload["equivalent_seed_cases"] == []
+    assert report_payload["regressed_seed_cases"] == []
+    assert report_payload["submission_policy"] == "NO_SUBMIT_WITHOUT_USER_APPROVAL"
 
     ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
     experiments = ledger["experiments"]
