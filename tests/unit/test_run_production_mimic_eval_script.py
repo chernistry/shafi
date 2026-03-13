@@ -15,6 +15,9 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
     exactness = tmp_path / "exactness.json"
     equivalence = tmp_path / "equivalence.json"
     history = tmp_path / "history.json"
+    scaffold = tmp_path / "scaffold.json"
+    raw_results = tmp_path / "raw_results.json"
+    cheap_eval = tmp_path / "cheap_eval.json"
     out_json = tmp_path / "production_mimic.json"
     out_md = tmp_path / "production_mimic.md"
 
@@ -37,6 +40,7 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
                         "hidden_g_trusted_delta": 0.0425,
                         "lineage_ok": True,
                         "page_drift": 4,
+                        "raw_results": str(raw_results),
                     }
                 ]
             }
@@ -53,6 +57,37 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
         encoding="utf-8",
     )
     equivalence.write_text(json.dumps({"safe_baselines": ["/tmp/submission_v6_context_seed.json"]}), encoding="utf-8")
+    scaffold.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "question_id": "q1",
+                        "question": "Compare the parties in these cases.",
+                        "support_shape_class": "comparison",
+                        "support_shape_requirements": {"requires_title_anchor": True},
+                        "minimal_required_support_pages": ["docA_1", "docB_1"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    raw_results.write_text(
+        json.dumps(
+            [
+                {
+                    "case": {"question": "Compare the parties in these cases."},
+                    "telemetry": {
+                        "question_id": "q1",
+                        "used_page_ids": ["docA_3", "docB_2"],
+                        "retrieved_page_ids": ["docA_1", "docA_3", "docB_1", "docB_2"],
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
     history.write_text(
         json.dumps(
             {
@@ -64,6 +99,27 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
                         "platform_like_total_estimate": 0.735,
                     }
                 ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    cheap_eval.write_text(
+        json.dumps(
+            {
+                "production_mimic": {
+                    "eval": {
+                        "citation_coverage": 0.9,
+                        "answer_type_format_compliance": 1.0,
+                        "grounding_g_score_beta_2_5": 0.81,
+                    },
+                    "judge": {
+                        "cases": 2,
+                        "pass_rate": 1.0,
+                        "avg_accuracy": 5.0,
+                        "avg_grounding": 5.0,
+                        "judge_failures": 0,
+                    },
+                }
             }
         ),
         encoding="utf-8",
@@ -87,6 +143,10 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
             str(equivalence),
             "--history-json",
             str(history),
+            "--cheap-eval-json",
+            str(cheap_eval),
+            "--scaffold-json",
+            str(scaffold),
             "--out-json",
             str(out_json),
             "--out-md",
@@ -103,6 +163,7 @@ def test_run_production_mimic_eval_script_writes_ranked_output(tmp_path: Path) -
     markdown = out_md.read_text(encoding="utf-8")
 
     assert report["lineage_confidence"] == "high"
+    assert report["support_shape"]["weak_same_doc_anchor_case_count"] == 1
     assert report["platform_like_rank_estimate"] >= 1
     assert report["strict_rank_estimate"] >= 1
     assert report["paranoid_rank_estimate"] >= 1

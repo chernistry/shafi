@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 JsonDict = dict[str, object]
+JsonList = list[JsonDict]
 
 
 def _as_float(value: object, *, default: float = 0.0) -> float:
@@ -53,13 +54,208 @@ def _as_str_list(value: object) -> list[str]:
     return [text for item in cast("list[object]", value) if (text := str(item).strip())]
 
 
+def _page_doc(page_id: str) -> str:
+    if "_" not in page_id:
+        return page_id
+    return page_id.rsplit("_", 1)[0]
+
+
+def _page_num(page_id: str) -> int | None:
+    if "_" not in page_id:
+        return None
+    suffix = page_id.rsplit("_", 1)[1]
+    try:
+        return int(suffix)
+    except ValueError:
+        return None
+
+
+def _index_scaffold_records(scaffold_payload: JsonDict | None) -> dict[str, JsonDict]:
+    if scaffold_payload is None:
+        return {}
+    records_obj = scaffold_payload.get("records")
+    if not isinstance(records_obj, list):
+        return {}
+    out: dict[str, JsonDict] = {}
+    for raw in cast("list[object]", records_obj):
+        if not isinstance(raw, dict):
+            continue
+        record = cast("JsonDict", raw)
+        question_id = str(record.get("question_id") or "").strip()
+        if question_id:
+            out[question_id] = record
+    return out
+
+
+def _requires_title_anchor(record: JsonDict, *, question: str) -> bool:
+    requirements = cast("JsonDict", record.get("support_shape_requirements") or {})
+    if _as_bool(requirements.get("requires_title_anchor")):
+        return True
+    shape = str(record.get("support_shape_class") or "").strip().lower()
+    if shape in {"comparison", "named_metadata"}:
+        return True
+    q = question.lower()
+    return any(term in q for term in ("title page", "cover page", "first page", "header", "caption"))
+
+
+def _requires_page_two(record: JsonDict, *, question: str) -> bool:
+    anchor = _page_num(str(record.get("required_page_anchor") or "").strip())
+    if anchor == 2:
+        return True
+    q = question.lower()
+    return "page 2" in q or "second page" in q
+
+
+def _requires_outcome_anchor(record: JsonDict, *, question: str) -> bool:
+    shape = str(record.get("support_shape_class") or "").strip().lower()
+    if shape in {"case_outcome", "outcome_plus_costs"}:
+        return True
+    q = question.lower()
+    return any(term in q for term in ("outcome", "order", "judgment", "disposed", "dismissed", "allowed"))
+
+
+def build_support_shape_report(
+    *,
+    raw_results_payload: JsonList | None,
+    scaffold_payload: JsonDict | None,
+) -> JsonDict:
+    if not raw_results_payload or scaffold_payload is None:
+        return {
+            "cases_scored": 0,
+            "page_budget_case_count": 0,
+            "citation_overbreadth_case_count": 0,
+            "weak_same_doc_anchor_case_count": 0,
+            "weak_same_doc_anchor_qids": [],
+            "page_budget_qids": [],
+            "citation_overbreadth_qids": [],
+        }
+
+    records_by_qid = _index_scaffold_records(scaffold_payload)
+    page_budget_qids: list[str] = []
+    citation_overbreadth_qids: list[str] = []
+    weak_anchor_qids: list[str] = []
+    cases_scored = 0
+
+    for raw in raw_results_payload:
+        telemetry = cast("JsonDict", raw.get("telemetry") or {})
+        question_id = str(telemetry.get("question_id") or "").strip()
+        if not question_id:
+            continue
+        record = records_by_qid.get(question_id)
+        if record is None:
+            continue
+        cases_scored += 1
+
+        question = str(record.get("question") or cast("JsonDict", raw.get("case") or {}).get("question") or "").strip()
+        used_page_ids = _as_str_list(telemetry.get("used_page_ids"))
+        retrieved_page_ids = _as_str_list(telemetry.get("retrieved_page_ids"))
+        if not used_page_ids:
+            continue
+
+        used_by_doc: dict[str, list[str]] = {}
+        retrieved_by_doc: dict[str, list[str]] = {}
+        for page_id in used_page_ids:
+            used_by_doc.setdefault(_page_doc(page_id), []).append(page_id)
+        for page_id in retrieved_page_ids:
+            retrieved_by_doc.setdefault(_page_doc(page_id), []).append(page_id)
+
+        minimal_pages = _as_str_list(record.get("minimal_required_support_pages"))
+        minimal_set = set(minimal_pages)
+        weak_anchor = False
+
+        for gold_page in minimal_pages:
+            doc = _page_doc(gold_page)
+            if doc in used_by_doc and gold_page in retrieved_page_ids and gold_page not in used_page_ids:
+                weak_anchor = True
+                break
+
+        if not weak_anchor:
+            wants_title = _requires_title_anchor(record, question=question)
+            wants_page_two = _requires_page_two(record, question=question)
+            wants_outcome = _requires_outcome_anchor(record, question=question)
+
+            for doc, used_pages in used_by_doc.items():
+                retrieved_pages = retrieved_by_doc.get(doc, [])
+                retrieved_nums = [num for page in retrieved_pages if (num := _page_num(page)) is not None]
+                used_nums = [num for page in used_pages if (num := _page_num(page)) is not None]
+                if not retrieved_nums or not used_nums:
+                    continue
+                if wants_title and 1 in retrieved_nums and 1 not in used_nums and doc not in {_page_doc(page) for page in minimal_set if _page_num(page) == 1}:
+                    weak_anchor = True
+                    break
+                if wants_page_two and 2 in retrieved_nums and 2 not in used_nums and doc not in {_page_doc(page) for page in minimal_set if _page_num(page) == 2}:
+                    weak_anchor = True
+                    break
+                if wants_outcome:
+                    last_page = max(retrieved_nums)
+                    if last_page not in used_nums and doc not in {_page_doc(page) for page in minimal_set if _page_num(page) == last_page}:
+                        weak_anchor = True
+                        break
+
+        if weak_anchor:
+            weak_anchor_qids.append(question_id)
+
+        max_pages_per_doc = max((len(pages) for pages in used_by_doc.values()), default=0)
+        if max_pages_per_doc > 2:
+            page_budget_qids.append(question_id)
+
+        allowed_total = min(4, max(2, len(minimal_pages) + 1))
+        if len(used_page_ids) > allowed_total:
+            citation_overbreadth_qids.append(question_id)
+
+    return {
+        "cases_scored": cases_scored,
+        "page_budget_case_count": len(page_budget_qids),
+        "citation_overbreadth_case_count": len(citation_overbreadth_qids),
+        "weak_same_doc_anchor_case_count": len(weak_anchor_qids),
+        "page_budget_qids": page_budget_qids,
+        "citation_overbreadth_qids": citation_overbreadth_qids,
+        "weak_same_doc_anchor_qids": weak_anchor_qids,
+    }
+
+
 def _eval_summary(payload: JsonDict | None) -> JsonDict:
     if payload is None:
         return {}
     summary_obj = payload.get("summary")
     if isinstance(summary_obj, dict):
         return cast("JsonDict", summary_obj)
+    nested_obj = payload.get("production_mimic")
+    if isinstance(nested_obj, dict):
+        nested = cast("JsonDict", nested_obj)
+        eval_block = cast("JsonDict", nested.get("eval") or {})
+        judge_block = cast("JsonDict", nested.get("judge") or {})
+        summary: JsonDict = dict(eval_block)
+        if judge_block:
+            summary["judge"] = judge_block
+        return summary
     return payload
+
+
+def _support_shape_penalty(report: JsonDict) -> tuple[float, list[str]]:
+    cases_scored = max(1, _as_int(report.get("cases_scored")))
+    weak_cases = _as_int(report.get("weak_same_doc_anchor_case_count"))
+    page_budget_cases = _as_int(report.get("page_budget_case_count"))
+    citation_overbreadth_cases = _as_int(report.get("citation_overbreadth_case_count"))
+
+    penalty = 0.0
+    reasons: list[str] = []
+
+    if weak_cases > 0:
+        penalty += min(0.015, 0.02 * (weak_cases / cases_scored))
+        reasons.append(
+            f"weak same-doc page choices where stronger anchors were already available ({weak_cases}/{cases_scored})"
+        )
+    if page_budget_cases > 0:
+        penalty += min(0.006, 0.01 * (page_budget_cases / cases_scored))
+        reasons.append(f"pages-per-doc exceeded strict local budget ({page_budget_cases}/{cases_scored})")
+    if citation_overbreadth_cases > 0:
+        penalty += min(0.008, 0.01 * (citation_overbreadth_cases / cases_scored))
+        reasons.append(
+            f"citation overbreadth exceeded strict local budget ({citation_overbreadth_cases}/{cases_scored})"
+        )
+
+    return penalty, reasons
 
 
 def extract_judge_summary(payload: JsonDict | None) -> JsonDict:
@@ -218,6 +414,8 @@ def estimate_production_mimic(
     cheap_eval_payload: JsonDict | None,
     strict_eval_payload: JsonDict | None,
     calibration: JsonDict | None,
+    raw_results_payload: JsonList | None = None,
+    scaffold_payload: JsonDict | None = None,
 ) -> JsonDict:
     calibration_block = calibration or {}
     hybrid_eval = aggregate_hybrid_strict_eval(
@@ -246,6 +444,10 @@ def estimate_production_mimic(
     lineage_confidence = infer_lineage_confidence(
         candidate_row=candidate_row,
         equivalence_report=equivalence_report,
+    )
+    support_shape = build_support_shape_report(
+        raw_results_payload=raw_results_payload,
+        scaffold_payload=scaffold_payload,
     )
 
     extra_penalty = 0.0
@@ -291,6 +493,9 @@ def estimate_production_mimic(
     if _as_int(candidate_row.get("page_drift")) > 0 and _as_float(candidate_row.get("hidden_g_trusted_delta")) <= 0.0:
         extra_penalty += 0.0025
         no_submit_reasons.append("page drift without trusted hidden-G gain")
+    support_shape_penalty, support_shape_reasons = _support_shape_penalty(support_shape)
+    extra_penalty += support_shape_penalty
+    no_submit_reasons.extend(support_shape_reasons)
 
     strict_offset = _as_float(calibration_block.get("strict_offset"))
     platform_like_offset = _as_float(calibration_block.get("platform_like_offset"))
@@ -342,6 +547,7 @@ def estimate_production_mimic(
             "answer_type_format_compliance": format_compliance,
             "grounding_g_score_beta_2_5": grounding_g_score,
         },
+        "support_shape": support_shape,
         "platform_like_total_estimate": platform_like_total_estimate,
         "strict_total_estimate": strict_total_estimate,
         "paranoid_total_estimate": paranoid_total_estimate,
