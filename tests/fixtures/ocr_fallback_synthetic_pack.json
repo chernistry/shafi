@@ -10,8 +10,8 @@
       ],
       "text_sufficient": false,
       "expected_fallback_triggered": true,
-      "expected_page_identity_collapsed": true,
-      "expected_mode": "docling_merged_single_page"
+      "expected_page_identity_collapsed": false,
+      "expected_mode": "docling_pages_preserved"
     },
     {
       "document": "scan-low-density-multipage.pdf",
@@ -21,8 +21,8 @@
       ],
       "text_sufficient": false,
       "expected_fallback_triggered": true,
-      "expected_page_identity_collapsed": true,
-      "expected_mode": "docling_merged_single_page"
+      "expected_page_identity_collapsed": false,
+      "expected_mode": "docling_pages_preserved"
     },
     {
       "document": "text-rich-multipage.pdf",

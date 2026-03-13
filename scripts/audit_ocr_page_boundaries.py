@@ -43,12 +43,14 @@ def _pdf_page_stats(path: Path) -> tuple[int, int]:
     return actual_pages, nonblank_pages
 
 
-def _current_parser_mode(*, actual_pdf_pages: int, text_sufficient: bool) -> str:
+def _current_parser_mode(*, actual_pdf_pages: int, text_sufficient: bool, page_identity_collapsed: bool) -> str:
     if actual_pdf_pages <= 1:
         return "not_applicable_single_page"
     if text_sufficient:
         return "pymupdf_pages_preserved"
-    return "docling_merged_single_page"
+    if page_identity_collapsed:
+        return "docling_merged_single_page"
+    return "docling_pages_preserved"
 
 
 def _audit_document(path: Path, *, parser: DocumentParser) -> OcrBoundaryAudit:
@@ -57,7 +59,9 @@ def _audit_document(path: Path, *, parser: DocumentParser) -> OcrBoundaryAudit:
     fast_text = "\n\n".join(text for text in pymupdf_pages if text).strip()
     text_sufficient = parser._is_pdf_text_sufficient(fast_text)
     fallback_triggered = not text_sufficient
-    page_identity_collapsed = actual_pdf_pages > 1 and fallback_triggered
+    docling_pages = parser._parse_pdf_docling_pages(path) if fallback_triggered else []
+    extracted_docling_pages = len([text for text in docling_pages if text.strip()])
+    page_identity_collapsed = actual_pdf_pages > 1 and fallback_triggered and extracted_docling_pages <= 1
     return OcrBoundaryAudit(
         document=path.name,
         actual_pdf_pages=actual_pdf_pages,
@@ -68,6 +72,7 @@ def _audit_document(path: Path, *, parser: DocumentParser) -> OcrBoundaryAudit:
         current_parser_mode=_current_parser_mode(
             actual_pdf_pages=actual_pdf_pages,
             text_sufficient=text_sufficient,
+            page_identity_collapsed=page_identity_collapsed,
         ),
     )
 

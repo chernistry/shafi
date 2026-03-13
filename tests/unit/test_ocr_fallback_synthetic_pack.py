@@ -9,7 +9,7 @@ from scripts.audit_ocr_page_boundaries import _audit_document, _scope_verdict
 from rag_challenge.ingestion.parser import DocumentParser
 
 
-def test_ocr_fallback_synthetic_pack_reproduces_page_identity_collapse(monkeypatch) -> None:
+def test_ocr_fallback_synthetic_pack_reflects_page_preserving_fallback(monkeypatch) -> None:
     fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / "ocr_fallback_synthetic_pack.json"
     payload = json.loads(fixture_path.read_text(encoding="utf-8"))
     cases = cast("list[dict[str, Any]]", payload["cases"])
@@ -31,6 +31,13 @@ def test_ocr_fallback_synthetic_pack_reproduces_page_identity_collapse(monkeypat
         )
         monkeypatch.setattr(parser, "_parse_pdf_pymupdf_pages", lambda _path, pymupdf_pages=pymupdf_pages: pymupdf_pages)
         monkeypatch.setattr(parser, "_is_pdf_text_sufficient", lambda _text, text_sufficient=text_sufficient: text_sufficient)
+        monkeypatch.setattr(
+            parser,
+            "_parse_pdf_docling_pages",
+            lambda _path, actual_pdf_pages=actual_pdf_pages, text_sufficient=text_sufficient: (
+                [f"OCR page {page_no}" for page_no in range(1, actual_pdf_pages + 1)] if not text_sufficient else []
+            ),
+        )
 
         audit = _audit_document(Path(document), parser=parser)
         audits.append(audit)
@@ -40,4 +47,4 @@ def test_ocr_fallback_synthetic_pack_reproduces_page_identity_collapse(monkeypat
         assert audit.page_identity_collapsed is bool(case["expected_page_identity_collapsed"])
         assert audit.current_parser_mode == str(case["expected_mode"])
 
-    assert _scope_verdict(audits) == "WARMUP_AND_PRIVATE_RISK"
+    assert _scope_verdict(audits) == "PRIVATE_SAFE_ONLY_WATCHPOINT"

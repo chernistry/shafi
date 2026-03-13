@@ -2,6 +2,7 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -137,12 +138,12 @@ def test_parse_pdf_uses_pymupdf_fast_path_when_text_is_sufficient(tmp_path: Path
     monkeypatch.setattr(parser, "_parse_pdf_pymupdf_pages", lambda _path: ["This is extracted text from PDF."])
     docling_called = False
 
-    def _docling(_path: Path) -> str:
+    def _docling_pages(_path: Path) -> list[str]:
         nonlocal docling_called
         docling_called = True
-        return "docling"
+        return ["docling"]
 
-    monkeypatch.setattr(parser, "_parse_pdf_docling", _docling)
+    monkeypatch.setattr(parser, "_parse_pdf_docling_pages", _docling_pages)
 
     text = parser._parse_pdf(file_path)
 
@@ -158,7 +159,7 @@ def test_parse_pdf_falls_back_to_docling_when_pymupdf_text_too_short(
     file_path.write_bytes(b"%PDF-1.4")
 
     monkeypatch.setattr(parser, "_parse_pdf_pymupdf_pages", lambda _path: ["short"])
-    monkeypatch.setattr(parser, "_parse_pdf_docling", lambda _path: "# Parsed by Docling\n\nFull text")
+    monkeypatch.setattr(parser, "_parse_pdf_docling_pages", lambda _path: ["# Parsed by Docling", "Full text"])
 
     text = parser._parse_pdf(file_path)
 
@@ -173,11 +174,38 @@ def test_parse_pdf_falls_back_to_docling_when_pymupdf_text_is_low_density(
     file_path.write_bytes(b"%PDF-1.4")
 
     monkeypatch.setattr(parser, "_parse_pdf_pymupdf_pages", lambda _path: ["_____ _____ _____ !!!!!"])
-    monkeypatch.setattr(parser, "_parse_pdf_docling", lambda _path: "# OCR fallback\n\nRecovered text")
+    monkeypatch.setattr(parser, "_parse_pdf_docling_pages", lambda _path: ["# OCR fallback", "Recovered text"])
 
     text = parser._parse_pdf(file_path)
 
     assert text.startswith("# OCR fallback")
+
+
+def test_read_pdf_preserves_docling_page_boundaries_on_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    parser = DocumentParser(pdf_text_min_chars=50, pdf_text_min_words=10)
+    file_path = tmp_path / "sample.pdf"
+    file_path.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(parser, "_parse_pdf_pymupdf_pages", lambda _path: ["short", ""])
+    monkeypatch.setattr(parser, "_parse_pdf_docling_pages", lambda _path: ["Recovered page 1", "Recovered page 2"])
+
+    text, pages = parser._read_pdf(file_path)
+
+    assert text == "Recovered page 1\n\nRecovered page 2"
+    assert pages == ["Recovered page 1", "Recovered page 2"]
+
+
+def test_parse_file_preserves_page_numbers_when_first_pdf_page_is_blank(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    parser = DocumentParser(pdf_text_min_chars=50, pdf_text_min_words=10)
+    file_path = tmp_path / "sample.pdf"
+    file_path.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(parser, "_read_pdf", lambda _path: ("Recovered page two", ["", "Recovered page two"]))
+
+    doc = parser.parse_file(file_path)
+
+    assert len(doc.sections) == 1
+    assert doc.sections[0].section_path == "page:2"
 
 
 def test_parse_pdf_docling_enables_ocr(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -192,8 +220,18 @@ def test_parse_pdf_docling_enables_ocr(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     class _FakeDocument:
         @staticmethod
-        def export_to_markdown() -> str:
-            return "# OCR markdown"
+        def export_to_markdown(*, page_no: int | None = None) -> str:
+            if page_no == 1:
+                return "# OCR markdown page 1"
+            if page_no == 2:
+                return "# OCR markdown page 2"
+            return "# OCR markdown page 1\n\n# OCR markdown page 2"
+
+        @staticmethod
+        def num_pages() -> int:
+            return 2
+
+        pages: ClassVar[dict[int, object]] = {1: object(), 2: object()}
 
     class _FakeConversionResult:
         document = _FakeDocument()
@@ -219,6 +257,6 @@ def test_parse_pdf_docling_enables_ocr(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     text = parser._parse_pdf_docling(file_path)
 
-    assert text == "# OCR markdown"
+    assert text == "# OCR markdown page 1\n\n# OCR markdown page 2"
     assert captured["do_ocr"] is True
     assert captured["format_options"] is True

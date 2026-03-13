@@ -152,7 +152,7 @@ class DocumentParser:
 
     def _read_pdf(self, path: Path) -> tuple[str, list[str]]:
         pages = self._parse_pdf_pymupdf_pages(path)
-        fast_text = "\n\n".join(text for text in pages if text).strip()
+        fast_text = "\n\n".join(text for text in pages if text.strip()).strip()
         if self._is_pdf_text_sufficient(fast_text):
             return fast_text, pages
 
@@ -164,10 +164,14 @@ class DocumentParser:
                 len(fast_text.split()),
             )
 
-        docling_text = self._parse_pdf_docling(path)
-        # Docling may lose page boundaries; treat as a single-page section.
-        merged = (docling_text or fast_text).strip()
-        return merged, [merged] if merged else []
+        docling_pages = [text.strip() for text in self._parse_pdf_docling_pages(path)]
+        if any(text for text in docling_pages):
+            return "\n\n".join(text for text in docling_pages if text).strip(), docling_pages
+
+        # Preserve any page boundaries PyMuPDF did recover instead of collapsing to one pseudo-page.
+        preserved_pages = [text.strip() for text in pages]
+        merged = "\n\n".join(text for text in preserved_pages if text).strip()
+        return merged, preserved_pages if preserved_pages else []
 
     def _parse_json_document(self, path: Path, *, fallback_doc_id: str) -> ParsedDocument:
         raw = path.read_text(encoding="utf-8", errors="replace")
@@ -268,32 +272,60 @@ class DocumentParser:
                     if not isinstance(page_text_obj, str):
                         continue
                     page_text = page_text_obj
-                    if page_text:
-                        pages.append(page_text.strip())
+                    pages.append(page_text.strip())
             return pages
         except Exception:
             logger.info("PyMuPDF failed for %s; falling back to Docling", path, exc_info=True)
             return []
 
-    def _parse_pdf_docling(self, path: Path) -> str:
+    def _get_docling_converter(self) -> DocumentConverter:
+        if self._docling_converter is None:
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+
+            pipeline_options = PdfPipelineOptions(do_ocr=True)
+            self._docling_converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+                }
+            )
+        return self._docling_converter
+
+    def _parse_pdf_docling_pages(self, path: Path) -> list[str]:
         try:
-            if self._docling_converter is None:
-                from docling.datamodel.base_models import InputFormat
-                from docling.datamodel.pipeline_options import PdfPipelineOptions
-                from docling.document_converter import DocumentConverter, PdfFormatOption
+            result = self._get_docling_converter().convert(str(path))
+            document = cast("Any", result.document)
+            page_numbers_obj = getattr(document, "pages", {})
+            page_numbers: list[int] = []
+            for page_no_obj in cast("dict[object, object]", page_numbers_obj):
+                if isinstance(page_no_obj, int):
+                    page_numbers.append(page_no_obj)
+                elif isinstance(page_no_obj, str) and page_no_obj.isdigit():
+                    page_numbers.append(int(page_no_obj))
+            page_numbers = sorted(page_numbers)
+            if not page_numbers:
+                total_pages_obj = getattr(document, "num_pages", None)
+                total_pages_value = total_pages_obj() if callable(total_pages_obj) else 0
+                total_pages = total_pages_value if isinstance(total_pages_value, int) else 0
+                page_numbers = list(range(1, total_pages + 1))
 
-                pipeline_options = PdfPipelineOptions(do_ocr=True)
-                self._docling_converter = DocumentConverter(
-                    format_options={
-                        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
-                    }
-                )
+            pages: list[str] = []
+            for page_no in page_numbers:
+                page_text = str(document.export_to_markdown(page_no=page_no) or "").strip()
+                pages.append(page_text)
 
-            result = self._docling_converter.convert(str(path))
-            return str(result.document.export_to_markdown())
+            if any(text for text in pages):
+                return pages
+
+            merged = str(document.export_to_markdown() or "").strip()
+            return [merged] if merged else []
         except Exception:
             logger.warning("Docling failed for %s", path, exc_info=True)
-            return ""
+            return []
+
+    def _parse_pdf_docling(self, path: Path) -> str:
+        return "\n\n".join(text for text in self._parse_pdf_docling_pages(path) if text).strip()
 
     def _is_pdf_text_sufficient(self, text: str) -> bool:
         stripped = text.strip()
