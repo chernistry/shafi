@@ -8,6 +8,7 @@ from typing import cast
 
 JsonDict = dict[str, object]
 JsonList = list[JsonDict]
+_MISS_PACK_FAMILIES = ("explicit_page", "title_page", "same_doc", "mixed_doc", "ocr_risk")
 
 _PAGE2_TERMS = ("page 2", "second page")
 _TITLE_TERMS = ("title page", "cover page", "caption", "header", "first page", "page 1")
@@ -54,10 +55,35 @@ def _coerce_str_list(value: object) -> list[str]:
     return [text for item in cast("list[object]", value) if (text := str(item).strip())]
 
 
+def _coerce_int(value: object) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return 0
+        try:
+            return int(float(text))
+        except ValueError:
+            return 0
+    return 0
+
+
 def _page_doc(page_id: str) -> str:
     if "_" not in page_id:
         return page_id
     return page_id.rsplit("_", 1)[0]
+
+
+def _target_doc_family(gold_pages: list[str], *, ocr_risk: bool) -> str:
+    if ocr_risk:
+        return "ocr_risk"
+    gold_docs = {_page_doc(page_id) for page_id in gold_pages}
+    return "multi_doc" if len(gold_docs) >= 2 else "single_doc"
 
 
 def _infer_doc_family(*, question: str, failure_class: str, support_shape_class: str) -> str:
@@ -157,6 +183,7 @@ def build_page_trace_ledger(
         failure_class = str(record.get("failure_class") or "").strip()
         support_shape_class = str(record.get("support_shape_class") or "").strip()
         route_family = str(record.get("route_family") or "").strip()
+        ocr_risk = bool(case.get("ocr_risk") or record.get("ocr_risk"))
         gold_in_retrieved = bool(set(gold_pages).intersection(retrieved_pages))
         gold_in_reranked = bool(set(gold_pages).intersection(context_pages))
         gold_in_used = bool(set(gold_pages).intersection(used_pages))
@@ -199,10 +226,13 @@ def build_page_trace_ledger(
                     failure_class=failure_class,
                     support_shape_class=support_shape_class,
                 ),
+                "target_doc_ids": sorted({_page_doc(page_id) for page_id in gold_pages}),
+                "target_doc_family": _target_doc_family(gold_pages, ocr_risk=ocr_risk),
                 "route": route_family,
                 "failure_stage": failure_stage,
                 "page_budget_overrun": max(0, len(used_pages) - max(1, len(gold_pages))),
                 "wrong_document_risk": bool(case.get("wrong_document_risk")),
+                "ocr_risk": ocr_risk,
                 "trust_tier": str(case.get("trust_tier") or "").strip() or "unknown",
             }
         )
@@ -227,6 +257,134 @@ def build_page_trace_ledger(
         },
         "records": records,
     }
+
+
+def _miss_pack_family(record: JsonDict) -> str:
+    if bool(record.get("ocr_risk")):
+        return "ocr_risk"
+    doc_family = str(record.get("doc_family") or "").strip()
+    failure_stage = str(record.get("failure_stage") or "").strip()
+    target_doc_family = str(record.get("target_doc_family") or "").strip()
+    if doc_family == "explicit_page_two":
+        return "explicit_page"
+    if doc_family in {"comparison_title_party", "single_doc_title_cover", "named_metadata_single_doc"}:
+        return "title_page"
+    if bool(record.get("wrong_document_risk")) or target_doc_family == "multi_doc":
+        return "mixed_doc"
+    if failure_stage in {"wrong_page_used_same_doc", "wrong_page_context_same_doc", "wrong_page_retrieved_same_doc"}:
+        return "same_doc"
+    return "same_doc"
+
+
+def build_bounded_miss_pack(*, ledger: JsonDict, max_per_family: int = 8) -> JsonDict:
+    records = _coerce_dict_list(ledger.get("records"))
+    miss_records = [
+        record
+        for record in records
+        if (not bool(record.get("gold_in_used"))) or _coerce_str_list(record.get("false_positive_pages"))
+    ]
+    miss_records.sort(
+        key=lambda record: (
+            0 if str(record.get("trust_tier") or "") == "trusted" else 1,
+            -len(_coerce_str_list(record.get("false_positive_pages"))),
+            -_coerce_int(record.get("page_budget_overrun")),
+            str(record.get("qid") or ""),
+        )
+    )
+
+    family_counts = {family: 0 for family in _MISS_PACK_FAMILIES}
+    selected_counts = {family: 0 for family in _MISS_PACK_FAMILIES}
+    cases: JsonList = []
+    for record in miss_records:
+        family = _miss_pack_family(record)
+        family_counts[family] += 1
+        if selected_counts[family] >= max_per_family:
+            continue
+        selected_counts[family] += 1
+        cases.append(
+            {
+                "qid": str(record.get("qid") or ""),
+                "question_family": str(record.get("doc_family") or ""),
+                "target_doc_family": str(record.get("target_doc_family") or ""),
+                "target_doc_ids": _coerce_str_list(record.get("target_doc_ids")),
+                "failure_stage": str(record.get("failure_stage") or ""),
+                "miss_family": family,
+                "route": str(record.get("route") or ""),
+                "trust_tier": str(record.get("trust_tier") or ""),
+                "wrong_document_risk": bool(record.get("wrong_document_risk")),
+                "ocr_risk": bool(record.get("ocr_risk")),
+                "gold_pages": _coerce_str_list(record.get("gold_pages")),
+                "used_pages": _coerce_str_list(record.get("used_pages")),
+                "false_positive_pages": _coerce_str_list(record.get("false_positive_pages")),
+            }
+        )
+
+    return {
+        "source_page_trace_ledger": ledger.get("source_raw_results"),
+        "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
+        "summary": {
+            "max_per_family": max_per_family,
+            "selected_case_count": len(cases),
+            "miss_case_count": len(miss_records),
+            "family_counts": family_counts,
+            "selected_family_counts": selected_counts,
+            "selected_qids": [str(case.get("qid") or "") for case in cases],
+        },
+        "cases": cases,
+    }
+
+
+def _render_miss_pack_markdown(payload: JsonDict) -> str:
+    summary = cast("JsonDict", payload.get("summary") or {})
+    cases = _coerce_dict_list(payload.get("cases"))
+    lines = [
+        "# Bounded Miss Pack",
+        "",
+        f"- source_page_trace_ledger: `{payload.get('source_page_trace_ledger')}`",
+        f"- submission_policy: `{payload.get('submission_policy')}`",
+        "",
+        "## Summary",
+        "",
+        f"- selected_case_count: `{summary.get('selected_case_count')}`",
+        f"- miss_case_count: `{summary.get('miss_case_count')}`",
+        f"- max_per_family: `{summary.get('max_per_family')}`",
+        f"- selected_qids: `{', '.join(_coerce_str_list(summary.get('selected_qids')))}`",
+        "",
+        "## Families",
+        "",
+    ]
+    family_counts = cast("dict[str, object]", summary.get("family_counts") or {})
+    selected_counts = cast("dict[str, object]", summary.get("selected_family_counts") or {})
+    for family in _MISS_PACK_FAMILIES:
+        lines.append(
+            f"- {family}: total=`{family_counts.get(family, 0)}` selected=`{selected_counts.get(family, 0)}`"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Cases",
+            "",
+            "| qid | miss_family | question_family | target_doc_family | failure_stage | trust |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for case in cases:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(case.get("qid") or ""),
+                    str(case.get("miss_family") or ""),
+                    str(case.get("question_family") or ""),
+                    str(case.get("target_doc_family") or ""),
+                    str(case.get("failure_stage") or ""),
+                    str(case.get("trust_tier") or ""),
+                ]
+            )
+            + " |"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _render_markdown(payload: JsonDict) -> str:
@@ -295,6 +453,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--qids-file", type=Path, default=None)
     parser.add_argument("--out-json", type=Path, required=True)
     parser.add_argument("--out-md", type=Path, required=True)
+    parser.add_argument("--miss-pack-json", type=Path, default=None)
+    parser.add_argument("--miss-pack-md", type=Path, default=None)
+    parser.add_argument("--miss-pack-max-per-family", type=int, default=8)
     return parser.parse_args()
 
 
@@ -317,6 +478,12 @@ def main() -> int:
     args.out_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     args.out_md.parent.mkdir(parents=True, exist_ok=True)
     args.out_md.write_text(_render_markdown(payload) + "\n", encoding="utf-8")
+    if args.miss_pack_json is not None and args.miss_pack_md is not None:
+        miss_pack = build_bounded_miss_pack(ledger=payload, max_per_family=args.miss_pack_max_per_family)
+        args.miss_pack_json.parent.mkdir(parents=True, exist_ok=True)
+        args.miss_pack_md.parent.mkdir(parents=True, exist_ok=True)
+        args.miss_pack_json.write_text(json.dumps(miss_pack, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        args.miss_pack_md.write_text(_render_miss_pack_markdown(miss_pack) + "\n", encoding="utf-8")
     return 0
 
 

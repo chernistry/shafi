@@ -171,6 +171,16 @@ def _load_benchmark(path: Path) -> list[BenchmarkCase]:
     return cases
 
 
+def _load_include_qids(path: Path | None) -> set[str] | None:
+    if path is None or not path.exists():
+        return None
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
 def _eval_cases_by_question_id(eval_path: Path) -> dict[str, JsonDict]:
     payload = _load_json(eval_path)
     cases_obj = payload.get("cases")
@@ -362,11 +372,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Score a manual page-level grounding benchmark against an eval JSON.")
     parser.add_argument("--eval", type=Path, required=True, help="Path to eval_*.json produced by the harness.")
     parser.add_argument("--benchmark", type=Path, required=True, help="Path to manual benchmark JSON.")
+    parser.add_argument("--include-qids-file", type=Path, default=None, help="Optional file containing the only QIDs to score.")
     parser.add_argument("--out", type=Path, default=None, help="Optional markdown output path.")
     parser.add_argument("--beta", type=float, default=2.5, help="F-beta parameter (default: 2.5).")
     args = parser.parse_args()
 
+    include_qids = _load_include_qids(args.include_qids_file)
     cases = _load_benchmark(args.benchmark)
+    if include_qids is not None:
+        cases = [case for case in cases if case.question_id in include_qids]
     eval_cases = _eval_cases_by_question_id(args.eval)
     scores = [_score_case(case, eval_cases.get(case.question_id), beta=args.beta) for case in cases]
     report = _build_report(scores=scores, beta=args.beta)
