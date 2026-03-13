@@ -196,6 +196,7 @@ def _verify_lineage(
     *,
     root: Path,
     baseline_submission: Path,
+    champion_equivalence_json: Path | None,
     candidate: CandidateSpec,
     paths: dict[str, Path],
 ) -> JsonDict:
@@ -217,6 +218,8 @@ def _verify_lineage(
         "--out-md",
         str(paths["lineage_md"]),
     ]
+    if champion_equivalence_json is not None:
+        cmd.extend(["--champion-equivalence-json", str(champion_equivalence_json)])
     _run(cmd, cwd=root)
     return _load_json(paths["lineage_json"])
 
@@ -656,6 +659,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--leaderboard", default=None)
     parser.add_argument("--team-name", default=None)
     parser.add_argument("--public-realized-exactness-qids-file", default=None)
+    parser.add_argument("--champion-equivalence-json", default=None)
     parser.add_argument("--target-rank", type=int, default=1)
     return parser.parse_args()
 
@@ -675,6 +679,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     leaderboard_path = _resolve(root, args.leaderboard)
     public_realized_qids_path = _resolve(root, args.public_realized_exactness_qids_file)
+    champion_equivalence_json = _resolve(root, args.champion_equivalence_json)
 
     leaderboard_rows: list[LeaderboardRow] = []
     subject_summary: JsonDict | None = None
@@ -697,6 +702,7 @@ def main() -> int:
         lineage = _verify_lineage(
             root=root,
             baseline_submission=baseline_submission,
+            champion_equivalence_json=champion_equivalence_json,
             candidate=candidate,
             paths=paths,
         )
@@ -786,6 +792,7 @@ def main() -> int:
         "leaderboard": None if leaderboard_path is None else str(leaderboard_path),
         "team_name": args.team_name,
         "public_realized_exactness_qids_file": None if public_realized_qids_path is None else str(public_realized_qids_path),
+        "champion_equivalence_json": None if champion_equivalence_json is None else str(champion_equivalence_json),
         "target_rank": args.target_rank,
         "branch_class_summary": branch_class_summary,
         "ranked_candidates": ranked,
