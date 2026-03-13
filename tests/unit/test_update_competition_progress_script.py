@@ -265,3 +265,129 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
     assert "Current default decision: `local_ceiling_reached_hold_budget`" in matrix_report
     assert "triad_f331_e0798_plus_dotted" in matrix_report
     assert "v6_public_exactness_champion" in matrix_report
+
+
+def test_update_competition_progress_script_merges_partial_specs_with_defaults(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    specs_json = tmp_path / "matrix_specs.json"
+    candidate_cycle = tmp_path / "cycle.json"
+    production_mimic = tmp_path / "production_mimic.json"
+    supervisor_runs = tmp_path / "runs.json"
+    matrix_json = tmp_path / "competition_matrix.json"
+    matrix_md = tmp_path / "competition_matrix.md"
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","Leader","0.867424","1","0.666667","0.921596","0.996","1.05","80","6","2026-03-12T14:02:54"\n'
+        '"8","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-12T14:56:17"\n',
+        encoding="utf-8",
+    )
+    specs_json.write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "label": "v10_local_page_candidates_r1",
+                        "date": "2026-03-13",
+                        "status": "rejected",
+                        "branch_class": "page_candidate_generator_family_aware",
+                        "git_commit": "a2ef637",
+                        "baseline": "triad_f331_e0798_plus_dotted",
+                        "notes": "ticket 23 rejected",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    supervisor_runs.write_text(
+        json.dumps(
+            {
+                "runs": [
+                    {
+                        "decision": {
+                            "action": "local_ceiling_reached_hold_budget",
+                        }
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    candidate_cycle.write_text(
+        json.dumps(
+            {
+                "ranked_candidates": [
+                    {
+                        "label": "triad_f331_e0798_plus_dotted",
+                        "strict_total_estimate": 0.760607,
+                        "paranoid_total_estimate": 0.744607,
+                        "hidden_g_trusted_delta": 0.0425,
+                        "hidden_g_all_delta": 0.0206,
+                        "answer_drift": 2,
+                        "page_drift": 4,
+                        "recommendation": "PROMISING",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    production_mimic.write_text(
+        json.dumps(
+            {
+                "production_mimic": {
+                    "candidate_class": "triad_f331_e0798_plus_dotted",
+                    "lineage_confidence": "high",
+                    "platform_like_total_estimate": 0.748,
+                    "strict_total_estimate": 0.756,
+                    "paranoid_total_estimate": 0.744,
+                    "judge": {
+                        "pass_rate": 1.0,
+                        "avg_grounding": 5.0,
+                        "avg_accuracy": 5.0,
+                    },
+                    "hidden_g_trusted": {"delta": 0.0425},
+                    "submit_eligibility": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/update_competition_progress.py",
+            "--leaderboard",
+            str(leaderboard),
+            "--team",
+            "Tzur Labs",
+            "--matrix-row-specs-json",
+            str(specs_json),
+            "--candidate-ceiling-cycle",
+            str(candidate_cycle),
+            "--production-mimic-json",
+            str(production_mimic),
+            "--supervisor-runs-json",
+            str(supervisor_runs),
+            "--matrix-json-out",
+            str(matrix_json),
+            "--matrix-md-out",
+            str(matrix_md),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    matrix_payload = json.loads(matrix_json.read_text(encoding="utf-8"))
+    matrix_report = matrix_md.read_text(encoding="utf-8")
+    labels = {str(row["label"]) for row in matrix_payload["rows"]}
+
+    assert "v6_public_exactness_champion" in labels
+    assert "triad_f331_e0798_plus_dotted" in labels
+    assert "v10_local_page_candidates_r1" in labels
+    assert matrix_payload["summary"]["current_best_offline_label"] == "triad_f331_e0798_plus_dotted"
+    assert "Current best offline candidate: `triad_f331_e0798_plus_dotted`" in matrix_report

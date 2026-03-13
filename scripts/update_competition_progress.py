@@ -498,17 +498,31 @@ def _matrix_default_specs(root: Path) -> list[JsonDict]:
 
 
 def _load_specs(path: Path | None, *, root: Path) -> list[JsonDict]:
+    default_specs = _matrix_default_specs(root)
     if path is None or not path.exists():
-        return _matrix_default_specs(root)
+        return default_specs
     payload = json.loads(path.read_text(encoding="utf-8"))
     rows_obj = payload.get("rows") if isinstance(payload, dict) else payload
     if not isinstance(rows_obj, list):
         raise ValueError(f"Expected list/rows object in {path}")
-    specs: list[JsonDict] = []
+    merged_specs: dict[str, JsonDict] = {}
+    ordered_labels: list[str] = []
+    for spec in default_specs:
+        label = str(spec.get("label") or "").strip()
+        if not label:
+            continue
+        merged_specs[label] = dict(spec)
+        ordered_labels.append(label)
     for item in cast("list[object]", rows_obj):
         if isinstance(item, dict):
-            specs.append(cast("JsonDict", item))
-    return specs
+            spec = cast("JsonDict", item)
+            label = str(spec.get("label") or "").strip()
+            if not label:
+                continue
+            merged_specs[label] = {**merged_specs.get(label, {}), **spec}
+            if label not in ordered_labels:
+                ordered_labels.append(label)
+    return [merged_specs[label] for label in ordered_labels if label in merged_specs]
 
 
 def _resolve_path(value: object) -> Path | None:
@@ -627,12 +641,16 @@ def _best_offline_row(rows: list[JsonDict]) -> JsonDict | None:
         candidates = [row for row in rows if str(row.get("status")) == "rejected"]
     if not candidates:
         return None
+    status_priority = {"ceiling": 2, "candidate": 1, "rejected": 0}
     return max(
         candidates,
         key=lambda row: (
+            row.get("paranoid_total_estimate") is not None,
             _as_float(row.get("paranoid_total_estimate"), default=-1.0),
+            row.get("strict_total_estimate") is not None,
             _as_float(row.get("strict_total_estimate"), default=-1.0),
             _as_float(row.get("hidden_g_trusted"), default=-999.0),
+            status_priority.get(str(row.get("status")), -1),
         ),
     )
 
