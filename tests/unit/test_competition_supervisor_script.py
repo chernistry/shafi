@@ -451,3 +451,89 @@ def test_competition_supervisor_reports_non_improving_paranoid_estimate(tmp_path
 
     report = out.read_text(encoding="utf-8")
     assert "paranoid estimate is non-improving relative to the current public baseline" in report
+
+
+def test_competition_supervisor_marks_ceiling_when_no_actionable_signal_families_remain(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    backlog_dir = tmp_path / "backlog"
+    ledger_json = tmp_path / "ledger.json"
+    ceiling_json = tmp_path / "ceiling.json"
+    remaining_signal_json = tmp_path / "remaining_signal.json"
+    out = tmp_path / "supervisor.md"
+    runs_json = tmp_path / "runs.json"
+
+    backlog_dir.mkdir()
+    (backlog_dir / "32-a.md").write_text("# a\n", encoding="utf-8")
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","TopTeam","0.867424","1","0.666667","0.921596","0.996","1.05","80","6","2026-03-12T14:02:54.255238"\n'
+        '"8","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-12T14:56:17.082289"\n',
+        encoding="utf-8",
+    )
+    ledger_json.write_text(json.dumps({"experiments": []}), encoding="utf-8")
+    ceiling_json.write_text(
+        json.dumps(
+            {
+                "ranked_candidates": [
+                    {
+                        "label": "projection-gap-leader",
+                        "paranoid_total_estimate": 0.744607,
+                        "strict_total_estimate": 0.760607,
+                        "upper_total_estimate": 0.780940,
+                        "paranoid_rank_estimate": 8,
+                        "strict_rank_estimate": 7,
+                        "upper_rank_estimate": 6,
+                        "blindspot_improved_case_count": 5,
+                        "blindspot_support_undercoverage_case_count": 4,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    remaining_signal_json.write_text(
+        json.dumps(
+            {
+                "summaries": [
+                    {"family": "comparison_party_metadata", "likely_actionable": False},
+                    {"family": "single_doc_title_cover", "likely_actionable": False},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/competition_supervisor.py",
+            "--leaderboard",
+            str(leaderboard),
+            "--team",
+            "Tzur Labs",
+            "--backlog-dir",
+            str(backlog_dir),
+            "--ledger-json",
+            str(ledger_json),
+            "--candidate-ceiling-cycle",
+            str(ceiling_json),
+            "--remaining-signal-json",
+            str(remaining_signal_json),
+            "--target-rank",
+            "1",
+            "--out",
+            str(out),
+            "--runs-json",
+            str(runs_json),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    report = out.read_text(encoding="utf-8")
+    assert "- Action: `small_diff_ceiling_reached`" in report
+    assert "actionable_families=0/2" in report
+    assert "no likely actionable family-level signals remain" in report
