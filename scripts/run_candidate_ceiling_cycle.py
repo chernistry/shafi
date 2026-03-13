@@ -317,7 +317,7 @@ def _run_family_debug(
 
 def _combined_score(
     row: JsonDict,
-) -> tuple[float, float, float, float, float, float, float, float, int, int, str]:
+) -> tuple[float, float, float, float, float, float, float, float, float, float, int, int, str]:
     lineage_ok = bool(row.get("lineage_ok"))
     recommendation = str(row.get("recommendation") or "")
     recommendation_bonus = {"PROMISING": 2.0, "EXPERIMENTAL_NO_SUBMIT": 1.0}.get(recommendation.upper(), 0.0)
@@ -326,6 +326,8 @@ def _combined_score(
         recommendation_bonus,
         _coerce_float(row.get("strict_total_estimate")),
         _coerce_float(row.get("upper_total_estimate")),
+        float(_coerce_int(row.get("blindspot_support_undercoverage_case_count"))),
+        float(_coerce_int(row.get("blindspot_improved_case_count"))),
         _coerce_float(row.get("hidden_g_trusted_delta")),
         _coerce_float(row.get("hidden_g_all_delta")),
         _coerce_float(row.get("judge_pass_delta")),
@@ -417,8 +419,8 @@ def _render_markdown(
         )
     lines.extend(
         [
-            "| Rank | Label | Recommendation | Lineage | Strict Total | Upper Total | Strict Rank | Upper Rank | Hidden-G Trusted Δ | Hidden-G All Δ | Judge Pass Δ | Judge Grounding Δ | Resolved Exactness | Answer Drift | Page Drift | Page p95 |",
-            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "| Rank | Label | Recommendation | Lineage | Strict Total | Upper Total | Strict Rank | Upper Rank | Blindspot Gains | SU Blindspots | Hidden-G Trusted Δ | Hidden-G All Δ | Judge Pass Δ | Judge Grounding Δ | Resolved Exactness | Answer Drift | Page Drift | Page p95 |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for index, row in enumerate(sorted(rows, key=_combined_score, reverse=True), start=1):
@@ -434,6 +436,7 @@ def _render_markdown(
             "| "
             f"{index} | `{row['label']}` | `{row['recommendation']}` | `{row['lineage_ok']}` | "
             f"{strict_total_cell} | {upper_total_cell} | {strict_rank_cell} | {upper_rank_cell} | "
+            f"{_coerce_int(row.get('blindspot_improved_case_count'))} | {_coerce_int(row.get('blindspot_support_undercoverage_case_count'))} | "
             f"{_coerce_float(row.get('hidden_g_trusted_delta')):.4f} | {_coerce_float(row.get('hidden_g_all_delta')):.4f} | "
             f"{_coerce_float(row.get('judge_pass_delta')):+.4f} | {_coerce_float(row.get('judge_grounding_delta')):+.4f} | "
             f"{_coerce_int(row.get('resolved_incorrect_count'))} | {_coerce_int(row.get('answer_drift'))} | "
@@ -548,6 +551,10 @@ def main() -> int:
             "page_p95": gate.get("candidate_page_p95"),
             "hidden_g_trusted_delta": _coerce_float(gate.get("benchmark_trusted_candidate")) - _coerce_float(gate.get("benchmark_trusted_baseline")),
             "hidden_g_all_delta": _coerce_float(gate.get("benchmark_all_candidate")) - _coerce_float(gate.get("benchmark_all_baseline")),
+            "blindspot_improved_case_count": len(cast("list[object]", gate.get("blindspot_improved_cases") or [])),
+            "blindspot_support_undercoverage_case_count": len(
+                cast("list[object]", gate.get("blindspot_support_undercoverage_cases") or [])
+            ),
             "resolved_incorrect_qids": _coerce_str_list(exactness.get("resolved_incorrect_qids")),
             "resolved_incorrect_count": len(cast("list[object]", exactness.get("resolved_incorrect_qids") or [])),
             "still_mismatched_incorrect_count": len(cast("list[object]", exactness.get("still_mismatched_incorrect_qids") or [])),
