@@ -97,6 +97,12 @@ class _TransformersCrossEncoderLike:
         model_cls = transformers.AutoModelForSequenceClassification
         self._tokenizer = tokenizer_cls.from_pretrained(model_name)
         self._model = model_cls.from_pretrained(model_name)
+        if getattr(self._tokenizer, "pad_token", None) is None and getattr(self._tokenizer, "eos_token", None) is not None:
+            self._tokenizer.pad_token = self._tokenizer.eos_token
+        if getattr(self._tokenizer, "pad_token_id", None) is None and getattr(self._tokenizer, "eos_token_id", None) is not None:
+            self._tokenizer.pad_token_id = self._tokenizer.eos_token_id
+        if getattr(self._model, "config", None) is not None and getattr(self._model.config, "pad_token_id", None) is None:
+            self._model.config.pad_token_id = getattr(self._tokenizer, "pad_token_id", None)
         self._model.eval()
         self._batch_size = max(1, int(batch_size))
         self._torch_device = _torch_device(device)
