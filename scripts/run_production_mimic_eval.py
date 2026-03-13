@@ -14,6 +14,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 from rag_challenge.eval.production_mimic import (
     JsonDict,
+    JsonList,
     build_public_history_calibration,
     estimate_production_mimic,
 )
@@ -26,6 +27,19 @@ def _load_json(path: Path | None) -> JsonDict | None:
     if not isinstance(obj, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return cast("JsonDict", obj)
+
+
+def _load_json_list(path: Path | None) -> JsonList | None:
+    if path is None or not path.exists():
+        return None
+    obj = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(obj, list):
+        raise ValueError(f"Expected JSON list in {path}")
+    out: JsonList = []
+    for raw in cast("list[object]", obj):
+        if isinstance(raw, dict):
+            out.append(cast("JsonDict", raw))
+    return out
 
 
 def _load_history_rows(path: Path | None) -> list[JsonDict]:
@@ -145,6 +159,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cheap-eval-json", type=Path, default=None)
     parser.add_argument("--strict-eval-json", type=Path, default=None)
     parser.add_argument("--history-json", type=Path, default=None)
+    parser.add_argument("--scaffold-json", type=Path, default=None)
     parser.add_argument("--out-json", type=Path, required=True)
     parser.add_argument("--out-md", type=Path, required=True)
     return parser.parse_args()
@@ -155,6 +170,8 @@ def main() -> int:
     subject_summary = build_leaderboard_summary(load_leaderboard_rows(args.leaderboard), team_name=args.team)
     candidate_row = _load_candidate_row(args.candidate_cycle_json, label=args.candidate_label)
     calibration = build_public_history_calibration(_load_history_rows(args.history_json))
+    raw_results_path = Path(str(candidate_row.get("raw_results") or "")).expanduser()
+    raw_results_payload = _load_json_list(raw_results_path if raw_results_path.exists() else None)
     result = estimate_production_mimic(
         subject_summary=subject_summary,
         candidate_row=candidate_row,
@@ -163,6 +180,8 @@ def main() -> int:
         cheap_eval_payload=_load_json(args.cheap_eval_json),
         strict_eval_payload=_load_json(args.strict_eval_json),
         calibration=calibration,
+        raw_results_payload=raw_results_payload,
+        scaffold_payload=_load_json(args.scaffold_json),
     )
     result["platform_like_rank_estimate"] = _rank_for_total(
         leaderboard_path=args.leaderboard,
