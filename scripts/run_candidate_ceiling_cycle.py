@@ -8,6 +8,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+try:
+    from analyze_leaderboard import (  # noqa: I001
+        LeaderboardRow,
+        build_summary as build_leaderboard_summary,
+        load_rows as load_leaderboard_rows,
+    )
+except ModuleNotFoundError:  # pragma: no cover - import path differs under pytest/module import
+    from scripts.analyze_leaderboard import (  # noqa: I001
+        LeaderboardRow,
+        build_summary as build_leaderboard_summary,
+        load_rows as load_leaderboard_rows,
+    )
+
 JsonDict = dict[str, Any]
 
 
@@ -68,6 +81,12 @@ def _coerce_int(value: object) -> int:
         except ValueError:
             return 0
     return 0
+
+
+def _load_qid_set(path: Path | None) -> set[str]:
+    if path is None or not path.exists():
+        return set()
+    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
 
 
 def _candidate_paths(*, out_dir: Path, label: str) -> dict[str, Path]:
@@ -296,13 +315,17 @@ def _run_family_debug(
     return _load_json(out_json)
 
 
-def _combined_score(row: JsonDict) -> tuple[float, float, float, float, float, float, int, int, str]:
+def _combined_score(
+    row: JsonDict,
+) -> tuple[float, float, float, float, float, float, float, float, int, int, str]:
     lineage_ok = bool(row.get("lineage_ok"))
     recommendation = str(row.get("recommendation") or "")
     recommendation_bonus = {"PROMISING": 2.0, "EXPERIMENTAL_NO_SUBMIT": 1.0}.get(recommendation.upper(), 0.0)
     return (
         1.0 if lineage_ok else 0.0,
         recommendation_bonus,
+        _coerce_float(row.get("strict_total_estimate")),
+        _coerce_float(row.get("upper_total_estimate")),
         _coerce_float(row.get("hidden_g_trusted_delta")),
         _coerce_float(row.get("hidden_g_all_delta")),
         _coerce_float(row.get("judge_pass_delta")),
@@ -313,7 +336,68 @@ def _combined_score(row: JsonDict) -> tuple[float, float, float, float, float, f
     )
 
 
-def _render_markdown(*, rows: list[JsonDict], baseline_label: str, include_qids_file: Path) -> str:
+def _rank_for_total(rows: list[LeaderboardRow], *, team_name: str, total: float) -> int:
+    return 1 + sum(1 for row in rows if row.team_name != team_name and row.total > total + 1e-9)
+
+
+def _candidate_score_estimates(
+    *,
+    row: JsonDict,
+    subject_summary: JsonDict,
+    leaderboard_rows: list[LeaderboardRow],
+    team_name: str,
+    public_realized_exactness_qids: set[str] | None,
+) -> JsonDict:
+    current_s = _coerce_float(subject_summary.get("s"))
+    current_g = _coerce_float(subject_summary.get("g"))
+    current_t = _coerce_float(subject_summary.get("t"))
+    current_f = _coerce_float(subject_summary.get("f"))
+    current_total = _coerce_float(subject_summary.get("total"))
+
+    resolved_qids = _coerce_str_list(row.get("resolved_incorrect_qids"))
+    if public_realized_exactness_qids is None:
+        strict_resolved_qids: list[str] = []
+        upper_resolved_qids = resolved_qids
+        exactness_basis = "strict exactness disabled until public-realized qids are supplied"
+    else:
+        strict_resolved_qids = [qid for qid in resolved_qids if qid not in public_realized_exactness_qids]
+        upper_resolved_qids = strict_resolved_qids
+        exactness_basis = "counts only qids not already realized in the public baseline"
+
+    strict_s = current_s + (0.01 * len(strict_resolved_qids))
+    upper_s = current_s + (0.01 * len(upper_resolved_qids))
+    strict_g = current_g + _coerce_float(row.get("hidden_g_all_delta"))
+    upper_g = current_g + max(_coerce_float(row.get("hidden_g_all_delta")), _coerce_float(row.get("hidden_g_trusted_delta")))
+    strict_total = strict_s * strict_g * current_t * current_f
+    upper_total = upper_s * upper_g * current_t * current_f
+
+    return {
+        "strict_resolved_incorrect_qids": strict_resolved_qids,
+        "upper_resolved_incorrect_qids": upper_resolved_qids,
+        "strict_resolved_incorrect_count": len(strict_resolved_qids),
+        "upper_resolved_incorrect_count": len(upper_resolved_qids),
+        "strict_s_estimate": strict_s,
+        "upper_s_estimate": upper_s,
+        "strict_g_estimate": strict_g,
+        "upper_g_estimate": upper_g,
+        "strict_total_estimate": strict_total,
+        "upper_total_estimate": upper_total,
+        "strict_total_delta": strict_total - current_total,
+        "upper_total_delta": upper_total - current_total,
+        "strict_rank_estimate": _rank_for_total(leaderboard_rows, team_name=team_name, total=strict_total),
+        "upper_rank_estimate": _rank_for_total(leaderboard_rows, team_name=team_name, total=upper_total),
+        "strict_exactness_basis": exactness_basis,
+    }
+
+
+def _render_markdown(
+    *,
+    rows: list[JsonDict],
+    baseline_label: str,
+    include_qids_file: Path,
+    team_name: str | None,
+    leaderboard_path: Path | None,
+) -> str:
     lines = [
         "# Candidate Ceiling Cycle",
         "",
@@ -322,13 +406,34 @@ def _render_markdown(*, rows: list[JsonDict], baseline_label: str, include_qids_
         f"- candidates: `{len(rows)}`",
         "- submission_policy: `NO_SUBMIT_WITHOUT_USER_APPROVAL`",
         "",
-        "| Rank | Label | Recommendation | Lineage | Hidden-G Trusted Δ | Hidden-G All Δ | Judge Pass Δ | Judge Grounding Δ | Resolved Exactness | Answer Drift | Page Drift | Page p95 |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+    if team_name is not None and leaderboard_path is not None:
+        lines.extend(
+            [
+                f"- leaderboard: `{leaderboard_path}`",
+                f"- team_name: `{team_name}`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "| Rank | Label | Recommendation | Lineage | Strict Total | Upper Total | Strict Rank | Upper Rank | Hidden-G Trusted Δ | Hidden-G All Δ | Judge Pass Δ | Judge Grounding Δ | Resolved Exactness | Answer Drift | Page Drift | Page p95 |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
     for index, row in enumerate(sorted(rows, key=_combined_score, reverse=True), start=1):
+        strict_total = row.get("strict_total_estimate")
+        upper_total = row.get("upper_total_estimate")
+        strict_rank = row.get("strict_rank_estimate")
+        upper_rank = row.get("upper_rank_estimate")
+        strict_total_cell = f"{_coerce_float(strict_total):.6f}" if strict_total is not None else "n/a"
+        upper_total_cell = f"{_coerce_float(upper_total):.6f}" if upper_total is not None else "n/a"
+        strict_rank_cell = str(_coerce_int(strict_rank)) if strict_rank is not None else "n/a"
+        upper_rank_cell = str(_coerce_int(upper_rank)) if upper_rank is not None else "n/a"
         lines.append(
             "| "
             f"{index} | `{row['label']}` | `{row['recommendation']}` | `{row['lineage_ok']}` | "
+            f"{strict_total_cell} | {upper_total_cell} | {strict_rank_cell} | {upper_rank_cell} | "
             f"{_coerce_float(row.get('hidden_g_trusted_delta')):.4f} | {_coerce_float(row.get('hidden_g_all_delta')):.4f} | "
             f"{_coerce_float(row.get('judge_pass_delta')):+.4f} | {_coerce_float(row.get('judge_grounding_delta')):+.4f} | "
             f"{_coerce_int(row.get('resolved_incorrect_count'))} | {_coerce_int(row.get('answer_drift'))} | "
@@ -366,6 +471,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-json", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--judge-scope", choices=("all", "free_text", "none"), default="all")
+    parser.add_argument("--leaderboard", default=None)
+    parser.add_argument("--team-name", default=None)
+    parser.add_argument("--public-realized-exactness-qids-file", default=None)
     return parser.parse_args()
 
 
@@ -382,6 +490,17 @@ def main() -> int:
     manifest_json = cast("Path", _resolve(root, args.manifest_json))
     out_dir = cast("Path", _resolve(root, args.out_dir))
     out_dir.mkdir(parents=True, exist_ok=True)
+    leaderboard_path = _resolve(root, args.leaderboard)
+    public_realized_qids_path = _resolve(root, args.public_realized_exactness_qids_file)
+
+    leaderboard_rows: list[LeaderboardRow] = []
+    subject_summary: JsonDict | None = None
+    if leaderboard_path is not None:
+        if args.team_name is None:
+            raise ValueError("--team-name is required when --leaderboard is provided")
+        leaderboard_rows = load_leaderboard_rows(leaderboard_path)
+        subject_summary = cast("JsonDict", build_leaderboard_summary(leaderboard_rows, team_name=str(args.team_name)))
+    public_realized_exactness_qids = _load_qid_set(public_realized_qids_path) if public_realized_qids_path is not None else None
 
     candidates = _load_manifest(manifest_json, root=root)
     include_qids = sorted({qid for candidate in candidates for qid in [*candidate.allowed_answer_qids, *candidate.allowed_page_qids]})
@@ -417,24 +536,34 @@ def main() -> int:
             candidate=candidate,
             paths=paths,
         )
-        rows.append(
-            {
-                "label": candidate.label,
-                "submission": str(candidate.submission),
-                "raw_results": str(candidate.raw_results),
-                "preflight": None if candidate.preflight is None else str(candidate.preflight),
-                "recommendation": gate.get("recommendation"),
-                "lineage_ok": lineage.get("lineage_ok"),
-                "answer_drift": lineage.get("answer_changed_count"),
-                "page_drift": lineage.get("page_changed_count"),
-                "page_p95": gate.get("candidate_page_p95"),
-                "hidden_g_trusted_delta": _coerce_float(gate.get("benchmark_trusted_candidate")) - _coerce_float(gate.get("benchmark_trusted_baseline")),
-                "hidden_g_all_delta": _coerce_float(gate.get("benchmark_all_candidate")) - _coerce_float(gate.get("benchmark_all_baseline")),
-                "resolved_incorrect_count": len(cast("list[object]", exactness.get("resolved_incorrect_qids") or [])),
-                "still_mismatched_incorrect_count": len(cast("list[object]", exactness.get("still_mismatched_incorrect_qids") or [])),
-                "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
-            }
-        )
+        row: JsonDict = {
+            "label": candidate.label,
+            "submission": str(candidate.submission),
+            "raw_results": str(candidate.raw_results),
+            "preflight": None if candidate.preflight is None else str(candidate.preflight),
+            "recommendation": gate.get("recommendation"),
+            "lineage_ok": lineage.get("lineage_ok"),
+            "answer_drift": lineage.get("answer_changed_count"),
+            "page_drift": lineage.get("page_changed_count"),
+            "page_p95": gate.get("candidate_page_p95"),
+            "hidden_g_trusted_delta": _coerce_float(gate.get("benchmark_trusted_candidate")) - _coerce_float(gate.get("benchmark_trusted_baseline")),
+            "hidden_g_all_delta": _coerce_float(gate.get("benchmark_all_candidate")) - _coerce_float(gate.get("benchmark_all_baseline")),
+            "resolved_incorrect_qids": _coerce_str_list(exactness.get("resolved_incorrect_qids")),
+            "resolved_incorrect_count": len(cast("list[object]", exactness.get("resolved_incorrect_qids") or [])),
+            "still_mismatched_incorrect_count": len(cast("list[object]", exactness.get("still_mismatched_incorrect_qids") or [])),
+            "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
+        }
+        if subject_summary is not None:
+            row.update(
+                _candidate_score_estimates(
+                    row=row,
+                    subject_summary=subject_summary,
+                    leaderboard_rows=leaderboard_rows,
+                    team_name=str(args.team_name),
+                    public_realized_exactness_qids=public_realized_exactness_qids,
+                )
+            )
+        rows.append(row)
 
     family_debug = _run_family_debug(
         root=root,
@@ -462,13 +591,25 @@ def main() -> int:
         "include_qids_file": str(include_qids_file),
         "manifest_json": str(manifest_json),
         "family_debug_json": str((out_dir / "family_debug" / "family_debug_rank.json").resolve()),
+        "leaderboard": None if leaderboard_path is None else str(leaderboard_path),
+        "team_name": args.team_name,
+        "public_realized_exactness_qids_file": None if public_realized_qids_path is None else str(public_realized_qids_path),
         "ranked_candidates": ranked,
         "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
     }
     out_json = out_dir / "candidate_ceiling_cycle.json"
     out_md = out_dir / "candidate_ceiling_cycle.md"
     out_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    out_md.write_text(_render_markdown(rows=rows, baseline_label=str(args.baseline_label), include_qids_file=include_qids_file), encoding="utf-8")
+    out_md.write_text(
+        _render_markdown(
+            rows=rows,
+            baseline_label=str(args.baseline_label),
+            include_qids_file=include_qids_file,
+            team_name=args.team_name,
+            leaderboard_path=leaderboard_path,
+        ),
+        encoding="utf-8",
+    )
     return 0
 
 
