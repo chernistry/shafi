@@ -30,15 +30,36 @@ def test_summarize_run_flags_null_empty_page_and_high_page_cases(tmp_path: Path)
                 "answer_text": "Yes",
                 "telemetry": {"model_llm": "strict-extractor", "ttft_ms": 20, "used_page_ids": ["doc_1", "doc_2", "doc_3"]},
             },
+            {
+                "case": {"case_id": "q3", "question": "Q3?", "answer_type": "boolean"},
+                "answer_text": "null",
+                "telemetry": {
+                    "model_llm": "gpt-4.1-mini",
+                    "ttft_ms": 180,
+                    "used_page_ids": [],
+                    "doc_refs": ["Operating Law 2018"],
+                    "retrieved_page_ids": [],
+                    "context_page_ids": [],
+                    "context_chunk_count": 2,
+                },
+            },
         ],
     )
-    _write_json(questions, [{"id": "q1", "question": "Q1?", "answer_type": "free_text"}, {"id": "q2", "question": "Q2?", "answer_type": "boolean"}])
+    _write_json(
+        questions,
+        [
+            {"id": "q1", "question": "Q1?", "answer_type": "free_text"},
+            {"id": "q2", "question": "Q2?", "answer_type": "boolean"},
+            {"id": "q3", "question": "Q3?", "answer_type": "boolean"},
+        ],
+    )
     _write_json(
         truth,
         {
             "records": [
                 {"question_id": "q1", "route_family": "model"},
                 {"question_id": "q2", "route_family": "strict"},
+                {"question_id": "q3", "route_family": "strict"},
             ]
         },
     )
@@ -51,11 +72,74 @@ def test_summarize_run_flags_null_empty_page_and_high_page_cases(tmp_path: Path)
         high_page_threshold=2,
     )
 
-    assert summary["null_answer_count"] == 1
-    assert summary["empty_used_page_count"] == 1
+    assert summary["null_answer_count"] == 2
+    assert summary["empty_used_page_count"] == 2
     assert summary["high_page_count_case_count"] == 1
-    assert summary["route_counts"] == {"model": 1, "strict": 1}
-    assert summary["ttft_p95_ms"] == 143.5
+    assert summary["route_counts"] == {"model": 1, "strict": 2}
+    assert summary["root_cause_counts"] == {
+        "retrieval_miss": 1,
+        "strict_null_telemetry_reset": 1,
+    }
+    assert summary["ttft_p95_ms"] == 177.0
+
+
+def test_summarize_run_root_causes_distinguish_context_and_answerer_miss(tmp_path: Path) -> None:
+    run = tmp_path / "run.json"
+    truth = tmp_path / "truth.json"
+    _write_json(
+        run,
+        [
+            {
+                "case": {"case_id": "q1", "question": "Q1?", "answer_type": "boolean"},
+                "answer_text": "null",
+                "telemetry": {
+                    "model_llm": "gpt-4.1-mini",
+                    "ttft_ms": 100,
+                    "used_page_ids": [],
+                    "retrieved_page_ids": ["doc_1"],
+                    "context_page_ids": [],
+                    "context_chunk_count": 0,
+                },
+            },
+            {
+                "case": {"case_id": "q2", "question": "Q2?", "answer_type": "boolean"},
+                "answer_text": "null",
+                "telemetry": {
+                    "model_llm": "gpt-4.1-mini",
+                    "ttft_ms": 120,
+                    "used_page_ids": [],
+                    "retrieved_page_ids": ["doc_2"],
+                    "context_page_ids": ["doc_2"],
+                    "context_chunk_count": 1,
+                },
+            },
+        ],
+    )
+    _write_json(
+        truth,
+        {
+            "records": [
+                {"question_id": "q1", "route_family": "strict"},
+                {"question_id": "q2", "route_family": "strict"},
+            ]
+        },
+    )
+
+    summary = mod._summarize_run(
+        label="run_a",
+        rows=mod._load_json_list(run),
+        questions={},
+        truth_audit=mod._load_truth_audit(truth),
+        high_page_threshold=4,
+    )
+
+    assert summary["root_cause_counts"] == {
+        "context_miss": 1,
+        "answerer_miss": 1,
+    }
+    cases = summary["cases_by_id"]
+    assert cases["q1"]["root_cause"] == "context_miss"
+    assert cases["q2"]["root_cause"] == "answerer_miss"
 
 
 def test_main_writes_diff_report(tmp_path: Path) -> None:

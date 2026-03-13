@@ -24,12 +24,22 @@ class CaseSnapshot:
     answer_type: str
     route_family: str
     model_name: str
+    doc_refs: list[str]
+    retrieved_page_ids: list[str]
+    context_page_ids: list[str]
+    context_chunk_count: int
     used_pages: list[str]
     ttft_ms: float | None
 
 
 def _coerce_dict(value: object) -> JsonDict:
     return cast("JsonDict", value) if isinstance(value, dict) else {}
+
+
+def _coerce_str_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [text for item in cast("list[object]", value) if (text := str(item).strip())]
 
 
 def _coerce_float(value: object) -> float | None:
@@ -131,6 +141,10 @@ def _build_snapshot(
     route_family = str(truth_row.get("route_family") or "").strip() or _infer_route_family(model_name)
     ttft_ms = _coerce_float(telemetry.get("ttft_ms"))
     used_pages = select_submission_used_pages(cast("dict[str, object]", telemetry))
+    doc_refs = _coerce_str_list(telemetry.get("doc_refs"))
+    retrieved_page_ids = _coerce_str_list(telemetry.get("retrieved_page_ids"))
+    context_page_ids = _coerce_str_list(telemetry.get("context_page_ids"))
+    context_chunk_count = int(telemetry.get("context_chunk_count") or len(_coerce_str_list(telemetry.get("context_chunk_ids"))) or 0)
     return CaseSnapshot(
         question_id=qid,
         question=question,
@@ -138,23 +152,61 @@ def _build_snapshot(
         answer_type=answer_type,
         route_family=route_family,
         model_name=model_name,
+        doc_refs=doc_refs,
+        retrieved_page_ids=retrieved_page_ids,
+        context_page_ids=context_page_ids,
+        context_chunk_count=max(0, context_chunk_count),
         used_pages=used_pages,
         ttft_ms=ttft_ms,
     )
 
 
+def _classify_root_cause(snapshot: CaseSnapshot) -> str | None:
+    strict_null, free_text_null = classify_unanswerable_answer(snapshot.answer_text, snapshot.answer_type)
+    is_null = strict_null or free_text_null
+    if not is_null and snapshot.used_pages:
+        return None
+    if (
+        strict_null
+        and snapshot.answer_type.strip().lower() != "free_text"
+        and snapshot.context_chunk_count > 0
+        and not snapshot.retrieved_page_ids
+        and not snapshot.context_page_ids
+        and not snapshot.used_pages
+    ):
+        return "strict_null_telemetry_reset"
+    if not snapshot.retrieved_page_ids and not snapshot.context_page_ids and not snapshot.used_pages:
+        return "retrieval_miss"
+    if snapshot.retrieved_page_ids and snapshot.context_chunk_count <= 0 and not snapshot.context_page_ids:
+        return "context_miss"
+    if snapshot.retrieved_page_ids and snapshot.context_chunk_count > 0 and not snapshot.context_page_ids and not snapshot.used_pages:
+        return "page_miss"
+    if snapshot.context_page_ids and not snapshot.used_pages:
+        return "answerer_miss"
+    if is_null and snapshot.used_pages:
+        return "answerer_miss"
+    return None
+
+
 def _case_summary(snapshot: CaseSnapshot) -> JsonDict:
     strict_null, free_text_null = classify_unanswerable_answer(snapshot.answer_text, snapshot.answer_type)
+    root_cause = _classify_root_cause(snapshot)
     return {
         "question_id": snapshot.question_id,
         "question": snapshot.question,
         "answer_type": snapshot.answer_type,
         "route_family": snapshot.route_family,
         "model_name": snapshot.model_name,
+        "doc_ref_count": len(snapshot.doc_refs),
+        "doc_refs": snapshot.doc_refs,
+        "retrieved_page_count": len(snapshot.retrieved_page_ids),
+        "context_page_count": len(snapshot.context_page_ids),
+        "context_chunk_count": snapshot.context_chunk_count,
         "used_page_count": len(snapshot.used_pages),
         "used_pages": snapshot.used_pages,
         "ttft_ms": snapshot.ttft_ms,
         "null_answer": strict_null or free_text_null,
+        "root_cause": root_cause,
     }
 
 
@@ -167,12 +219,16 @@ def _summarize_run(*, label: str, rows: list[JsonDict], questions: dict[str, Jso
     null_cases: list[JsonDict] = []
     empty_page_cases: list[JsonDict] = []
     high_page_cases: list[JsonDict] = []
+    root_cause_counts: Counter[str] = Counter()
 
     for snapshot in snapshots:
         route_counts[snapshot.route_family or "unknown"] += 1
         answer_type_counts[snapshot.answer_type or "unknown"] += 1
         model_counts[snapshot.model_name or "unknown"] += 1
         case_info = _case_summary(snapshot)
+        root_cause = str(case_info.get("root_cause") or "").strip()
+        if root_cause:
+            root_cause_counts[root_cause] += 1
         if snapshot.ttft_ms is not None:
             ttft_values.append(snapshot.ttft_ms)
         if case_info["null_answer"]:
@@ -200,6 +256,7 @@ def _summarize_run(*, label: str, rows: list[JsonDict], questions: dict[str, Jso
         "route_counts": dict(route_counts),
         "answer_type_counts": dict(answer_type_counts),
         "model_counts": dict(model_counts),
+        "root_cause_counts": dict(root_cause_counts),
         "null_answer_count": len(null_cases),
         "empty_used_page_count": len(empty_page_cases),
         "high_page_count_case_count": len(high_page_cases),
@@ -290,6 +347,7 @@ def _render_markdown(*, run_a: JsonDict, run_b: JsonDict | None, diff: JsonDict 
         f"- `null_answer_count`: `{run_a['null_answer_count']}`",
         f"- `empty_used_page_count`: `{run_a['empty_used_page_count']}`",
         f"- `high_page_count_case_count`: `{run_a['high_page_count_case_count']}`",
+        f"- `root_cause_counts`: `{run_a.get('root_cause_counts')}`",
         f"- `ttft_p50_ms`: `{run_a['ttft_p50_ms']}`",
         f"- `ttft_p95_ms`: `{run_a['ttft_p95_ms']}`",
         "",
@@ -312,6 +370,7 @@ def _render_markdown(*, run_a: JsonDict, run_b: JsonDict | None, diff: JsonDict 
                 f"- `null_answer_count`: `{run_b['null_answer_count']}`",
                 f"- `empty_used_page_count`: `{run_b['empty_used_page_count']}`",
                 f"- `high_page_count_case_count`: `{run_b['high_page_count_case_count']}`",
+                f"- `root_cause_counts`: `{run_b.get('root_cause_counts')}`",
                 f"- `ttft_p50_ms`: `{run_b['ttft_p50_ms']}`",
                 f"- `ttft_p95_ms`: `{run_b['ttft_p95_ms']}`",
             ]
