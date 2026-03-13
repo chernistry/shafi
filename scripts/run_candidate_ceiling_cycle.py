@@ -14,12 +14,14 @@ try:
         build_summary as build_leaderboard_summary,
         load_rows as load_leaderboard_rows,
     )
+    from impact_router import route_changed_files
 except ModuleNotFoundError:  # pragma: no cover - import path differs under pytest/module import
     from scripts.analyze_leaderboard import (  # noqa: I001
         LeaderboardRow,
         build_summary as build_leaderboard_summary,
         load_rows as load_leaderboard_rows,
     )
+    from scripts.impact_router import route_changed_files
 
 JsonDict = dict[str, Any]
 
@@ -33,6 +35,8 @@ class CandidateSpec:
     candidate_scaffold: Path | None
     allowed_answer_qids: list[str]
     allowed_page_qids: list[str]
+    changed_files: list[str]
+    completed_packs: list[str]
 
 
 def _resolve(root: Path, raw: str | Path | None) -> Path | None:
@@ -137,6 +141,8 @@ def _load_manifest(path: Path, *, root: Path) -> list[CandidateSpec]:
                 candidate_scaffold=_resolve(root, row.get("candidate_scaffold")),
                 allowed_answer_qids=_coerce_str_list(row.get("allowed_answer_qids")),
                 allowed_page_qids=_coerce_str_list(row.get("allowed_page_qids")),
+                changed_files=_coerce_str_list(row.get("changed_files")),
+                completed_packs=_coerce_str_list(row.get("completed_packs")),
             )
         )
     if not out:
@@ -317,11 +323,13 @@ def _run_family_debug(
 
 def _combined_score(
     row: JsonDict,
-) -> tuple[float, float, float, float, float, float, float, float, float, float, float, int, int, str]:
+) -> tuple[float, float, float, float, float, float, float, float, float, float, float, float, int, int, str]:
+    impacted_packs_ok = not bool(row.get("impact_router_blocked"))
     lineage_ok = bool(row.get("lineage_ok"))
     recommendation = str(row.get("recommendation") or "")
     recommendation_bonus = {"PROMISING": 2.0, "EXPERIMENTAL_NO_SUBMIT": 1.0}.get(recommendation.upper(), 0.0)
     return (
+        1.0 if impacted_packs_ok else 0.0,
         1.0 if lineage_ok else 0.0,
         recommendation_bonus,
         _coerce_float(row.get("paranoid_total_estimate")),
@@ -337,6 +345,16 @@ def _combined_score(
         -_coerce_int(row.get("answer_drift")),
         str(row.get("label") or ""),
     )
+
+
+def _apply_impact_router(candidate: CandidateSpec, row: JsonDict) -> None:
+    impact = route_changed_files(candidate.changed_files, completed_packs=candidate.completed_packs)
+    row["required_packs"] = impact.get("required_packs") or []
+    row["completed_packs"] = impact.get("completed_packs") or []
+    row["missing_packs"] = impact.get("missing_packs") or []
+    row["impact_router_blocked"] = bool(impact.get("should_block_promotion"))
+    if row["impact_router_blocked"]:
+        row["recommendation"] = "BLOCKED_MISSING_IMPACT_PACK"
 
 
 def _paranoid_total_penalty(row: JsonDict) -> float:
@@ -590,6 +608,7 @@ def main() -> int:
             "still_mismatched_incorrect_count": len(cast("list[object]", exactness.get("still_mismatched_incorrect_qids") or [])),
             "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
         }
+        _apply_impact_router(candidate, row)
         if subject_summary is not None:
             row.update(
                 _candidate_score_estimates(

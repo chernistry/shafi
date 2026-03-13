@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from scripts.analyze_leaderboard import LeaderboardRow
-from scripts.run_candidate_ceiling_cycle import _candidate_score_estimates, _combined_score, _load_manifest
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from scripts.impact_router import route_changed_files
+from scripts.run_candidate_ceiling_cycle import (
+    CandidateSpec,
+    _apply_impact_router,
+    _candidate_score_estimates,
+    _combined_score,
+    _load_manifest,
+)
 
 
 def test_load_manifest_resolves_candidate_specs(tmp_path: Path) -> None:
@@ -26,6 +30,8 @@ def test_load_manifest_resolves_candidate_specs(tmp_path: Path) -> None:
                         "raw_results": str(raw_results),
                         "allowed_answer_qids": ["q1"],
                         "allowed_page_qids": ["q2"],
+                        "changed_files": ["src/rag_challenge/core/strict_answerer.py"],
+                        "completed_packs": ["strict_answerer_pack"],
                     }
                 ]
             }
@@ -40,6 +46,8 @@ def test_load_manifest_resolves_candidate_specs(tmp_path: Path) -> None:
     assert rows[0].raw_results == raw_results.resolve()
     assert rows[0].allowed_answer_qids == ["q1"]
     assert rows[0].allowed_page_qids == ["q2"]
+    assert rows[0].changed_files == ["src/rag_challenge/core/strict_answerer.py"]
+    assert rows[0].completed_packs == ["strict_answerer_pack"]
 
 
 def test_combined_score_prefers_lineage_and_exactness_when_hidden_g_ties() -> None:
@@ -158,3 +166,40 @@ def test_combined_score_prefers_higher_paranoid_total_when_other_metrics_tie() -
     riskier["label"] = "riskier"
 
     assert _combined_score(safer) > _combined_score(riskier)
+
+
+def test_impact_router_routes_major_change_classes() -> None:
+    strict = route_changed_files(["src/rag_challenge/core/strict_answerer.py"], completed_packs=["strict_answerer_pack"])
+    retrieval = route_changed_files(["src/rag_challenge/core/retriever.py"], completed_packs=["page_localization_pack"])
+    reingest = route_changed_files(["src/rag_challenge/ingestion/parser.py"], completed_packs=["reingest_ocr_pack"])
+    free_text = route_changed_files(["src/rag_challenge/prompts/llm/generator_system_complex.md"], completed_packs=["free_text_pack"])
+    config = route_changed_files(["src/rag_challenge/config/settings.py"], completed_packs=["full_regression_pack"])
+
+    assert strict["required_packs"] == ["strict_answerer_pack"]
+    assert retrieval["required_packs"] == ["page_localization_pack"]
+    assert reingest["required_packs"] == ["reingest_ocr_pack"]
+    assert free_text["required_packs"] == ["free_text_pack"]
+    assert config["required_packs"] == ["full_regression_pack"]
+
+
+def test_apply_impact_router_blocks_candidate_when_required_pack_missing() -> None:
+    row = {"label": "cand-a", "recommendation": "PROMISING"}
+    _apply_impact_router(
+        CandidateSpec(
+            label="cand-a",
+            submission=Path("/tmp/submission.json"),
+            raw_results=Path("/tmp/raw_results.json"),
+            preflight=None,
+            candidate_scaffold=None,
+            allowed_answer_qids=[],
+            allowed_page_qids=[],
+            changed_files=["src/rag_challenge/core/retriever.py"],
+            completed_packs=[],
+        ),
+        row,
+    )
+
+    assert row["impact_router_blocked"] is True
+    assert row["required_packs"] == ["page_localization_pack"]
+    assert row["missing_packs"] == ["page_localization_pack"]
+    assert row["recommendation"] == "BLOCKED_MISSING_IMPACT_PACK"
