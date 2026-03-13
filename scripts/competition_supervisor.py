@@ -103,6 +103,17 @@ def _load_remaining_signal_summary(path: Path | None) -> dict[str, object] | Non
     return _load_json(path)
 
 
+def _load_alternative_gate_reports(paths: list[Path] | None) -> list[dict[str, object]]:
+    if not paths:
+        return []
+    reports: list[dict[str, object]] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        reports.append(_load_json(path))
+    return reports
+
+
 def _exactness_page_metrics_identical(report: dict[str, object]) -> bool:
     direct = report.get("page_metrics_identical")
     if isinstance(direct, bool):
@@ -175,6 +186,7 @@ def _decide(
     equivalence_report: dict[str, object] | None,
     candidate_ceiling_cycle: dict[str, object] | None,
     remaining_signal_summary: dict[str, object] | None,
+    alternative_gate_reports: list[dict[str, object]],
     required_safe_baseline_substrings: list[str],
     ticket_names: list[str],
     warmup_budget: int,
@@ -227,6 +239,28 @@ def _decide(
                     )
                 if remaining_family_count > 0 and remaining_actionable_count == 0:
                     rationale.append("no likely actionable family-level signals remain after investigated/manual-tested coverage")
+                    if alternative_gate_reports:
+                        alternative_labels = [
+                            str(report.get("label") or "unknown").strip() or "unknown"
+                            for report in alternative_gate_reports
+                        ]
+                        promising_alternatives = [
+                            report
+                            for report in alternative_gate_reports
+                            if str(report.get("recommendation") or "").strip() == "PROMISING"
+                        ]
+                        rationale.append(
+                            "alternative branch reports considered: "
+                            + ", ".join(alternative_labels)
+                        )
+                        if not promising_alternatives:
+                            rationale.append("no tested alternative branch class currently clears the bounded offline gate")
+                            return SupervisorDecision(
+                                action="local_ceiling_reached_hold_budget",
+                                rationale=rationale,
+                                submissions_remaining=submissions_remaining,
+                                next_tickets=ticket_names[:5],
+                            )
                     return SupervisorDecision(
                         action="small_diff_ceiling_reached",
                         rationale=rationale,
@@ -286,6 +320,7 @@ def _render_report(
     latest_experiment: dict[str, object] | None,
     scoring_summary: dict[str, object] | None,
     candidate_ceiling_cycle: dict[str, object] | None,
+    alternative_gate_reports: list[dict[str, object]],
     decision: SupervisorDecision,
 ) -> str:
     gap_targets = cast("list[dict[str, object]]", subject_summary.get("gap_targets") or [])
@@ -374,6 +409,23 @@ def _render_report(
                 ]
             )
 
+    lines.extend(["", "## Alternative Branches", ""])
+    if not alternative_gate_reports:
+        lines.append("- none")
+    else:
+        for report in alternative_gate_reports:
+            label = str(report.get("label") or "unknown")
+            lines.extend(
+                [
+                    f"- `{label}`",
+                    f"  - Recommendation: `{report.get('recommendation')}`",
+                    f"  - Answer changes: `{_as_int(report.get('answer_changed_count'))}`",
+                    f"  - Retrieval-page projection changes: `{_as_int(report.get('retrieval_page_projection_changed_count'))}`",
+                    f"  - Trusted hidden-G baseline: `{_as_float(report.get('benchmark_trusted_baseline')):.4f}`",
+                    f"  - Trusted hidden-G candidate: `{_as_float(report.get('benchmark_trusted_candidate')):.4f}`",
+                ]
+            )
+
     lines.extend(["", "## Decision", "", f"- Action: `{decision.action}`"])
     for note in decision.rationale:
         lines.append(f"- Rationale: {note}")
@@ -405,6 +457,7 @@ def main() -> None:
     parser.add_argument("--equivalence-json", type=Path, default=None)
     parser.add_argument("--candidate-ceiling-cycle", type=Path, default=None)
     parser.add_argument("--remaining-signal-json", type=Path, default=None)
+    parser.add_argument("--alternative-gate-json", action="append", type=Path, default=[])
     parser.add_argument("--required-safe-baseline-substring", action="append", default=[])
     parser.add_argument("--scoring-json", type=Path, default=None)
     parser.add_argument("--min-ticket", type=int, default=31)
@@ -421,6 +474,7 @@ def main() -> None:
     equivalence_report = _load_equivalence_report(args.equivalence_json)
     candidate_ceiling_cycle = _load_candidate_ceiling_cycle(args.candidate_ceiling_cycle)
     remaining_signal_summary = _load_remaining_signal_summary(args.remaining_signal_json)
+    alternative_gate_reports = _load_alternative_gate_reports(args.alternative_gate_json)
     scoring_summary = _load_scoring_summary(args.scoring_json)
     ticket_names = _open_tickets(args.backlog_dir, min_ticket=args.min_ticket)
     decision = _decide(
@@ -430,6 +484,7 @@ def main() -> None:
         equivalence_report=equivalence_report,
         candidate_ceiling_cycle=candidate_ceiling_cycle,
         remaining_signal_summary=remaining_signal_summary,
+        alternative_gate_reports=alternative_gate_reports,
         required_safe_baseline_substrings=[
             str(item).strip() for item in args.required_safe_baseline_substring if str(item).strip()
         ],
@@ -443,6 +498,7 @@ def main() -> None:
         latest_experiment=latest_experiment,
         scoring_summary=scoring_summary,
         candidate_ceiling_cycle=candidate_ceiling_cycle,
+        alternative_gate_reports=alternative_gate_reports,
         decision=decision,
     )
 
