@@ -97,6 +97,16 @@ def _load_candidate_ceiling_cycle(path: Path | None) -> dict[str, object] | None
     return _load_json(path)
 
 
+def _load_production_mimic(path: Path | None) -> dict[str, object] | None:
+    if path is None or not path.exists():
+        return None
+    payload = _load_json(path)
+    nested = payload.get("production_mimic")
+    if isinstance(nested, dict):
+        return cast("dict[str, object]", nested)
+    return payload
+
+
 def _load_remaining_signal_summary(path: Path | None) -> dict[str, object] | None:
     if path is None or not path.exists():
         return None
@@ -185,6 +195,7 @@ def _decide(
     exactness_report: dict[str, object] | None,
     equivalence_report: dict[str, object] | None,
     candidate_ceiling_cycle: dict[str, object] | None,
+    production_mimic: dict[str, object] | None,
     remaining_signal_summary: dict[str, object] | None,
     alternative_gate_reports: list[dict[str, object]],
     required_safe_baseline_substrings: list[str],
@@ -211,6 +222,46 @@ def _decide(
                 submissions_remaining=submissions_remaining,
                 next_tickets=ticket_names[:5],
             )
+
+    if production_mimic is not None:
+        candidate_class = str(production_mimic.get("candidate_class") or "unknown").strip() or "unknown"
+        lineage_confidence = str(production_mimic.get("lineage_confidence") or "unknown").strip() or "unknown"
+        platform_like_total = _as_float(production_mimic.get("platform_like_total_estimate"))
+        strict_total = _as_float(production_mimic.get("strict_total_estimate"))
+        paranoid_total = _as_float(production_mimic.get("paranoid_total_estimate"))
+        submit_eligibility = bool(production_mimic.get("submit_eligibility"))
+        hidden_g_trusted = cast("dict[str, object]", production_mimic.get("hidden_g_trusted") or {})
+        exactness_block = cast("dict[str, object]", production_mimic.get("exactness") or {})
+        judge_block = cast("dict[str, object]", production_mimic.get("judge") or {})
+        unresolved_qids = cast("list[object]", exactness_block.get("still_mismatched_incorrect_qids") or [])
+        judge_timeout = bool(judge_block.get("judge_timeout_or_failure"))
+        rationale.append(
+            "production-like eval "
+            f"candidate_class={candidate_class} lineage={lineage_confidence} "
+            f"platform_like={platform_like_total:.6f} strict={strict_total:.6f} paranoid={paranoid_total:.6f}"
+        )
+        if (
+            platform_like_total > _as_float(subject_summary.get("total")) + 1e-9
+            and _as_float(hidden_g_trusted.get("delta")) >= 0.0
+            and not unresolved_qids
+            and not judge_timeout
+        ):
+            if lineage_confidence != "high":
+                rationale.append("candidate clears strict local bar except for lineage confidence")
+                return SupervisorDecision(
+                    action="candidate_requires_manual_lineage_review",
+                    rationale=rationale,
+                    submissions_remaining=submissions_remaining,
+                    next_tickets=ticket_names[:5],
+                )
+            if submit_eligibility:
+                rationale.append("candidate clears production-like local bar and requires only explicit user approval")
+                return SupervisorDecision(
+                    action="candidate_ready_for_manual_submit_review",
+                    rationale=rationale,
+                    submissions_remaining=submissions_remaining,
+                    next_tickets=ticket_names[:5],
+                )
 
     if candidate_ceiling_cycle is not None:
         remaining_family_count, remaining_actionable_count = _remaining_signal_stats(remaining_signal_summary)
@@ -320,6 +371,7 @@ def _render_report(
     latest_experiment: dict[str, object] | None,
     scoring_summary: dict[str, object] | None,
     candidate_ceiling_cycle: dict[str, object] | None,
+    production_mimic: dict[str, object] | None,
     alternative_gate_reports: list[dict[str, object]],
     decision: SupervisorDecision,
 ) -> str:
@@ -409,6 +461,31 @@ def _render_report(
                 ]
             )
 
+    lines.extend(["", "## Production-Like Eval", ""])
+    if production_mimic is None:
+        lines.append("- none")
+    else:
+        hidden_g_trusted = cast("dict[str, object]", production_mimic.get("hidden_g_trusted") or {})
+        exactness = cast("dict[str, object]", production_mimic.get("exactness") or {})
+        judge = cast("dict[str, object]", production_mimic.get("judge") or {})
+        lines.extend(
+            [
+                f"- Candidate class: `{production_mimic.get('candidate_class')}`",
+                f"- Lineage confidence: `{production_mimic.get('lineage_confidence')}`",
+                f"- Submit eligibility: `{production_mimic.get('submit_eligibility')}`",
+                f"- No-submit reason: `{production_mimic.get('no_submit_reason') or 'none'}`",
+                f"- Platform-like total estimate: `{_as_float(production_mimic.get('platform_like_total_estimate')):.6f}`",
+                f"- Strict total estimate: `{_as_float(production_mimic.get('strict_total_estimate')):.6f}`",
+                f"- Paranoid total estimate: `{_as_float(production_mimic.get('paranoid_total_estimate')):.6f}`",
+                f"- Platform-like rank estimate: `{_as_int(production_mimic.get('platform_like_rank_estimate'))}`",
+                f"- Strict rank estimate: `{_as_int(production_mimic.get('strict_rank_estimate'))}`",
+                f"- Paranoid rank estimate: `{_as_int(production_mimic.get('paranoid_rank_estimate'))}`",
+                f"- Trusted hidden-G delta: `{_as_float(hidden_g_trusted.get('delta')):.4f}`",
+                f"- Unresolved incorrect qids: `{len(cast('list[object]', exactness.get('still_mismatched_incorrect_qids') or []))}`",
+                f"- Judge timeout/failure: `{judge.get('judge_timeout_or_failure')}`",
+            ]
+        )
+
     lines.extend(["", "## Alternative Branches", ""])
     if not alternative_gate_reports:
         lines.append("- none")
@@ -456,6 +533,7 @@ def main() -> None:
     parser.add_argument("--exactness-report", type=Path, default=None)
     parser.add_argument("--equivalence-json", type=Path, default=None)
     parser.add_argument("--candidate-ceiling-cycle", type=Path, default=None)
+    parser.add_argument("--production-mimic-json", type=Path, default=None)
     parser.add_argument("--remaining-signal-json", type=Path, default=None)
     parser.add_argument("--alternative-gate-json", action="append", type=Path, default=[])
     parser.add_argument("--required-safe-baseline-substring", action="append", default=[])
@@ -473,6 +551,7 @@ def main() -> None:
     exactness_report = _load_exactness_report(args.exactness_report)
     equivalence_report = _load_equivalence_report(args.equivalence_json)
     candidate_ceiling_cycle = _load_candidate_ceiling_cycle(args.candidate_ceiling_cycle)
+    production_mimic = _load_production_mimic(args.production_mimic_json)
     remaining_signal_summary = _load_remaining_signal_summary(args.remaining_signal_json)
     alternative_gate_reports = _load_alternative_gate_reports(args.alternative_gate_json)
     scoring_summary = _load_scoring_summary(args.scoring_json)
@@ -483,6 +562,7 @@ def main() -> None:
         exactness_report=exactness_report,
         equivalence_report=equivalence_report,
         candidate_ceiling_cycle=candidate_ceiling_cycle,
+        production_mimic=production_mimic,
         remaining_signal_summary=remaining_signal_summary,
         alternative_gate_reports=alternative_gate_reports,
         required_safe_baseline_substrings=[
@@ -498,6 +578,7 @@ def main() -> None:
         latest_experiment=latest_experiment,
         scoring_summary=scoring_summary,
         candidate_ceiling_cycle=candidate_ceiling_cycle,
+        production_mimic=production_mimic,
         alternative_gate_reports=alternative_gate_reports,
         decision=decision,
     )
@@ -514,6 +595,7 @@ def main() -> None:
             "decision": asdict(decision),
             "leaderboard_summary": subject_summary,
             "latest_experiment_label": latest_experiment.get("label") if latest_experiment is not None else None,
+            "production_mimic_candidate_class": production_mimic.get("candidate_class") if production_mimic is not None else None,
             "strict_estimate_upper_bound_total": (
                 cast("dict[str, object]", scoring_summary.get("exactness_estimate") or {}).get(
                     "strict_upper_bound_total_if_all_answer_changes_are_real"
