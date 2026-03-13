@@ -640,3 +640,129 @@ def test_competition_supervisor_holds_budget_when_no_actionable_families_and_alt
     assert "actionable_families=0/2" in report
     assert "no tested alternative branch class currently clears the bounded offline gate" in report
     assert "embeddinggemma-fullcollection" in report
+
+
+def test_competition_supervisor_requires_manual_lineage_review_when_candidate_is_otherwise_ready(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    backlog_dir = tmp_path / "backlog"
+    production_mimic = tmp_path / "production_mimic.json"
+    out = tmp_path / "supervisor.md"
+    runs_json = tmp_path / "runs.json"
+
+    backlog_dir.mkdir()
+    (backlog_dir / "18-manual-submit-readiness-decision.md").write_text("# 18\n", encoding="utf-8")
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","Leader","0.867424","1","0.666667","0.921596","0.996","1.05","80","6","2026-03-12T14:02:54"\n'
+        '"8","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-12T14:56:17"\n',
+        encoding="utf-8",
+    )
+    production_mimic.write_text(
+        json.dumps(
+            {
+                "production_mimic": {
+                    "candidate_class": "triad_f331_e0798_plus_dotted",
+                    "lineage_confidence": "medium",
+                    "platform_like_total_estimate": 0.760000,
+                    "strict_total_estimate": 0.768000,
+                    "paranoid_total_estimate": 0.752000,
+                    "hidden_g_trusted": {"delta": 0.0425},
+                    "exactness": {"still_mismatched_incorrect_qids": []},
+                    "judge": {"judge_timeout_or_failure": False},
+                    "submit_eligibility": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/competition_supervisor.py",
+            "--leaderboard",
+            str(leaderboard),
+            "--team",
+            "Tzur Labs",
+            "--backlog-dir",
+            str(backlog_dir),
+            "--production-mimic-json",
+            str(production_mimic),
+            "--out",
+            str(out),
+            "--runs-json",
+            str(runs_json),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    report = out.read_text(encoding="utf-8")
+    assert "- Action: `candidate_requires_manual_lineage_review`" in report
+    assert "candidate clears strict local bar except for lineage confidence" in report
+
+
+def test_competition_supervisor_marks_candidate_ready_for_manual_submit_review(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    backlog_dir = tmp_path / "backlog"
+    production_mimic = tmp_path / "production_mimic.json"
+    out = tmp_path / "supervisor.md"
+    runs_json = tmp_path / "runs.json"
+
+    backlog_dir.mkdir()
+    (backlog_dir / "18-manual-submit-readiness-decision.md").write_text("# 18\n", encoding="utf-8")
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","Leader","0.867424","1","0.666667","0.921596","0.996","1.05","80","6","2026-03-12T14:02:54"\n'
+        '"8","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-12T14:56:17"\n',
+        encoding="utf-8",
+    )
+    production_mimic.write_text(
+        json.dumps(
+            {
+                "production_mimic": {
+                    "candidate_class": "triad_f331_e0798_plus_dotted",
+                    "lineage_confidence": "high",
+                    "platform_like_total_estimate": 0.760000,
+                    "strict_total_estimate": 0.768000,
+                    "paranoid_total_estimate": 0.752000,
+                    "hidden_g_trusted": {"delta": 0.0425},
+                    "exactness": {"still_mismatched_incorrect_qids": []},
+                    "judge": {"judge_timeout_or_failure": False, "pass_rate": 1.0},
+                    "submit_eligibility": True,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/competition_supervisor.py",
+            "--leaderboard",
+            str(leaderboard),
+            "--team",
+            "Tzur Labs",
+            "--backlog-dir",
+            str(backlog_dir),
+            "--production-mimic-json",
+            str(production_mimic),
+            "--out",
+            str(out),
+            "--runs-json",
+            str(runs_json),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    report = out.read_text(encoding="utf-8")
+    assert "- Action: `candidate_ready_for_manual_submit_review`" in report
+    assert "requires only explicit user approval" in report
