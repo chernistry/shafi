@@ -99,6 +99,23 @@ def test_chunk_snippets_are_filtered_to_visible_chunk_ids() -> None:
     }
 
 
+def test_chunk_page_hints_fill_page_ids_for_non_numeric_chunk_ids() -> None:
+    collector = TelemetryCollector(request_id="req-4e")
+    collector.set_retrieved_ids(["operating:title", "operating:article8"])
+    collector.set_context_ids(["operating:title", "operating:article8"])
+    collector.set_chunk_page_hints(
+        {
+            "operating:title": "operating_4",
+            "operating:article8": "operating_8",
+        }
+    )
+
+    payload = collector.finalize()
+
+    assert payload.retrieved_page_ids == ["operating_4", "operating_8"]
+    assert payload.context_page_ids == ["operating_4", "operating_8"]
+
+
 def test_token_usage_and_model_tracking():
     collector = TelemetryCollector(request_id="req-5")
     collector.set_token_usage(prompt_tokens=1000, completion_tokens=120, total_tokens=1120)

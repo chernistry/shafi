@@ -34,6 +34,7 @@ class TelemetryCollector:
         self._cited_ids: list[str] = []
         self._used_ids: list[str] = []
         self._chunk_snippets: dict[str, str] = {}
+        self._chunk_page_hints: dict[str, str] = {}
         self._doc_refs: list[str] = []
 
         self._prompt_tokens = 0
@@ -84,6 +85,14 @@ class TelemetryCollector:
             if not chunk_id or not snippet:
                 continue
             self._chunk_snippets[chunk_id] = snippet
+
+    def set_chunk_page_hints(self, page_hints: dict[str, str]) -> None:
+        for raw_chunk_id, raw_page_id in page_hints.items():
+            chunk_id = str(raw_chunk_id).strip()
+            page_id = str(raw_page_id).strip()
+            if not chunk_id or not page_id:
+                continue
+            self._chunk_page_hints[chunk_id] = page_id
 
     def set_token_usage(self, prompt_tokens: int, completion_tokens: int, total_tokens: int) -> None:
         self._prompt_tokens = max(0, int(prompt_tokens))
@@ -202,15 +211,14 @@ class TelemetryCollector:
             model_upgraded=self._model_upgraded,
         )
 
-    @staticmethod
-    def _chunk_ids_to_page_ids(ids: list[str]) -> list[str]:
+    def _chunk_ids_to_page_ids(self, ids: list[str]) -> list[str]:
         seen: set[str] = set()
         out: list[str] = []
         for raw in ids:
             chunk_id = str(raw).strip()
             if not chunk_id:
                 continue
-            page_id = TelemetryCollector._chunk_id_to_page_id(chunk_id)
+            page_id = self._chunk_page_hints.get(chunk_id) or TelemetryCollector._chunk_id_to_page_id(chunk_id)
             if not page_id or page_id in seen:
                 continue
             seen.add(page_id)

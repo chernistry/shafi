@@ -4126,8 +4126,10 @@ class RAGPipelineBuilder:
         if retrieved_chunks:
             collector.set_retrieved_ids([chunk.chunk_id for chunk in retrieved_chunks])
             collector.set_chunk_snippets(self._build_chunk_snippet_map(retrieved_chunks))
+            collector.set_chunk_page_hints(self._build_chunk_page_hint_map(retrieved_chunks))
         if context_chunks:
             collector.set_chunk_snippets(self._build_chunk_snippet_map(context_chunks))
+            collector.set_chunk_page_hints(self._build_chunk_page_hint_map(context_chunks))
         collector.set_context_ids(context_chunk_ids)
         get_context_debug_stats = getattr(self._generator, "get_context_debug_stats", None)
         if callable(get_context_debug_stats):
@@ -4340,8 +4342,6 @@ class RAGPipelineBuilder:
             if self._is_unanswerable_strict_answer(answer):
                 used_ids = []
                 cited_ids = []
-                collector.set_retrieved_ids([])
-                collector.set_context_ids([])
             else:
                 cited_ids = (
                     list(strict_cited_ids)
@@ -5288,6 +5288,18 @@ class RAGPipelineBuilder:
             if snippet:
                 snippets[chunk_id] = snippet
         return snippets
+
+    @classmethod
+    def _build_chunk_page_hint_map(cls, chunks: Sequence[RetrievedChunk | RankedChunk]) -> dict[str, str]:
+        page_hints: dict[str, str] = {}
+        for chunk in chunks:
+            chunk_id = str(getattr(chunk, "chunk_id", "") or "").strip()
+            doc_id = str(getattr(chunk, "doc_id", "") or "").strip()
+            page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+            if not chunk_id or not doc_id or page_num <= 0 or chunk_id in page_hints:
+                continue
+            page_hints[chunk_id] = f"{doc_id}_{page_num}"
+        return page_hints
 
     @staticmethod
     def _page_text_looks_like_continuation_tail(text: str) -> bool:

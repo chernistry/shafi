@@ -1152,6 +1152,114 @@ async def test_generate_augments_strict_context_for_explicit_page_claim_origin(m
     assert generator.generate.await_count == 0
 
 
+@pytest.mark.asyncio
+async def test_strict_null_preserves_context_page_telemetry(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+    from rag_challenge.core.strict_answerer import StrictAnswerResult
+
+    generator = MagicMock()
+    generator.generate = AsyncMock(return_value=("should-not-run", []))
+    generator.get_context_debug_stats = MagicMock(return_value=(2, 900))
+    generator.extract_citations = MagicMock(return_value=[])
+    generator.extract_cited_chunk_ids = MagicMock(return_value=[])
+
+    builder = RAGPipelineBuilder(
+        retriever=MagicMock(),
+        reranker=MagicMock(),
+        generator=generator,
+        classifier=MagicMock(),
+    )
+    builder._strict_answerer.answer = MagicMock(return_value=StrictAnswerResult(answer="null", cited_chunk_ids=[], confident=True))
+
+    collector = TelemetryCollector(
+        request_id="strict-null-telemetry",
+        question_id="strict-null-telemetry",
+        answer_type="boolean",
+    )
+
+    result = await builder._generate(
+        {
+            "query": (
+                "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct business "
+                "in or from the DIFC without being incorporated, registered, or continued under a Prescribed Law or "
+                "other Legislation administered by the Registrar?"
+            ),
+            "request_id": "strict-null-telemetry",
+            "question_id": "strict-null-telemetry",
+            "collector": collector,
+            "answer_type": "boolean",
+            "context_chunks": [
+                RankedChunk(
+                    chunk_id="operating:title",
+                    doc_id="operating",
+                    doc_title="OPERATING LAW",
+                    doc_type=DocType.STATUTE,
+                    section_path="page:4",
+                    text='This Law may be cited as the "Operating Law 2018".',
+                    retrieval_score=0.92,
+                    rerank_score=0.92,
+                    doc_summary="",
+                ),
+                RankedChunk(
+                    chunk_id="operating:article8",
+                    doc_id="operating",
+                    doc_title="OPERATING LAW",
+                    doc_type=DocType.STATUTE,
+                    section_path="page:8",
+                    text=(
+                        "No person shall operate or conduct business in or from the DIFC unless that person is "
+                        "incorporated, registered or continued under a Prescribed Law."
+                    ),
+                    retrieval_score=0.91,
+                    rerank_score=0.91,
+                    doc_summary="",
+                ),
+            ],
+            "retrieved": [
+                RetrievedChunk(
+                    chunk_id="operating:title",
+                    doc_id="operating",
+                    doc_title="OPERATING LAW",
+                    doc_type=DocType.STATUTE,
+                    section_path="page:4",
+                    text='This Law may be cited as the "Operating Law 2018".',
+                    score=0.92,
+                    doc_summary="",
+                ),
+                RetrievedChunk(
+                    chunk_id="operating:article8",
+                    doc_id="operating",
+                    doc_title="OPERATING LAW",
+                    doc_type=DocType.STATUTE,
+                    section_path="page:8",
+                    text=(
+                        "No person shall operate or conduct business in or from the DIFC unless that person is "
+                        "incorporated, registered or continued under a Prescribed Law."
+                    ),
+                    score=0.91,
+                    doc_summary="",
+                ),
+            ],
+            "doc_refs": ["Operating Law 2018"],
+            "model": "gpt-4.1-mini",
+            "max_tokens": 64,
+            "complexity": QueryComplexity.SIMPLE,
+        }
+    )
+
+    telemetry = collector.finalize()
+
+    assert result["answer"] == "null"
+    assert telemetry.retrieved_chunk_ids == ["operating:title", "operating:article8"]
+    assert telemetry.context_chunk_ids == ["operating:title", "operating:article8"]
+    assert telemetry.retrieved_page_ids == ["operating_4", "operating_8"]
+    assert telemetry.context_page_ids == ["operating_4", "operating_8"]
+    assert telemetry.cited_page_ids == []
+    assert telemetry.used_page_ids == []
+    assert telemetry.context_chunk_count == 2
+    assert generator.generate.await_count == 0
+
+
 def test_apply_support_shape_policy_prunes_nonrequested_title_page_noise_when_title_page_already_present() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
