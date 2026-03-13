@@ -46,6 +46,7 @@ def test_combined_score_prefers_lineage_and_exactness_when_hidden_g_ties() -> No
     base = {
         "recommendation": "PROMISING",
         "lineage_ok": True,
+        "paranoid_total_estimate": 0.7550,
         "strict_total_estimate": 0.7600,
         "upper_total_estimate": 0.7800,
         "blindspot_improved_case_count": 3,
@@ -130,3 +131,30 @@ def test_candidate_score_estimates_use_public_realized_qids_when_provided() -> N
     assert with_public_history["strict_resolved_incorrect_count"] == 1
     assert with_public_history["upper_resolved_incorrect_count"] == 1
     assert with_public_history["strict_total_estimate"] < no_public_history["upper_total_estimate"]
+    assert with_public_history["paranoid_total_estimate"] < with_public_history["strict_total_estimate"]
+    assert with_public_history["paranoid_rank_estimate"] >= with_public_history["strict_rank_estimate"]
+
+
+def test_combined_score_prefers_higher_paranoid_total_when_other_metrics_tie() -> None:
+    safer = {
+        "recommendation": "PROMISING",
+        "lineage_ok": True,
+        "paranoid_total_estimate": 0.7520,
+        "strict_total_estimate": 0.7600,
+        "upper_total_estimate": 0.7800,
+        "blindspot_improved_case_count": 3,
+        "blindspot_support_undercoverage_case_count": 2,
+        "hidden_g_trusted_delta": 0.0425,
+        "hidden_g_all_delta": 0.0206,
+        "judge_pass_delta": 1.0,
+        "judge_grounding_delta": 5.0,
+        "page_drift": 3,
+        "answer_drift": 1,
+        "resolved_incorrect_count": 2,
+        "label": "safer",
+    }
+    riskier = dict(safer)
+    riskier["paranoid_total_estimate"] = 0.7440
+    riskier["label"] = "riskier"
+
+    assert _combined_score(safer) > _combined_score(riskier)
