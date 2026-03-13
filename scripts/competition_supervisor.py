@@ -91,6 +91,12 @@ def _load_scoring_summary(path: Path | None) -> dict[str, object] | None:
     return _load_json(path)
 
 
+def _load_candidate_ceiling_cycle(path: Path | None) -> dict[str, object] | None:
+    if path is None or not path.exists():
+        return None
+    return _load_json(path)
+
+
 def _exactness_page_metrics_identical(report: dict[str, object]) -> bool:
     direct = report.get("page_metrics_identical")
     if isinstance(direct, bool):
@@ -144,9 +150,11 @@ def _decide(
     latest_experiment: dict[str, object] | None,
     exactness_report: dict[str, object] | None,
     equivalence_report: dict[str, object] | None,
+    candidate_ceiling_cycle: dict[str, object] | None,
     required_safe_baseline_substrings: list[str],
     ticket_names: list[str],
     warmup_budget: int,
+    target_rank: int,
 ) -> SupervisorDecision:
     submissions_used = _as_int(subject_summary.get("submissions"))
     submissions_remaining = max(0, warmup_budget - submissions_used)
@@ -167,6 +175,30 @@ def _decide(
                 submissions_remaining=submissions_remaining,
                 next_tickets=ticket_names[:5],
             )
+
+    if candidate_ceiling_cycle is not None:
+        ranked_obj = candidate_ceiling_cycle.get("ranked_candidates")
+        ranked = cast("list[object]", ranked_obj) if isinstance(ranked_obj, list) else []
+        if ranked and isinstance(ranked[0], dict):
+            best = cast("dict[str, object]", ranked[0])
+            best_label = str(best.get("label") or "unknown").strip() or "unknown"
+            strict_rank = _as_int(best.get("strict_rank_estimate"), default=10_000)
+            upper_rank = _as_int(best.get("upper_rank_estimate"), default=10_000)
+            strict_total = _as_float(best.get("strict_total_estimate"))
+            rationale.append(
+                f"best small-diff ceiling candidate={best_label} strict_rank≈{strict_rank} upper_rank≈{upper_rank}"
+            )
+            if upper_rank > target_rank:
+                rationale.append("best current small-diff path still misses the requested target rank even under the upper estimate")
+                if submissions_remaining <= 1:
+                    return SupervisorDecision(
+                        action="small_diff_ceiling_reached",
+                        rationale=rationale,
+                        submissions_remaining=submissions_remaining,
+                        next_tickets=ticket_names[:5],
+                    )
+            elif strict_total > _as_float(subject_summary.get("total")):
+                rationale.append("best current small-diff candidate still has plausible upside under strict estimate")
 
     if exactness_report is not None:
         answer_changed = _as_int(exactness_report.get("answer_changed_count"))
@@ -208,6 +240,7 @@ def _render_report(
     subject_summary: dict[str, object],
     latest_experiment: dict[str, object] | None,
     scoring_summary: dict[str, object] | None,
+    candidate_ceiling_cycle: dict[str, object] | None,
     decision: SupervisorDecision,
 ) -> str:
     gap_targets = cast("list[dict[str, object]]", subject_summary.get("gap_targets") or [])
@@ -272,6 +305,26 @@ def _render_report(
         if upper_bound is not None:
             lines.append(f"- Exactness-only strict upper-bound total: `{_as_float(upper_bound):.6f}`")
 
+    lines.extend(["", "## Ceiling Cycle", ""])
+    if candidate_ceiling_cycle is None:
+        lines.append("- none")
+    else:
+        ranked_obj = candidate_ceiling_cycle.get("ranked_candidates")
+        ranked = cast("list[object]", ranked_obj) if isinstance(ranked_obj, list) else []
+        if not ranked or not isinstance(ranked[0], dict):
+            lines.append("- none")
+        else:
+            best = cast("dict[str, object]", ranked[0])
+            lines.extend(
+                [
+                    f"- Best candidate: `{best.get('label')}`",
+                    f"- Strict total estimate: `{_as_float(best.get('strict_total_estimate')):.6f}`",
+                    f"- Upper total estimate: `{_as_float(best.get('upper_total_estimate')):.6f}`",
+                    f"- Strict rank estimate: `{_as_int(best.get('strict_rank_estimate'))}`",
+                    f"- Upper rank estimate: `{_as_int(best.get('upper_rank_estimate'))}`",
+                ]
+            )
+
     lines.extend(["", "## Decision", "", f"- Action: `{decision.action}`"])
     for note in decision.rationale:
         lines.append(f"- Rationale: {note}")
@@ -301,10 +354,12 @@ def main() -> None:
     parser.add_argument("--ledger-json", type=Path, default=None)
     parser.add_argument("--exactness-report", type=Path, default=None)
     parser.add_argument("--equivalence-json", type=Path, default=None)
+    parser.add_argument("--candidate-ceiling-cycle", type=Path, default=None)
     parser.add_argument("--required-safe-baseline-substring", action="append", default=[])
     parser.add_argument("--scoring-json", type=Path, default=None)
     parser.add_argument("--min-ticket", type=int, default=31)
     parser.add_argument("--warmup-budget", type=int, default=10)
+    parser.add_argument("--target-rank", type=int, default=1)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--runs-json", type=Path, default=None)
     args = parser.parse_args()
@@ -314,6 +369,7 @@ def main() -> None:
     latest_experiment = _load_latest_experiment(args.ledger_json)
     exactness_report = _load_exactness_report(args.exactness_report)
     equivalence_report = _load_equivalence_report(args.equivalence_json)
+    candidate_ceiling_cycle = _load_candidate_ceiling_cycle(args.candidate_ceiling_cycle)
     scoring_summary = _load_scoring_summary(args.scoring_json)
     ticket_names = _open_tickets(args.backlog_dir, min_ticket=args.min_ticket)
     decision = _decide(
@@ -321,17 +377,20 @@ def main() -> None:
         latest_experiment=latest_experiment,
         exactness_report=exactness_report,
         equivalence_report=equivalence_report,
+        candidate_ceiling_cycle=candidate_ceiling_cycle,
         required_safe_baseline_substrings=[
             str(item).strip() for item in args.required_safe_baseline_substring if str(item).strip()
         ],
         ticket_names=ticket_names,
         warmup_budget=args.warmup_budget,
+        target_rank=args.target_rank,
     )
     report = _render_report(
         team_name=args.team,
         subject_summary=subject_summary,
         latest_experiment=latest_experiment,
         scoring_summary=scoring_summary,
+        candidate_ceiling_cycle=candidate_ceiling_cycle,
         decision=decision,
     )
 

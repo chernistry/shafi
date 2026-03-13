@@ -239,3 +239,71 @@ def test_competition_supervisor_rejects_lineage_safe_fallback_for_wrong_baseline
     report = out.read_text(encoding="utf-8")
     assert "- Action: `no_submit_continue_offline`" in report
     assert "not lineage-safe for the required champion baseline" in report
+
+
+def test_competition_supervisor_marks_small_diff_ceiling_reached_for_rank_one(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    backlog_dir = tmp_path / "backlog"
+    ledger_json = tmp_path / "ledger.json"
+    ceiling_json = tmp_path / "ceiling.json"
+    out = tmp_path / "supervisor.md"
+    runs_json = tmp_path / "runs.json"
+
+    backlog_dir.mkdir()
+    (backlog_dir / "32-a.md").write_text("# a\n", encoding="utf-8")
+    (backlog_dir / "43-b.md").write_text("# b\n", encoding="utf-8")
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","TopTeam","0.867424","1","0.666667","0.921596","0.996","1.05","80","6","2026-03-12T14:02:54.255238"\n'
+        '"8","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-12T14:56:17.082289"\n',
+        encoding="utf-8",
+    )
+    ledger_json.write_text(json.dumps({"experiments": []}), encoding="utf-8")
+    ceiling_json.write_text(
+        json.dumps(
+            {
+                "ranked_candidates": [
+                    {
+                        "label": "triad_f331_e0798_plus_dotted",
+                        "strict_total_estimate": 0.760607,
+                        "upper_total_estimate": 0.780940,
+                        "strict_rank_estimate": 7,
+                        "upper_rank_estimate": 6,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/competition_supervisor.py",
+            "--leaderboard",
+            str(leaderboard),
+            "--team",
+            "Tzur Labs",
+            "--backlog-dir",
+            str(backlog_dir),
+            "--ledger-json",
+            str(ledger_json),
+            "--candidate-ceiling-cycle",
+            str(ceiling_json),
+            "--target-rank",
+            "1",
+            "--out",
+            str(out),
+            "--runs-json",
+            str(runs_json),
+        ],
+        cwd="/Users/sasha/IdeaProjects/personal_projects/rag_challenge",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    report = out.read_text(encoding="utf-8")
+    assert "- Action: `small_diff_ceiling_reached`" in report
+    assert "- Upper rank estimate: `6`" in report
