@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -134,3 +135,95 @@ def test_extract_query_refs_includes_law_titles():
 
     refs = QueryClassifier.extract_query_refs("Compare Schedule 1 of the Trust Law 2018 under Article 5(2).")
     assert "Trust Law 2018" in refs
+
+
+def test_extract_explicit_page_reference_detects_title_page():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("Who is listed on the title page of CFI 010/2024?")
+    assert ref is not None
+    assert ref.kind == "title_page"
+    assert ref.requested_page == 1
+
+
+def test_extract_explicit_page_reference_detects_second_page():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("What appears on the second page of the judgment?")
+    assert ref is not None
+    assert ref.kind == "second_page"
+    assert ref.requested_page == 2
+
+
+def test_extract_explicit_page_reference_detects_numeric_page():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("Which date appears on page 7?")
+    assert ref is not None
+    assert ref.kind == "numeric_page"
+    assert ref.requested_page == 7
+
+
+def test_extract_explicit_page_reference_detects_caption_header():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("What claimant name appears in the caption header?")
+    assert ref is not None
+    assert ref.kind == "caption_header"
+    assert ref.requested_page == 1
+
+
+def test_explicit_page_reference_audit_groups_phrase_types(tmp_path):
+    from scripts.audit_explicit_page_reference_candidates import build_audit
+
+    ledger_path = tmp_path / "page_trace_ledger.json"
+    ledger_path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "qid": "q1",
+                        "question": "Who is listed on the title page?",
+                        "gold_pages": ["docA_1"],
+                        "used_pages": ["docA_2"],
+                        "false_positive_pages": ["docA_2"],
+                        "failure_stage": "wrong_page_used_same_doc",
+                        "trust_tier": "trusted",
+                        "gold_in_used": False,
+                    },
+                    {
+                        "qid": "q2",
+                        "question": "What is on the second page?",
+                        "gold_pages": ["docB_2"],
+                        "used_pages": ["docB_2"],
+                        "false_positive_pages": [],
+                        "failure_stage": "retained_to_used",
+                        "trust_tier": "trusted",
+                        "gold_in_used": True,
+                    },
+                    {
+                        "qid": "q3",
+                        "question": "What amount appears on page 9?",
+                        "gold_pages": ["docC_9"],
+                        "used_pages": ["docC_8"],
+                        "false_positive_pages": ["docC_8"],
+                        "failure_stage": "wrong_page_used_same_doc",
+                        "trust_tier": "suspect",
+                        "gold_in_used": False,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_audit(page_trace_ledger_path=ledger_path, min_meaningful_qids=3)
+
+    assert payload["summary"]["meaningful_qid_count"] == 3
+    assert payload["summary"]["phrase_type_counts"] == {
+        "numeric_page": 1,
+        "title_page": 1,
+        "second_page": 1,
+        "caption_header": 0,
+    }
+    assert payload["summary"]["verdict"] == "continue_to_ticket_14"

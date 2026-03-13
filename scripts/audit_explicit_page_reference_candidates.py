@@ -2,260 +2,207 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
-JsonDict = dict[str, Any]
-_CASE_REF_RE = re.compile(r"\b(?:CFI|CA|SCT|ENF|DEC|TCD|ARB)\s*\d{1,4}/\d{4}\b", re.IGNORECASE)
+from rag_challenge.core.classifier import QueryClassifier
 
-
-def _load_json(path: Path) -> object:
-    return json.loads(path.read_text(encoding="utf-8"))
+JsonDict = dict[str, object]
 
 
-def _load_questions(path: Path) -> dict[str, JsonDict]:
-    obj = _load_json(path)
-    if not isinstance(obj, list):
-        raise ValueError(f"Expected question array in {path}")
-    rows = cast("list[object]", obj)
-    out: dict[str, JsonDict] = {}
-    for row_obj in rows:
-        if not isinstance(row_obj, dict):
-            continue
-        row = cast("JsonDict", row_obj)
-        qid = str(row.get("id") or row.get("question_id") or "").strip()
-        if qid:
-            out[qid] = row
-    return out
-
-
-def _load_raw_results(path: Path) -> dict[str, JsonDict]:
-    obj = _load_json(path)
-    if not isinstance(obj, list):
-        raise ValueError(f"Expected raw-results array in {path}")
-    rows = cast("list[object]", obj)
-    out: dict[str, JsonDict] = {}
-    for row_obj in rows:
-        if not isinstance(row_obj, dict):
-            continue
-        row = cast("JsonDict", row_obj)
-        case_obj = row.get("case")
-        case = cast("JsonDict", case_obj) if isinstance(case_obj, dict) else {}
-        qid = str(case.get("case_id") or row.get("question_id") or "").strip()
-        if qid:
-            out[qid] = row
-    return out
-
-
-def _load_scaffold(path: Path | None) -> dict[str, JsonDict]:
-    if path is None:
-        return {}
-    obj = _load_json(path)
+def _load_json(path: Path) -> JsonDict:
+    obj = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(obj, dict):
-        return {}
-    records_obj = cast("JsonDict", obj).get("records")
-    if not isinstance(records_obj, list):
-        return {}
-    rows = cast("list[object]", records_obj)
-    out: dict[str, JsonDict] = {}
-    for row_obj in rows:
-        if not isinstance(row_obj, dict):
-            continue
-        row = cast("JsonDict", row_obj)
-        qid = str(row.get("question_id") or "").strip()
-        if qid:
-            out[qid] = row
-    return out
+        raise ValueError(f"Expected JSON object in {path}")
+    return cast("JsonDict", obj)
 
 
-def _coerce_page_ids(value: object) -> list[str]:
+def _coerce_dict_list(value: object) -> list[JsonDict]:
     if not isinstance(value, list):
         return []
-    rows = cast("list[object]", value)
-    return [text for item in rows if (text := str(item).strip())]
+    return [cast("JsonDict", item) for item in cast("list[object]", value) if isinstance(item, dict)]
 
 
-def _page_id_parts(page_id: str) -> tuple[str, int | None]:
-    if "_" not in page_id:
-        return page_id, None
-    doc_id, suffix = page_id.rsplit("_", 1)
-    try:
-        return doc_id, int(suffix)
-    except ValueError:
-        return doc_id, None
+def _coerce_str_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for raw in cast("list[object]", value):
+        text = str(raw).strip()
+        if text:
+            out.append(text)
+    return out
 
 
-def _page_hits(page_ids: list[str], *, target_page: int) -> tuple[int, list[str]]:
-    doc_ids: list[str] = []
-    for page_id in page_ids:
-        doc_id, page_num = _page_id_parts(page_id)
-        if page_num == target_page:
-            doc_ids.append(doc_id)
-    unique_doc_ids = list(dict.fromkeys(doc_ids))
-    return len(unique_doc_ids), unique_doc_ids
+def _coerce_int(value: object) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return 0
+        try:
+            return int(float(text))
+        except ValueError:
+            return 0
+    return 0
 
 
-def _answer_text(row: JsonDict) -> str:
-    return str(row.get("answer_text") or "").strip()
+def _phrase_type_counts(records: list[JsonDict]) -> dict[str, int]:
+    counts = {
+        "numeric_page": 0,
+        "title_page": 0,
+        "second_page": 0,
+        "caption_header": 0,
+    }
+    for record in records:
+        kind = str(record.get("phrase_type") or "").strip()
+        if kind in counts:
+            counts[kind] += 1
+    return counts
 
 
-def _question_target(question: str) -> tuple[str, int] | None:
-    q = re.sub(r"\s+", " ", question).strip().lower()
-    if not q:
-        return None
-    if "page 2" in q or "second page" in q:
-        return ("page_2", 2)
-    if any(term in q for term in ("title page", "cover page", "first page", "header", "caption")):
-        return ("page_1_anchor", 1)
-    return None
+def _failure_stage_counts(records: list[JsonDict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for record in records:
+        stage = str(record.get("failure_stage") or "").strip() or "unknown"
+        counts[stage] = counts.get(stage, 0) + 1
+    return counts
 
 
-def _required_doc_count(question: str) -> int:
-    refs = _CASE_REF_RE.findall(question or "")
-    return max(1, len({ref.upper() for ref in refs}))
-
-
-def _recommendation(*, baseline_used_hits: int, best_source_hits: int, answer_changed: bool) -> str:
-    if not answer_changed and best_source_hits > baseline_used_hits:
-        return "PROMISING"
-    if not answer_changed and best_source_hits == baseline_used_hits and best_source_hits > 0:
-        return "REPORT_ONLY"
-    return "REPORT_ONLY"
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit explicit page-reference questions against baseline and source raw-results artifacts.")
-    parser.add_argument("--questions", type=Path, required=True)
-    parser.add_argument("--baseline-raw-results", type=Path, required=True)
-    parser.add_argument("--baseline-label", required=True)
-    parser.add_argument("--scaffold", type=Path, default=None)
-    parser.add_argument("--source", action="append", default=[], help="label=/abs/path/to/raw_results.json")
-    parser.add_argument("--out-md", type=Path, required=True)
-    parser.add_argument("--out-json", type=Path, required=True)
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = parse_args()
-    questions_by_id = _load_questions(args.questions.resolve())
-    baseline_rows = _load_raw_results(args.baseline_raw_results.resolve())
-    scaffold_by_id = _load_scaffold(args.scaffold.resolve() if args.scaffold else None)
-
-    source_rows: list[tuple[str, dict[str, JsonDict]]] = []
-    for raw in args.source:
-        label, sep, path_text = str(raw).partition("=")
-        if not sep:
-            raise ValueError(f"Invalid --source value: {raw}")
-        source_rows.append((label.strip(), _load_raw_results(Path(path_text).expanduser().resolve())))
+def build_audit(*, page_trace_ledger_path: Path, min_meaningful_qids: int = 3) -> JsonDict:
+    ledger = _load_json(page_trace_ledger_path)
+    ledger_records = _coerce_dict_list(ledger.get("records"))
 
     records: list[JsonDict] = []
-    for qid, question_row in questions_by_id.items():
-        question = str(question_row.get("question") or "").strip()
-        target = _question_target(question)
-        if target is None or qid not in baseline_rows:
+    for record in ledger_records:
+        question = str(record.get("question") or "").strip()
+        explicit_ref = QueryClassifier.extract_explicit_page_reference(question)
+        if explicit_ref is None:
             continue
-        target_kind, target_page = target
-        required_docs = _required_doc_count(question)
-        baseline = baseline_rows[qid]
-        baseline_answer = _answer_text(baseline)
-        baseline_telemetry = cast("JsonDict", baseline.get("telemetry")) if isinstance(baseline.get("telemetry"), dict) else {}
-        baseline_used = _coerce_page_ids(baseline_telemetry.get("used_page_ids"))
-        baseline_context = _coerce_page_ids(baseline_telemetry.get("context_page_ids"))
-        baseline_retrieved = _coerce_page_ids(baseline_telemetry.get("retrieved_page_ids"))
-        baseline_used_hits, baseline_used_doc_ids = _page_hits(baseline_used, target_page=target_page)
-        baseline_context_hits, _baseline_context_doc_ids = _page_hits(baseline_context, target_page=target_page)
-        baseline_retrieved_hits, _baseline_retrieved_doc_ids = _page_hits(baseline_retrieved, target_page=target_page)
 
-        source_signals: list[JsonDict] = []
-        best_source_hits = baseline_used_hits
-        any_answer_changed = False
-        for label, rows in source_rows:
-            candidate = rows.get(qid)
-            if candidate is None:
-                continue
-            candidate_answer = _answer_text(candidate)
-            candidate_telemetry = cast("JsonDict", candidate.get("telemetry")) if isinstance(candidate.get("telemetry"), dict) else {}
-            candidate_used = _coerce_page_ids(candidate_telemetry.get("used_page_ids"))
-            used_hits, used_doc_ids = _page_hits(candidate_used, target_page=target_page)
-            answer_changed = candidate_answer != baseline_answer
-            any_answer_changed = any_answer_changed or answer_changed
-            best_source_hits = max(best_source_hits, used_hits)
-            source_signals.append(
-                {
-                    "label": label,
-                    "answer_changed": answer_changed,
-                    "used_page_hits": used_hits,
-                    "used_page_doc_ids": used_doc_ids,
-                    "used_page_ids": candidate_used,
-                }
-            )
-
-        scaffold = scaffold_by_id.get(qid, {})
+        used_pages = _coerce_str_list(record.get("used_pages"))
+        gold_pages = _coerce_str_list(record.get("gold_pages"))
         records.append(
             {
-                "question_id": qid,
+                "qid": str(record.get("qid") or ""),
                 "question": question,
-                "answer_type": str(question_row.get("answer_type") or "").strip(),
-                "target_kind": target_kind,
-                "target_page": target_page,
-                "required_doc_count": required_docs,
-                "route_family": str(scaffold.get("route_family") or "").strip(),
-                "support_shape_class": str(scaffold.get("support_shape_class") or "").strip(),
-                "baseline_used_page_hits": baseline_used_hits,
-                "baseline_context_page_hits": baseline_context_hits,
-                "baseline_retrieved_page_hits": baseline_retrieved_hits,
-                "baseline_used_page_doc_ids": baseline_used_doc_ids,
-                "baseline_used_page_ids": baseline_used,
-                "source_signals": source_signals,
-                "recommendation": _recommendation(
-                    baseline_used_hits=baseline_used_hits,
-                    best_source_hits=best_source_hits,
-                    answer_changed=any_answer_changed,
-                ),
+                "phrase_type": explicit_ref.kind,
+                "phrase": explicit_ref.phrase,
+                "requested_page": explicit_ref.requested_page,
+                "failure_stage": str(record.get("failure_stage") or ""),
+                "route": str(record.get("route") or ""),
+                "trust_tier": str(record.get("trust_tier") or ""),
+                "gold_in_used": bool(record.get("gold_in_used")),
+                "gold_pages": gold_pages,
+                "used_pages": used_pages,
+                "false_positive_pages": _coerce_str_list(record.get("false_positive_pages")),
+                "page_budget_overrun": _coerce_int(record.get("page_budget_overrun")),
             }
         )
 
-    ranked = sorted(
-        records,
-        key=lambda row: (
-            {"PROMISING": 1, "REPORT_ONLY": 0}.get(str(row.get("recommendation") or ""), 0),
-            int(row.get("required_doc_count") or 0) - int(row.get("baseline_used_page_hits") or 0),
-            -int(row.get("target_page") or 0),
-            str(row.get("question_id") or ""),
-        ),
-        reverse=True,
+    phrase_counts = _phrase_type_counts(records)
+    failure_stage_counts = _failure_stage_counts(records)
+    meaningful_qid_count = len(records)
+    trusted_count = sum(1 for record in records if str(record.get("trust_tier") or "") == "trusted")
+    gold_in_used_rate = (
+        sum(1 for record in records if bool(record.get("gold_in_used"))) / meaningful_qid_count if meaningful_qid_count else 0.0
     )
-
-    md_lines = [
-        "# Explicit Page-Reference Candidate Audit",
-        "",
-        f"- baseline_label: `{args.baseline_label}`",
-        f"- records: `{len(ranked)}`",
-        "- submission_policy: `NO_SUBMIT_WITHOUT_USER_APPROVAL`",
-        "",
-        "| Rank | QID | Kind | Recommendation | Required Docs | Baseline Used Hits | Baseline Context Hits | Source Rescue |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | --- |",
-    ]
-    for index, row in enumerate(ranked, start=1):
-        rescue = ", ".join(
-            f"{signal['label']}:{signal['used_page_hits']}"
-            for signal in cast("list[JsonDict]", row.get("source_signals") or [])
-        ) or "n/a"
-        md_lines.append(
-            f"| {index} | `{row['question_id']}` | `{row['target_kind']}` | `{row['recommendation']}` | "
-            f"{row['required_doc_count']} | {row['baseline_used_page_hits']} | {row['baseline_context_page_hits']} | {rescue} |"
-        )
-
-    payload = {
-        "baseline_label": args.baseline_label,
-        "records": ranked,
+    verdict = "kill_small_family" if meaningful_qid_count < min_meaningful_qids else "continue_to_ticket_14"
+    return {
+        "source_page_trace_ledger": str(page_trace_ledger_path),
         "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
+        "summary": {
+            "meaningful_qid_count": meaningful_qid_count,
+            "trusted_qid_count": trusted_count,
+            "phrase_type_counts": phrase_counts,
+            "failure_stage_counts": failure_stage_counts,
+            "gold_in_used_rate": gold_in_used_rate,
+            "verdict": verdict,
+            "stop_threshold": min_meaningful_qids,
+        },
+        "records": records,
     }
-    args.out_md.parent.mkdir(parents=True, exist_ok=True)
-    args.out_md.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+
+
+def _render_markdown(payload: JsonDict) -> str:
+    summary = cast("JsonDict", payload.get("summary") or {})
+    phrase_counts = cast("dict[str, object]", summary.get("phrase_type_counts") or {})
+    failure_stage_counts = cast("dict[str, object]", summary.get("failure_stage_counts") or {})
+    records = _coerce_dict_list(payload.get("records"))
+    lines = [
+        "# Explicit Page Reference Audit",
+        "",
+        f"- source_page_trace_ledger: `{payload.get('source_page_trace_ledger')}`",
+        f"- submission_policy: `{payload.get('submission_policy')}`",
+        "",
+        "## Summary",
+        "",
+        f"- meaningful_qid_count: `{summary.get('meaningful_qid_count')}`",
+        f"- trusted_qid_count: `{summary.get('trusted_qid_count')}`",
+        f"- gold_in_used_rate: `{summary.get('gold_in_used_rate')}`",
+        f"- verdict: `{summary.get('verdict')}`",
+        "",
+        "## Phrase Types",
+        "",
+    ]
+    for key in ("numeric_page", "title_page", "second_page", "caption_header"):
+        lines.append(f"- {key}: `{phrase_counts.get(key, 0)}`")
+    lines.extend(["", "## Failure Stages", ""])
+    for stage in sorted(failure_stage_counts):
+        lines.append(f"- {stage}: `{failure_stage_counts[stage]}`")
+    lines.extend(
+        [
+            "",
+            "## Records",
+            "",
+            "| qid | phrase_type | requested_page | trust | failure_stage | gold_in_used |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for record in records:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(record.get("qid") or "")[:12],
+                    str(record.get("phrase_type") or ""),
+                    str(record.get("requested_page") or ""),
+                    str(record.get("trust_tier") or ""),
+                    str(record.get("failure_stage") or ""),
+                    str(record.get("gold_in_used") or False),
+                ]
+            )
+            + " |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Audit explicit page-reference questions from a page-trace ledger.")
+    parser.add_argument("--page-trace-ledger", type=Path, required=True)
+    parser.add_argument("--min-meaningful-qids", type=int, default=3)
+    parser.add_argument("--out-json", type=Path, required=True)
+    parser.add_argument("--out-md", type=Path, required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    payload = build_audit(
+        page_trace_ledger_path=args.page_trace_ledger,
+        min_meaningful_qids=max(1, int(args.min_meaningful_qids)),
+    )
+    args.out_json.parent.mkdir(parents=True, exist_ok=True)
     args.out_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    args.out_md.parent.mkdir(parents=True, exist_ok=True)
+    args.out_md.write_text(_render_markdown(payload) + "\n", encoding="utf-8")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
