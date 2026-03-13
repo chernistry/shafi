@@ -127,6 +127,7 @@ class TelemetryPayload(BaseModel):
     retrieved_chunk_ids: list[str] = Field(default_factory=list)
     context_chunk_ids: list[str] = Field(default_factory=list)
     cited_chunk_ids: list[str] = Field(default_factory=list)
+    chunk_snippets: dict[str, str] = Field(default_factory=dict)
     retrieved_page_ids: list[str] = Field(default_factory=list)
     context_page_ids: list[str] = Field(default_factory=list)
     cited_page_ids: list[str] = Field(default_factory=list)

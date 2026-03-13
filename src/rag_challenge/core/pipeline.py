@@ -4125,6 +4125,9 @@ class RAGPipelineBuilder:
         retrieved_chunks = list(state.get("retrieved", []))
         if retrieved_chunks:
             collector.set_retrieved_ids([chunk.chunk_id for chunk in retrieved_chunks])
+            collector.set_chunk_snippets(self._build_chunk_snippet_map(retrieved_chunks))
+        if context_chunks:
+            collector.set_chunk_snippets(self._build_chunk_snippet_map(context_chunks))
         collector.set_context_ids(context_chunk_ids)
         get_context_debug_stats = getattr(self._generator, "get_context_debug_stats", None)
         if callable(get_context_debug_stats):
@@ -5261,6 +5264,30 @@ class RAGPipelineBuilder:
             return int(match.group(1))
         except ValueError:
             return 10_000
+
+    @staticmethod
+    def _build_chunk_snippet(chunk: RetrievedChunk | RankedChunk, *, max_chars: int = 220) -> str:
+        text = re.sub(r"\s+", " ", str(getattr(chunk, "text", "") or "")).strip()
+        if not text:
+            return ""
+        if len(text) > max_chars:
+            text = f"{text[: max_chars - 3].rstrip()}..."
+        section_path = str(getattr(chunk, "section_path", "") or "").strip()
+        if section_path:
+            return f"{section_path} | {text}"
+        return text
+
+    @classmethod
+    def _build_chunk_snippet_map(cls, chunks: Sequence[RetrievedChunk | RankedChunk]) -> dict[str, str]:
+        snippets: dict[str, str] = {}
+        for chunk in chunks:
+            chunk_id = str(getattr(chunk, "chunk_id", "") or "").strip()
+            if not chunk_id or chunk_id in snippets:
+                continue
+            snippet = cls._build_chunk_snippet(chunk)
+            if snippet:
+                snippets[chunk_id] = snippet
+        return snippets
 
     @staticmethod
     def _page_text_looks_like_continuation_tail(text: str) -> bool:

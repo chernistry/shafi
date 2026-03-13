@@ -33,6 +33,7 @@ class TelemetryCollector:
         self._context_ids: list[str] = []
         self._cited_ids: list[str] = []
         self._used_ids: list[str] = []
+        self._chunk_snippets: dict[str, str] = {}
         self._doc_refs: list[str] = []
 
         self._prompt_tokens = 0
@@ -75,6 +76,14 @@ class TelemetryCollector:
 
     def set_used_ids(self, ids: list[str] | tuple[str, ...]) -> None:
         self._used_ids = list(ids)
+
+    def set_chunk_snippets(self, snippets: dict[str, str]) -> None:
+        for raw_chunk_id, raw_snippet in snippets.items():
+            chunk_id = str(raw_chunk_id).strip()
+            snippet = str(raw_snippet).strip()
+            if not chunk_id or not snippet:
+                continue
+            self._chunk_snippets[chunk_id] = snippet
 
     def set_token_usage(self, prompt_tokens: int, completion_tokens: int, total_tokens: int) -> None:
         self._prompt_tokens = max(0, int(prompt_tokens))
@@ -174,6 +183,7 @@ class TelemetryCollector:
             retrieved_chunk_ids=list(self._retrieved_ids),
             context_chunk_ids=list(self._context_ids),
             cited_chunk_ids=list(self._cited_ids),
+            chunk_snippets=self._finalize_chunk_snippets(),
             retrieved_page_ids=retrieved_pages,
             context_page_ids=context_pages,
             cited_page_ids=cited_pages,
@@ -221,6 +231,33 @@ class TelemetryCollector:
             return ""
         # Internally we use 0-based section/page index; competition expects 1-based page numbers.
         return f"{doc_id}_{int(page_idx_raw) + 1}"
+
+    def _finalize_chunk_snippets(self) -> dict[str, str]:
+        ordered_ids = self._ordered_unique(
+            [
+                *self._retrieved_ids,
+                *self._context_ids,
+                *self._cited_ids,
+                *self._used_ids,
+            ]
+        )
+        return {
+            chunk_id: self._chunk_snippets[chunk_id]
+            for chunk_id in ordered_ids
+            if chunk_id in self._chunk_snippets
+        }
+
+    @staticmethod
+    def _ordered_unique(ids: list[str]) -> list[str]:
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for raw in ids:
+            chunk_id = str(raw).strip()
+            if not chunk_id or chunk_id in seen:
+                continue
+            seen.add(chunk_id)
+            ordered.append(chunk_id)
+        return ordered
 
     def _validate_chunk_subset_chain(self) -> None:
         retrieved_set = set(self._retrieved_ids)

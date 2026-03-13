@@ -192,6 +192,7 @@ async def test_pipeline_runs_end_to_end(pipeline_builder):
     assert telemetry.model_rerank == "zerank-2"
     assert telemetry.model_llm == "gpt-4o-mini"
     assert telemetry.cited_chunk_ids == ["c0"]
+    assert telemetry.chunk_snippets["c0"] == "Section 0 | text 0"
     assert any(event.get("type") == "token" for event in events)
     assert any(event.get("type") == "answer_final" and "Answer text" in str(event.get("text")) for event in events)
     assert any(event.get("type") == "telemetry" for event in events)

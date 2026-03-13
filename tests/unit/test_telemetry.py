@@ -78,6 +78,27 @@ def test_used_page_ids_can_be_wider_than_cited_page_ids() -> None:
     assert payload.used_page_ids == ["doc_1", "doc_2"]
 
 
+def test_chunk_snippets_are_filtered_to_visible_chunk_ids() -> None:
+    collector = TelemetryCollector(request_id="req-4d")
+    collector.set_retrieved_ids(["doc:0:0:a", "doc:1:0:b"])
+    collector.set_context_ids(["doc:1:0:b"])
+    collector.set_cited_ids(["doc:1:0:b"])
+    collector.set_chunk_snippets(
+        {
+            "doc:0:0:a": "page:1 | title chunk",
+            "doc:1:0:b": "page:2 | answer chunk",
+            "doc:9:0:z": "page:10 | hidden chunk",
+        }
+    )
+
+    payload = collector.finalize()
+
+    assert payload.chunk_snippets == {
+        "doc:0:0:a": "page:1 | title chunk",
+        "doc:1:0:b": "page:2 | answer chunk",
+    }
+
+
 def test_token_usage_and_model_tracking():
     collector = TelemetryCollector(request_id="req-5")
     collector.set_token_usage(prompt_tokens=1000, completion_tokens=120, total_tokens=1120)
