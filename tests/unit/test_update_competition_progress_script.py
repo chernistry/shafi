@@ -685,3 +685,102 @@ def test_candidate_fingerprint_script_marks_duplicate_and_matrix_links_it(tmp_pa
     assert row["candidate_fingerprint"] == duplicate_payload["fingerprint"]
     assert row["duplicate_of_label"] == "candidate_alpha"
     assert "duplicate_of=candidate_alpha" in str(row["notes"])
+
+
+def test_update_competition_progress_recomputes_stale_rank_estimates_from_latest_leaderboard(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    specs_json = tmp_path / "matrix_specs.json"
+    production_mimic = tmp_path / "production_mimic.json"
+    matrix_json = tmp_path / "competition_matrix.json"
+    matrix_md = tmp_path / "competition_matrix.md"
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","Leader","0.900000","1","0.700000","0.950000","1","1.0500","80","2","2026-03-12T14:02:54"\n'
+        '"2","Team2","0.840000","1","0.700000","0.900000","1","1.0500","81","2","2026-03-12T14:02:55"\n'
+        '"3","Team3","0.820000","1","0.700000","0.890000","1","1.0500","82","2","2026-03-12T14:02:56"\n'
+        '"4","Team4","0.810000","1","0.700000","0.880000","1","1.0500","83","2","2026-03-12T14:02:57"\n'
+        '"5","Team5","0.800000","1","0.700000","0.870000","1","1.0500","84","2","2026-03-12T14:02:58"\n'
+        '"6","Team6","0.781000","1","0.700000","0.860000","1","1.0500","85","2","2026-03-12T14:02:59"\n'
+        '"7","Team7","0.761000","1","0.700000","0.850000","1","1.0500","86","2","2026-03-12T14:03:00"\n'
+        '"8","Borderline","0.753713","0.985714","0.673333","0.904631","0.996","0.9378","961","3","2026-03-12T18:45:46"\n'
+        '"9","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-13T14:56:17"\n',
+        encoding="utf-8",
+    )
+    production_mimic.write_text(
+        json.dumps(
+            {
+                "production_mimic": {
+                    "candidate_class": "triad_rank_refresh_test",
+                    "lineage_confidence": "medium",
+                    "platform_like_total_estimate": 0.757142,
+                    "platform_like_rank_estimate": 7,
+                    "strict_total_estimate": 0.760607,
+                    "strict_rank_estimate": 7,
+                    "paranoid_total_estimate": 0.74156,
+                    "paranoid_rank_estimate": 8,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    specs_json.write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "label": "v6_public_exactness_champion",
+                        "date": "2026-03-12",
+                        "status": "submitted",
+                        "branch_class": "answer_only_exactness",
+                        "external_version": "v6",
+                        "external_rank": 8,
+                        "external_total": 0.74156,
+                        "git_commit": "unknown",
+                        "baseline": "v5",
+                        "lineage_confidence": "high",
+                    },
+                    {
+                        "label": "triad_rank_refresh_test",
+                        "date": "2026-03-13",
+                        "status": "ceiling",
+                        "branch_class": "combined_small_diff_ceiling",
+                        "candidate_label": "triad_rank_refresh_test",
+                        "git_commit": "unknown",
+                        "baseline": "submission_v6_context_seed",
+                        "lineage_confidence": "medium",
+                        "production_mimic_json": str(production_mimic),
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/update_competition_progress.py",
+            "--leaderboard",
+            str(leaderboard),
+            "--team",
+            "Tzur Labs",
+            "--matrix-row-specs-json",
+            str(specs_json),
+            "--matrix-json-out",
+            str(matrix_json),
+            "--matrix-md-out",
+            str(matrix_md),
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    rows = json.loads(matrix_json.read_text(encoding="utf-8"))["rows"]
+    by_label = {row["label"]: row for row in rows}
+    assert by_label["v6_public_exactness_champion"]["external_rank"] == 9
+    assert by_label["triad_rank_refresh_test"]["platform_like_rank_estimate"] == 8
+    assert by_label["triad_rank_refresh_test"]["strict_rank_estimate"] == 8
+    assert by_label["triad_rank_refresh_test"]["paranoid_rank_estimate"] == 9

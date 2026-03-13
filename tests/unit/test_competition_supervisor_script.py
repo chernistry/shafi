@@ -258,6 +258,13 @@ def test_competition_supervisor_marks_small_diff_ceiling_reached_for_rank_one(tm
     leaderboard.write_text(
         '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
         '"1","TopTeam","0.867424","1","0.666667","0.921596","0.996","1.05","80","6","2026-03-12T14:02:54.255238"\n'
+        '"2","Team2","0.840000","1","0.700000","0.900000","1","1.0500","81","2","2026-03-12T14:02:55"\n'
+        '"3","Team3","0.820000","1","0.700000","0.890000","1","1.0500","82","2","2026-03-12T14:02:56"\n'
+        '"4","Team4","0.810000","1","0.700000","0.880000","1","1.0500","83","2","2026-03-12T14:02:57"\n'
+        '"5","Team5","0.800000","1","0.700000","0.870000","1","1.0500","84","2","2026-03-12T14:02:58"\n'
+        '"6","Team6","0.781000","1","0.700000","0.860000","1","1.0500","85","2","2026-03-12T14:02:59"\n'
+        '"7","Team7","0.761000","1","0.700000","0.850000","1","1.0500","86","2","2026-03-12T14:03:00"\n'
+        '"8","Borderline","0.753713","0.985714","0.673333","0.904631","0.996","0.9378","961","3","2026-03-12T18:45:46"\n'
         '"8","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-12T14:56:17.082289"\n',
         encoding="utf-8",
     )
@@ -310,8 +317,8 @@ def test_competition_supervisor_marks_small_diff_ceiling_reached_for_rank_one(tm
 
     report = out.read_text(encoding="utf-8")
     assert "- Action: `small_diff_ceiling_reached`" in report
-    assert "- Paranoid rank estimate: `7`" in report
-    assert "- Upper rank estimate: `6`" in report
+    assert "- Paranoid rank estimate: `9`" in report
+    assert "- Upper rank estimate: `7`" in report
 
 
 def test_competition_supervisor_keeps_offline_loop_alive_when_blindspot_gains_exist(tmp_path: Path) -> None:
@@ -871,3 +878,112 @@ def test_competition_supervisor_reports_branch_freeze_and_private_only_demotions
     assert "ocr_visual_rerank" in report
     assert "private-only branch classes will not displace active pre-March-17 work" in report
     assert "best ranked ceiling row is demoted by branch policy" in report
+
+
+def test_competition_supervisor_recomputes_stale_rank_estimates_from_latest_leaderboard(tmp_path: Path) -> None:
+    leaderboard = tmp_path / "leaderboard.csv"
+    backlog_dir = tmp_path / "backlog"
+    ceiling_json = tmp_path / "ceiling.json"
+    production_mimic = tmp_path / "production_mimic.json"
+    out = tmp_path / "supervisor.md"
+    runs_json = tmp_path / "runs.json"
+
+    backlog_dir.mkdir()
+    (backlog_dir / "50-refresh.md").write_text("# 50\n", encoding="utf-8")
+
+    leaderboard.write_text(
+        '"Rank","Team name","Total score","Det","Asst","G","T","F","Latency","Submissions","Last submission"\n'
+        '"1","Leader","0.900000","1","0.700000","0.950000","1","1.0500","80","2","2026-03-12T14:02:54"\n'
+        '"2","Team2","0.840000","1","0.700000","0.900000","1","1.0500","81","2","2026-03-12T14:02:55"\n'
+        '"3","Team3","0.820000","1","0.700000","0.890000","1","1.0500","82","2","2026-03-12T14:02:56"\n'
+        '"4","Team4","0.810000","1","0.700000","0.880000","1","1.0500","83","2","2026-03-12T14:02:57"\n'
+        '"5","Team5","0.800000","1","0.700000","0.870000","1","1.0500","84","2","2026-03-12T14:02:58"\n'
+        '"6","Team6","0.781000","1","0.700000","0.860000","1","1.0500","85","2","2026-03-12T14:02:59"\n'
+        '"7","Team7","0.761000","1","0.700000","0.850000","1","1.0500","86","2","2026-03-12T14:03:00"\n'
+        '"8","Borderline","0.753713","0.985714","0.673333","0.904631","0.996","0.9378","961","3","2026-03-12T18:45:46"\n'
+        '"9","Tzur Labs","0.741560","0.971429","0.693333","0.800729","0.996","1.0471","347","9","2026-03-13T14:56:17"\n',
+        encoding="utf-8",
+    )
+    ceiling_json.write_text(
+        json.dumps(
+            {
+                "ranked_candidates": [
+                    {
+                        "label": "triad_f331_e0798_plus_dotted",
+                        "branch_class": "combined_small_diff_ceiling",
+                        "paranoid_total_estimate": 0.74156,
+                        "strict_total_estimate": 0.760607,
+                        "upper_total_estimate": 0.78094,
+                        "paranoid_rank_estimate": 8,
+                        "strict_rank_estimate": 7,
+                        "upper_rank_estimate": 6,
+                    }
+                ],
+                "branch_class_summary": [
+                    {
+                        "branch_class": "combined_small_diff_ceiling",
+                        "status": "active",
+                        "active_before_march17": True,
+                        "best_label": "triad_f331_e0798_plus_dotted",
+                        "best_upper_rank_estimate": 6,
+                        "reason": "current best branch",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    production_mimic.write_text(
+        json.dumps(
+            {
+                "production_mimic": {
+                    "candidate_class": "triad_f331_e0798_plus_dotted",
+                    "lineage_confidence": "medium",
+                    "platform_like_total_estimate": 0.757142,
+                    "platform_like_rank_estimate": 7,
+                    "strict_total_estimate": 0.760607,
+                    "strict_rank_estimate": 7,
+                    "paranoid_total_estimate": 0.74156,
+                    "paranoid_rank_estimate": 8,
+                    "hidden_g_trusted": {"delta": 0.0425},
+                    "judge": {"judge_timeout_or_failure": True},
+                    "submit_eligibility": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/competition_supervisor.py",
+            "--leaderboard",
+            str(leaderboard),
+            "--team",
+            "Tzur Labs",
+            "--backlog-dir",
+            str(backlog_dir),
+            "--candidate-ceiling-cycle",
+            str(ceiling_json),
+            "--production-mimic-json",
+            str(production_mimic),
+            "--out",
+            str(out),
+            "--runs-json",
+            str(runs_json),
+            "--min-ticket",
+            "50",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    report = out.read_text(encoding="utf-8")
+    assert "- Rank: `9`" in report
+    assert "- Platform-like rank estimate: `8`" in report
+    assert "- Strict rank estimate: `8`" in report
+    assert "- Paranoid rank estimate: `9`" in report
+    assert "paranoid_rank≈9 strict_rank≈8 upper_rank≈7" in report

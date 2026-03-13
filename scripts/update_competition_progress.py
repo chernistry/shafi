@@ -1078,12 +1078,11 @@ def build_competition_matrix(
             ("strict_total_estimate", "strict_rank_estimate"),
             ("paranoid_total_estimate", "paranoid_rank_estimate"),
         ):
-            if row.get(rank_key) is None:
-                row[rank_key] = _estimate_rank_for_total(
-                    total=row.get(total_key),
-                    leaderboard_rows=leaderboard_row_objs,
-                    team_name=team_name,
-                )
+            row[rank_key] = _estimate_rank_for_total(
+                total=row.get(total_key),
+                leaderboard_rows=leaderboard_row_objs,
+                team_name=team_name,
+            )
         if (
             row.get("platform_like_total_estimate") is None
             and row.get("strict_total_estimate") is None

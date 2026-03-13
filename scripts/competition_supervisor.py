@@ -197,6 +197,94 @@ def _branch_class_summaries(payload: dict[str, object] | None) -> list[dict[str,
     return [cast("dict[str, object]", item) for item in summaries_obj if isinstance(item, dict)]
 
 
+def _estimate_rank_for_total(*, total: object, leaderboard_rows: list[object], team_name: str) -> int:
+    total_value = _as_float(total, default=-1.0)
+    if total_value < 0:
+        return 0
+    better = 0
+    for raw in leaderboard_rows:
+        row = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
+        if str(row.get("team_name") or "") == team_name:
+            continue
+        if _as_float(row.get("total"), default=-1.0) > total_value + 1e-9:
+            better += 1
+    return better + 1
+
+
+def _refresh_candidate_ceiling_cycle_ranks(
+    payload: dict[str, object] | None,
+    *,
+    leaderboard_rows: list[object],
+    team_name: str,
+) -> dict[str, object] | None:
+    if payload is None:
+        return None
+    ranked_obj = payload.get("ranked_candidates")
+    ranked = cast("list[object]", ranked_obj) if isinstance(ranked_obj, list) else []
+    by_label: dict[str, dict[str, object]] = {}
+    for item in ranked:
+        if not isinstance(item, dict):
+            continue
+        candidate = cast("dict[str, object]", item)
+        candidate["paranoid_rank_estimate"] = _estimate_rank_for_total(
+            total=candidate.get("paranoid_total_estimate"),
+            leaderboard_rows=leaderboard_rows,
+            team_name=team_name,
+        )
+        candidate["strict_rank_estimate"] = _estimate_rank_for_total(
+            total=candidate.get("strict_total_estimate"),
+            leaderboard_rows=leaderboard_rows,
+            team_name=team_name,
+        )
+        candidate["upper_rank_estimate"] = _estimate_rank_for_total(
+            total=candidate.get("upper_total_estimate"),
+            leaderboard_rows=leaderboard_rows,
+            team_name=team_name,
+        )
+        label = str(candidate.get("label") or "").strip()
+        if label:
+            by_label[label] = candidate
+    summaries_obj = payload.get("branch_class_summary")
+    summaries = cast("list[object]", summaries_obj) if isinstance(summaries_obj, list) else []
+    for item in summaries:
+        if not isinstance(item, dict):
+            continue
+        summary = cast("dict[str, object]", item)
+        best_label = str(summary.get("best_label") or "").strip()
+        if not best_label:
+            continue
+        best = by_label.get(best_label)
+        if best is not None:
+            summary["best_upper_rank_estimate"] = best.get("upper_rank_estimate")
+    return payload
+
+
+def _refresh_production_mimic_ranks(
+    payload: dict[str, object] | None,
+    *,
+    leaderboard_rows: list[object],
+    team_name: str,
+) -> dict[str, object] | None:
+    if payload is None:
+        return None
+    payload["platform_like_rank_estimate"] = _estimate_rank_for_total(
+        total=payload.get("platform_like_total_estimate"),
+        leaderboard_rows=leaderboard_rows,
+        team_name=team_name,
+    )
+    payload["strict_rank_estimate"] = _estimate_rank_for_total(
+        total=payload.get("strict_total_estimate"),
+        leaderboard_rows=leaderboard_rows,
+        team_name=team_name,
+    )
+    payload["paranoid_rank_estimate"] = _estimate_rank_for_total(
+        total=payload.get("paranoid_total_estimate"),
+        leaderboard_rows=leaderboard_rows,
+        team_name=team_name,
+    )
+    return payload
+
+
 def _decide(
     *,
     subject_summary: dict[str, object],
@@ -609,12 +697,21 @@ def main() -> None:
     args = parser.parse_args()
 
     rows = load_leaderboard_rows(args.leaderboard)
+    leaderboard_row_objs: list[object] = [{"team_name": row.team_name, "total": row.total} for row in rows]
     subject_summary = build_leaderboard_summary(rows, team_name=args.team)
     latest_experiment = _load_latest_experiment(args.ledger_json)
     exactness_report = _load_exactness_report(args.exactness_report)
     equivalence_report = _load_equivalence_report(args.equivalence_json)
-    candidate_ceiling_cycle = _load_candidate_ceiling_cycle(args.candidate_ceiling_cycle)
-    production_mimic = _load_production_mimic(args.production_mimic_json)
+    candidate_ceiling_cycle = _refresh_candidate_ceiling_cycle_ranks(
+        _load_candidate_ceiling_cycle(args.candidate_ceiling_cycle),
+        leaderboard_rows=leaderboard_row_objs,
+        team_name=args.team,
+    )
+    production_mimic = _refresh_production_mimic_ranks(
+        _load_production_mimic(args.production_mimic_json),
+        leaderboard_rows=leaderboard_row_objs,
+        team_name=args.team,
+    )
     remaining_signal_summary = _load_remaining_signal_summary(args.remaining_signal_json)
     alternative_gate_reports = _load_alternative_gate_reports(args.alternative_gate_json)
     scoring_summary = _load_scoring_summary(args.scoring_json)
