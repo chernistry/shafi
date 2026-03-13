@@ -37,6 +37,17 @@ class CandidateSpec:
     allowed_page_qids: list[str]
     changed_files: list[str]
     completed_packs: list[str]
+    branch_class: str
+    timeline_scope: str
+
+
+_FROZEN_BRANCH_CLASS_REASONS: dict[str, str] = {
+    "small_diff_support_rider": "proven dead mechanism: small-diff support rider ceiling",
+    "broad_page_inflation": "proven dead mechanism: broad page inflation",
+    "full_collection_embedder_swap": "proven dead mechanism: full-collection embedder swap",
+    "global_prompt_churn": "proven dead mechanism: global prompt churn",
+    "latency_vps_chase_for_score_only": "proven dead mechanism: latency/VPS score chase",
+}
 
 
 def _resolve(root: Path, raw: str | Path | None) -> Path | None:
@@ -72,7 +83,7 @@ def _coerce_float(value: object) -> float:
     return 0.0
 
 
-def _coerce_int(value: object) -> int:
+def _coerce_int(value: object, *, default: int = 0) -> int:
     if isinstance(value, bool):
         return int(value)
     if isinstance(value, int):
@@ -83,8 +94,20 @@ def _coerce_int(value: object) -> int:
         try:
             return int(value.strip())
         except ValueError:
-            return 0
-    return 0
+            return default
+    return default
+
+
+def _coerce_branch_class(value: object) -> str:
+    text = str(value or "").strip()
+    return text or "unclassified"
+
+
+def _coerce_timeline_scope(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"private_only", "deferred_after_18", "after_private_release"}:
+        return "private_only"
+    return "active"
 
 
 def _load_qid_set(path: Path | None) -> set[str]:
@@ -143,6 +166,8 @@ def _load_manifest(path: Path, *, root: Path) -> list[CandidateSpec]:
                 allowed_page_qids=_coerce_str_list(row.get("allowed_page_qids")),
                 changed_files=_coerce_str_list(row.get("changed_files")),
                 completed_packs=_coerce_str_list(row.get("completed_packs")),
+                branch_class=_coerce_branch_class(row.get("branch_class")),
+                timeline_scope=_coerce_timeline_scope(row.get("timeline_scope")),
             )
         )
     if not out:
@@ -323,12 +348,16 @@ def _run_family_debug(
 
 def _combined_score(
     row: JsonDict,
-) -> tuple[float, float, float, float, float, float, float, float, float, float, float, float, int, int, str]:
+) -> tuple[float, float, float, float, float, float, float, float, float, float, float, float, float, float, int, int, str]:
+    active_before_deadline = bool(row.get("active_before_march17", True))
+    branch_active = str(row.get("branch_status") or "active") == "active"
     impacted_packs_ok = not bool(row.get("impact_router_blocked"))
     lineage_ok = bool(row.get("lineage_ok"))
     recommendation = str(row.get("recommendation") or "")
     recommendation_bonus = {"PROMISING": 2.0, "EXPERIMENTAL_NO_SUBMIT": 1.0}.get(recommendation.upper(), 0.0)
     return (
+        1.0 if active_before_deadline else 0.0,
+        1.0 if branch_active else 0.0,
         1.0 if impacted_packs_ok else 0.0,
         1.0 if lineage_ok else 0.0,
         recommendation_bonus,
@@ -345,6 +374,91 @@ def _combined_score(
         -_coerce_int(row.get("answer_drift")),
         str(row.get("label") or ""),
     )
+
+
+def _summarize_branch_classes(*, rows: list[JsonDict], target_rank: int) -> list[JsonDict]:
+    grouped: dict[str, list[JsonDict]] = {}
+    for row in rows:
+        branch_class = _coerce_branch_class(row.get("branch_class"))
+        grouped.setdefault(branch_class, []).append(row)
+
+    summaries: list[JsonDict] = []
+    for branch_class, branch_rows in grouped.items():
+        best_upper = min(branch_rows, key=lambda row: _coerce_int(row.get("upper_rank_estimate")) or 10_000)
+        best_strict = min(branch_rows, key=lambda row: _coerce_int(row.get("strict_rank_estimate")) or 10_000)
+        best_paranoid = min(branch_rows, key=lambda row: _coerce_int(row.get("paranoid_rank_estimate")) or 10_000)
+        best_upper_rank = _coerce_int(best_upper.get("upper_rank_estimate")) or 10_000
+        best_strict_rank = _coerce_int(best_strict.get("strict_rank_estimate")) or 10_000
+        best_paranoid_rank = _coerce_int(best_paranoid.get("paranoid_rank_estimate")) or 10_000
+        timeline_scopes = sorted({str(row.get("timeline_scope") or "active") for row in branch_rows})
+
+        status = "active"
+        reason = "active pre-March-17 class"
+        active_before_march17 = True
+        if branch_class in _FROZEN_BRANCH_CLASS_REASONS:
+            status = "frozen"
+            reason = _FROZEN_BRANCH_CLASS_REASONS[branch_class]
+            active_before_march17 = False
+        elif all(scope == "private_only" for scope in timeline_scopes):
+            status = "private_only"
+            reason = "reserved for after March 18 / private-phase work"
+            active_before_march17 = False
+        elif (
+            best_upper_rank > target_rank
+            and best_strict_rank > target_rank
+            and best_paranoid_rank > target_rank
+        ):
+            status = "frozen"
+            reason = f"mathematical ceiling misses target rank {target_rank} even under upper estimate"
+            active_before_march17 = False
+
+        summaries.append(
+            {
+                "branch_class": branch_class,
+                "status": status,
+                "reason": reason,
+                "active_before_march17": active_before_march17,
+                "timeline_scopes": timeline_scopes,
+                "candidate_count": len(branch_rows),
+                "promising_candidate_count": sum(
+                    1 for row in branch_rows if str(row.get("recommendation") or "").upper() == "PROMISING"
+                ),
+                "best_label": str(best_upper.get("label") or ""),
+                "best_upper_rank_estimate": best_upper_rank,
+                "best_strict_rank_estimate": best_strict_rank,
+                "best_paranoid_rank_estimate": best_paranoid_rank,
+                "best_upper_total_estimate": _coerce_float(best_upper.get("upper_total_estimate")),
+            }
+        )
+
+    summaries.sort(
+        key=lambda row: (
+            1.0 if bool(row.get("active_before_march17")) else 0.0,
+            _coerce_float(row.get("best_upper_total_estimate")),
+            str(row.get("branch_class") or ""),
+        ),
+        reverse=True,
+    )
+    return summaries
+
+
+def _apply_branch_class_policy(*, rows: list[JsonDict], target_rank: int) -> list[JsonDict]:
+    summaries = _summarize_branch_classes(rows=rows, target_rank=target_rank)
+    by_branch = {
+        _coerce_branch_class(summary.get("branch_class")): summary
+        for summary in summaries
+    }
+    for row in rows:
+        summary = by_branch.get(_coerce_branch_class(row.get("branch_class")))
+        if summary is None:
+            row["branch_status"] = "active"
+            row["branch_status_reason"] = "active pre-March-17 class"
+            row["active_before_march17"] = True
+            continue
+        row["branch_status"] = summary.get("status")
+        row["branch_status_reason"] = summary.get("reason")
+        row["active_before_march17"] = bool(summary.get("active_before_march17"))
+    return summaries
 
 
 def _apply_impact_router(candidate: CandidateSpec, row: JsonDict) -> None:
@@ -439,6 +553,7 @@ def _candidate_score_estimates(
 def _render_markdown(
     *,
     rows: list[JsonDict],
+    branch_class_summary: list[JsonDict],
     baseline_label: str,
     include_qids_file: Path,
     team_name: str | None,
@@ -461,6 +576,22 @@ def _render_markdown(
                 "",
             ]
         )
+    lines.extend(
+        [
+            "## Branch Classes",
+            "",
+            "| Branch class | Status | Active before March 17 | Best label | Best upper rank | Candidates | Reason |",
+            "| --- | --- | --- | --- | ---: | ---: | --- |",
+        ]
+    )
+    for summary in branch_class_summary:
+        lines.append(
+            "| "
+            f"`{summary['branch_class']}` | `{summary['status']}` | `{summary['active_before_march17']}` | "
+            f"`{summary['best_label']}` | `{_coerce_int(summary.get('best_upper_rank_estimate'))}` | "
+            f"`{_coerce_int(summary.get('candidate_count'))}` | {summary['reason']} |"
+        )
+    lines.extend(["", "## Ranked Candidates", ""])
     lines.extend(
         [
             "| Rank | Label | Recommendation | Lineage | Paranoid Total | Strict Total | Upper Total | Paranoid Rank | Strict Rank | Upper Rank | Blindspot Gains | SU Blindspots | Hidden-G Trusted Δ | Hidden-G All Δ | Judge Pass Δ | Judge Grounding Δ | Resolved Exactness | Answer Drift | Page Drift | Page p95 |",
@@ -525,6 +656,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--leaderboard", default=None)
     parser.add_argument("--team-name", default=None)
     parser.add_argument("--public-realized-exactness-qids-file", default=None)
+    parser.add_argument("--target-rank", type=int, default=1)
     return parser.parse_args()
 
 
@@ -592,6 +724,8 @@ def main() -> int:
             "submission": str(candidate.submission),
             "raw_results": str(candidate.raw_results),
             "preflight": None if candidate.preflight is None else str(candidate.preflight),
+            "branch_class": candidate.branch_class,
+            "timeline_scope": candidate.timeline_scope,
             "recommendation": gate.get("recommendation"),
             "lineage_ok": lineage.get("lineage_ok"),
             "answer_drift": lineage.get("answer_changed_count"),
@@ -642,6 +776,7 @@ def main() -> int:
         row["format_delta"] = family.get("format_delta", 0.0)
         row["judge_timeout"] = family.get("judge_timeout", False)
 
+    branch_class_summary = _apply_branch_class_policy(rows=rows, target_rank=args.target_rank)
     ranked = sorted(rows, key=_combined_score, reverse=True)
     payload = {
         "baseline_label": args.baseline_label,
@@ -651,6 +786,8 @@ def main() -> int:
         "leaderboard": None if leaderboard_path is None else str(leaderboard_path),
         "team_name": args.team_name,
         "public_realized_exactness_qids_file": None if public_realized_qids_path is None else str(public_realized_qids_path),
+        "target_rank": args.target_rank,
+        "branch_class_summary": branch_class_summary,
         "ranked_candidates": ranked,
         "submission_policy": "NO_SUBMIT_WITHOUT_USER_APPROVAL",
     }
@@ -660,6 +797,7 @@ def main() -> int:
     out_md.write_text(
         _render_markdown(
             rows=rows,
+            branch_class_summary=branch_class_summary,
             baseline_label=str(args.baseline_label),
             include_qids_file=include_qids_file,
             team_name=args.team_name,

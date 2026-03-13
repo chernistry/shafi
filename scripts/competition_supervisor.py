@@ -188,6 +188,15 @@ def _remaining_signal_stats(summary: dict[str, object] | None) -> tuple[int, int
     return family_count, actionable_count
 
 
+def _branch_class_summaries(payload: dict[str, object] | None) -> list[dict[str, object]]:
+    if payload is None:
+        return []
+    summaries_obj = payload.get("branch_class_summary")
+    if not isinstance(summaries_obj, list):
+        return []
+    return [cast("dict[str, object]", item) for item in summaries_obj if isinstance(item, dict)]
+
+
 def _decide(
     *,
     subject_summary: dict[str, object],
@@ -273,11 +282,36 @@ def _decide(
 
     if candidate_ceiling_cycle is not None:
         remaining_family_count, remaining_actionable_count = _remaining_signal_stats(remaining_signal_summary)
+        branch_summaries = _branch_class_summaries(candidate_ceiling_cycle)
+        frozen_classes = [
+            str(item.get("branch_class") or "").strip()
+            for item in branch_summaries
+            if str(item.get("status") or "").strip() == "frozen"
+        ]
+        private_only_classes = [
+            str(item.get("branch_class") or "").strip()
+            for item in branch_summaries
+            if str(item.get("status") or "").strip() == "private_only"
+        ]
+        active_classes = [
+            str(item.get("branch_class") or "").strip()
+            for item in branch_summaries
+            if bool(item.get("active_before_march17"))
+        ]
+        if frozen_classes:
+            rationale.append("frozen branch classes: " + ", ".join(frozen_classes))
+        if private_only_classes:
+            rationale.append(
+                "private-only branch classes will not displace active pre-March-17 work: "
+                + ", ".join(private_only_classes)
+            )
         ranked_obj = candidate_ceiling_cycle.get("ranked_candidates")
         ranked = cast("list[object]", ranked_obj) if isinstance(ranked_obj, list) else []
         if ranked and isinstance(ranked[0], dict):
             best = cast("dict[str, object]", ranked[0])
             best_label = str(best.get("label") or "unknown").strip() or "unknown"
+            best_branch_class = str(best.get("branch_class") or "unclassified").strip() or "unclassified"
+            best_branch_status = str(best.get("branch_status") or "active").strip() or "active"
             paranoid_rank = _as_int(best.get("paranoid_rank_estimate"), default=10_000)
             paranoid_total = _as_float(best.get("paranoid_total_estimate"))
             strict_rank = _as_int(best.get("strict_rank_estimate"), default=10_000)
@@ -286,8 +320,10 @@ def _decide(
             support_undercoverage_blindspots = _as_int(best.get("blindspot_support_undercoverage_case_count"))
             strict_total = _as_float(best.get("strict_total_estimate"))
             rationale.append(
-                f"best small-diff ceiling candidate={best_label} paranoid_rank≈{paranoid_rank} strict_rank≈{strict_rank} upper_rank≈{upper_rank} blindspot_gains={blindspot_improved}"
+                f"best small-diff ceiling candidate={best_label} branch_class={best_branch_class} branch_status={best_branch_status} paranoid_rank≈{paranoid_rank} strict_rank≈{strict_rank} upper_rank≈{upper_rank} blindspot_gains={blindspot_improved}"
             )
+            if best_branch_status != "active" and active_classes:
+                rationale.append("best ranked ceiling row is demoted by branch policy and does not replace the active pre-March-17 queue")
             if paranoid_total <= _as_float(subject_summary.get("total")):
                 rationale.append("paranoid estimate is non-improving relative to the current public baseline")
             if paranoid_rank > target_rank and strict_rank > target_rank and upper_rank > target_rank:
@@ -384,6 +420,7 @@ def _render_report(
     decision: SupervisorDecision,
 ) -> str:
     gap_targets = cast("list[dict[str, object]]", subject_summary.get("gap_targets") or [])
+    branch_summaries = _branch_class_summaries(candidate_ceiling_cycle)
     lines = [
         "# Competition Supervisor Report",
         "",
@@ -445,6 +482,22 @@ def _render_report(
         if upper_bound is not None:
             lines.append(f"- Exactness-only strict upper-bound total: `{_as_float(upper_bound):.6f}`")
 
+    lines.extend(["", "## Branch Freeze", ""])
+    if not branch_summaries:
+        lines.append("- none")
+    else:
+        for summary in branch_summaries:
+            lines.extend(
+                [
+                    f"- `{summary.get('branch_class')}`",
+                    f"  - status: `{summary.get('status')}`",
+                    f"  - active_before_march17: `{summary.get('active_before_march17')}`",
+                    f"  - best_label: `{summary.get('best_label')}`",
+                    f"  - best_upper_rank_estimate: `{_as_int(summary.get('best_upper_rank_estimate'))}`",
+                    f"  - reason: {summary.get('reason')}",
+                ]
+            )
+
     lines.extend(["", "## Ceiling Cycle", ""])
     if candidate_ceiling_cycle is None:
         lines.append("- none")
@@ -458,6 +511,8 @@ def _render_report(
             lines.extend(
                 [
                     f"- Best candidate: `{best.get('label')}`",
+                    f"- Branch class: `{best.get('branch_class') or 'unclassified'}`",
+                    f"- Branch status: `{best.get('branch_status') or 'active'}`",
                     f"- Paranoid total estimate: `{_as_float(best.get('paranoid_total_estimate')):.6f}`",
                     f"- Strict total estimate: `{_as_float(best.get('strict_total_estimate')):.6f}`",
                     f"- Upper total estimate: `{_as_float(best.get('upper_total_estimate')):.6f}`",

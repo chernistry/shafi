@@ -7,10 +7,12 @@ from scripts.analyze_leaderboard import LeaderboardRow
 from scripts.impact_router import route_changed_files
 from scripts.run_candidate_ceiling_cycle import (
     CandidateSpec,
+    _apply_branch_class_policy,
     _apply_impact_router,
     _candidate_score_estimates,
     _combined_score,
     _load_manifest,
+    _summarize_branch_classes,
 )
 
 
@@ -32,6 +34,8 @@ def test_load_manifest_resolves_candidate_specs(tmp_path: Path) -> None:
                         "allowed_page_qids": ["q2"],
                         "changed_files": ["src/rag_challenge/core/strict_answerer.py"],
                         "completed_packs": ["strict_answerer_pack"],
+                        "branch_class": "det_exactness",
+                        "timeline_scope": "active",
                     }
                 ]
             }
@@ -48,6 +52,8 @@ def test_load_manifest_resolves_candidate_specs(tmp_path: Path) -> None:
     assert rows[0].allowed_page_qids == ["q2"]
     assert rows[0].changed_files == ["src/rag_challenge/core/strict_answerer.py"]
     assert rows[0].completed_packs == ["strict_answerer_pack"]
+    assert rows[0].branch_class == "det_exactness"
+    assert rows[0].timeline_scope == "active"
 
 
 def test_combined_score_prefers_lineage_and_exactness_when_hidden_g_ties() -> None:
@@ -168,6 +174,105 @@ def test_combined_score_prefers_higher_paranoid_total_when_other_metrics_tie() -
     assert _combined_score(safer) > _combined_score(riskier)
 
 
+def test_branch_class_summary_freezes_dead_and_private_only_classes() -> None:
+    rows = [
+        {
+            "label": "dead-rider",
+            "branch_class": "small_diff_support_rider",
+            "timeline_scope": "active",
+            "recommendation": "NO_SUBMIT",
+            "upper_rank_estimate": 6,
+            "strict_rank_estimate": 7,
+            "paranoid_rank_estimate": 8,
+            "upper_total_estimate": 0.78,
+        },
+        {
+            "label": "private-rerank",
+            "branch_class": "visual_page_rerank",
+            "timeline_scope": "private_only",
+            "recommendation": "PROMISING",
+            "upper_rank_estimate": 1,
+            "strict_rank_estimate": 2,
+            "paranoid_rank_estimate": 3,
+            "upper_total_estimate": 0.83,
+        },
+        {
+            "label": "active-core",
+            "branch_class": "doc_page_rerank_core",
+            "timeline_scope": "active",
+            "recommendation": "PROMISING",
+            "upper_rank_estimate": 1,
+            "strict_rank_estimate": 2,
+            "paranoid_rank_estimate": 3,
+            "upper_total_estimate": 0.82,
+        },
+    ]
+
+    summary = _summarize_branch_classes(rows=rows, target_rank=1)
+    by_class = {row["branch_class"]: row for row in summary}
+
+    assert by_class["small_diff_support_rider"]["status"] == "frozen"
+    assert by_class["visual_page_rerank"]["status"] == "private_only"
+    assert by_class["doc_page_rerank_core"]["status"] == "active"
+    assert by_class["doc_page_rerank_core"]["active_before_march17"] is True
+
+
+def test_apply_branch_class_policy_demotes_private_only_rows_in_score_order() -> None:
+    rows = [
+        {
+            "label": "private-rerank",
+            "branch_class": "visual_page_rerank",
+            "timeline_scope": "private_only",
+            "recommendation": "PROMISING",
+            "lineage_ok": True,
+            "impact_router_blocked": False,
+            "paranoid_total_estimate": 0.80,
+            "strict_total_estimate": 0.81,
+            "upper_total_estimate": 0.82,
+            "blindspot_support_undercoverage_case_count": 0,
+            "blindspot_improved_case_count": 0,
+            "hidden_g_trusted_delta": 0.03,
+            "hidden_g_all_delta": 0.03,
+            "judge_pass_delta": 0.0,
+            "judge_grounding_delta": 0.0,
+            "resolved_incorrect_count": 0,
+            "page_drift": 0,
+            "answer_drift": 0,
+            "upper_rank_estimate": 1,
+            "strict_rank_estimate": 2,
+            "paranoid_rank_estimate": 3,
+        },
+        {
+            "label": "active-core",
+            "branch_class": "doc_page_rerank_core",
+            "timeline_scope": "active",
+            "recommendation": "PROMISING",
+            "lineage_ok": True,
+            "impact_router_blocked": False,
+            "paranoid_total_estimate": 0.79,
+            "strict_total_estimate": 0.80,
+            "upper_total_estimate": 0.81,
+            "blindspot_support_undercoverage_case_count": 0,
+            "blindspot_improved_case_count": 0,
+            "hidden_g_trusted_delta": 0.03,
+            "hidden_g_all_delta": 0.03,
+            "judge_pass_delta": 0.0,
+            "judge_grounding_delta": 0.0,
+            "resolved_incorrect_count": 0,
+            "page_drift": 0,
+            "answer_drift": 0,
+            "upper_rank_estimate": 1,
+            "strict_rank_estimate": 2,
+            "paranoid_rank_estimate": 3,
+        },
+    ]
+
+    _apply_branch_class_policy(rows=rows, target_rank=1)
+    ranked = sorted(rows, key=_combined_score, reverse=True)
+    assert ranked[0]["label"] == "active-core"
+    assert ranked[1]["branch_status"] == "private_only"
+
+
 def test_impact_router_routes_major_change_classes() -> None:
     strict = route_changed_files(["src/rag_challenge/core/strict_answerer.py"], completed_packs=["strict_answerer_pack"])
     retrieval = route_changed_files(["src/rag_challenge/core/retriever.py"], completed_packs=["page_localization_pack"])
@@ -195,6 +300,8 @@ def test_apply_impact_router_blocks_candidate_when_required_pack_missing() -> No
             allowed_page_qids=[],
             changed_files=["src/rag_challenge/core/retriever.py"],
             completed_packs=[],
+            branch_class="doc_page_rerank_core",
+            timeline_scope="active",
         ),
         row,
     )
