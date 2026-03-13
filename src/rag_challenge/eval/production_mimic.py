@@ -5,6 +5,15 @@ from typing import cast
 JsonDict = dict[str, object]
 JsonList = list[JsonDict]
 
+_CITATION_FLOORS_BY_ANSWER_TYPE: dict[str, float] = {
+    "boolean": 0.80,
+    "name": 0.85,
+    "names": 0.85,
+    "date": 0.85,
+    "number": 0.85,
+    "free_text": 0.60,
+}
+
 
 def _as_float(value: object, *, default: float = 0.0) -> float:
     if isinstance(value, bool):
@@ -52,6 +61,18 @@ def _as_str_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [text for item in cast("list[object]", value) if (text := str(item).strip())]
+
+
+def _as_float_dict(value: object) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, float] = {}
+    for raw_key, raw_value in cast("dict[object, object]", value).items():
+        key = str(raw_key).strip()
+        if not key:
+            continue
+        out[key] = _as_float(raw_value)
+    return out
 
 
 def _page_doc(page_id: str) -> str:
@@ -270,6 +291,7 @@ def extract_eval_metrics(payload: JsonDict | None) -> JsonDict:
     summary = _eval_summary(payload)
     return {
         "citation_coverage": summary.get("citation_coverage"),
+        "citation_coverage_by_answer_type": _as_float_dict(summary.get("citation_coverage_by_answer_type")),
         "answer_type_format_compliance": summary.get("answer_type_format_compliance"),
         "grounding_g_score_beta_2_5": summary.get("grounding_g_score_beta_2_5"),
         "judge": extract_judge_summary(payload),
@@ -348,8 +370,18 @@ def aggregate_hybrid_strict_eval(
             return None
         return min(values)
 
+    def _pick_min_by_answer_type(metric: str) -> dict[str, float]:
+        merged: dict[str, float] = {}
+        for block in (cheap, strict):
+            values = _as_float_dict(block.get(metric))
+            for answer_type, value in values.items():
+                current = merged.get(answer_type)
+                merged[answer_type] = value if current is None else min(current, value)
+        return merged
+
     return {
         "citation_coverage": _pick_min("citation_coverage"),
+        "citation_coverage_by_answer_type": _pick_min_by_answer_type("citation_coverage_by_answer_type"),
         "answer_type_format_compliance": _pick_min("answer_type_format_compliance"),
         "grounding_g_score_beta_2_5": _pick_min("grounding_g_score_beta_2_5"),
         "judge": aggregate_hybrid_strict_judge(
@@ -360,32 +392,55 @@ def aggregate_hybrid_strict_eval(
 
 
 def build_page_trace_summary(page_trace_payload: JsonDict | None) -> JsonDict:
+    empty_summary: JsonDict = {
+        "cases_scored": 0,
+        "trusted_case_count": 0,
+        "gold_in_retrieved_count": 0,
+        "gold_in_reranked_count": 0,
+        "gold_in_used_count": 0,
+        "false_positive_case_count": 0,
+        "failure_stage_counts": {},
+        "stage_examples": {},
+        "explained_ratio": 0.0,
+        "page_true_positive_count": 0,
+        "page_used_count": 0,
+        "page_gold_count": 0,
+        "page_precision": 0.0,
+        "page_recall": 0.0,
+        "trusted_page_true_positive_count": 0,
+        "trusted_page_used_count": 0,
+        "trusted_page_gold_count": 0,
+        "trusted_page_precision": 0.0,
+        "trusted_page_recall": 0.0,
+    }
     if page_trace_payload is None:
-        return {
-            "cases_scored": 0,
-            "trusted_case_count": 0,
-            "gold_in_retrieved_count": 0,
-            "gold_in_reranked_count": 0,
-            "gold_in_used_count": 0,
-            "false_positive_case_count": 0,
-            "failure_stage_counts": {},
-            "stage_examples": {},
-            "explained_ratio": 0.0,
-        }
+        return empty_summary
     summary_obj = page_trace_payload.get("summary")
     if not isinstance(summary_obj, dict):
-        return {
-            "cases_scored": 0,
-            "trusted_case_count": 0,
-            "gold_in_retrieved_count": 0,
-            "gold_in_reranked_count": 0,
-            "gold_in_used_count": 0,
-            "false_positive_case_count": 0,
-            "failure_stage_counts": {},
-            "stage_examples": {},
-            "explained_ratio": 0.0,
-        }
+        return empty_summary
     summary = cast("JsonDict", summary_obj)
+    records_obj = page_trace_payload.get("records")
+    page_true_positive_count = 0
+    page_used_count = 0
+    page_gold_count = 0
+    trusted_page_true_positive_count = 0
+    trusted_page_used_count = 0
+    trusted_page_gold_count = 0
+    if isinstance(records_obj, list):
+        for raw_record in cast("list[object]", records_obj):
+            if not isinstance(raw_record, dict):
+                continue
+            record = cast("JsonDict", raw_record)
+            gold_pages = set(_as_str_list(record.get("gold_pages")))
+            used_pages = set(_as_str_list(record.get("used_pages")))
+            true_positive_count = len(gold_pages.intersection(used_pages))
+            page_true_positive_count += true_positive_count
+            page_used_count += len(used_pages)
+            page_gold_count += len(gold_pages)
+            if str(record.get("trust_tier") or "").strip().lower() == "trusted":
+                trusted_page_true_positive_count += true_positive_count
+                trusted_page_used_count += len(used_pages)
+                trusted_page_gold_count += len(gold_pages)
     return {
         "cases_scored": _as_int(summary.get("cases_scored")),
         "trusted_case_count": _as_int(summary.get("trusted_case_count")),
@@ -396,6 +451,20 @@ def build_page_trace_summary(page_trace_payload: JsonDict | None) -> JsonDict:
         "failure_stage_counts": cast("dict[str, object]", summary.get("failure_stage_counts") or {}),
         "stage_examples": cast("dict[str, object]", summary.get("stage_examples") or {}),
         "explained_ratio": _as_float(summary.get("explained_ratio")),
+        "page_true_positive_count": page_true_positive_count,
+        "page_used_count": page_used_count,
+        "page_gold_count": page_gold_count,
+        "page_precision": 0.0 if page_used_count <= 0 else page_true_positive_count / page_used_count,
+        "page_recall": 0.0 if page_gold_count <= 0 else page_true_positive_count / page_gold_count,
+        "trusted_page_true_positive_count": trusted_page_true_positive_count,
+        "trusted_page_used_count": trusted_page_used_count,
+        "trusted_page_gold_count": trusted_page_gold_count,
+        "trusted_page_precision": (
+            0.0 if trusted_page_used_count <= 0 else trusted_page_true_positive_count / trusted_page_used_count
+        ),
+        "trusted_page_recall": (
+            0.0 if trusted_page_gold_count <= 0 else trusted_page_true_positive_count / trusted_page_gold_count
+        ),
     }
 
 
@@ -445,6 +514,23 @@ def build_public_history_calibration(rows: list[JsonDict]) -> JsonDict:
     }
 
 
+def _citation_floor_failures(citation_coverage_by_answer_type: dict[str, float]) -> list[JsonDict]:
+    failures: list[JsonDict] = []
+    for answer_type, floor in _CITATION_FLOORS_BY_ANSWER_TYPE.items():
+        observed = citation_coverage_by_answer_type.get(answer_type)
+        if observed is None or observed + 1e-9 >= floor:
+            continue
+        failures.append(
+            {
+                "answer_type": answer_type,
+                "observed": round(observed, 4),
+                "floor": floor,
+                "gap": round(floor - observed, 4),
+            }
+        )
+    return failures
+
+
 def estimate_production_mimic(
     *,
     subject_summary: JsonDict,
@@ -456,6 +542,7 @@ def estimate_production_mimic(
     calibration: JsonDict | None,
     raw_results_payload: JsonList | None = None,
     scaffold_payload: JsonDict | None = None,
+    page_trace_payload: JsonDict | None = None,
 ) -> JsonDict:
     calibration_block = calibration or {}
     hybrid_eval = aggregate_hybrid_strict_eval(
@@ -480,15 +567,18 @@ def estimate_production_mimic(
     unresolved_qids = _as_str_list((exactness_report or {}).get("still_mismatched_incorrect_qids"))
     format_compliance = hybrid_eval.get("answer_type_format_compliance")
     citation_coverage = hybrid_eval.get("citation_coverage")
+    citation_coverage_by_answer_type = _as_float_dict(hybrid_eval.get("citation_coverage_by_answer_type"))
     grounding_g_score = hybrid_eval.get("grounding_g_score_beta_2_5")
     lineage_confidence = infer_lineage_confidence(
         candidate_row=candidate_row,
         equivalence_report=equivalence_report,
     )
+    page_trace = build_page_trace_summary(page_trace_payload)
     support_shape = build_support_shape_report(
         raw_results_payload=raw_results_payload,
         scaffold_payload=scaffold_payload,
     )
+    citation_floor_failures = _citation_floor_failures(citation_coverage_by_answer_type)
 
     extra_penalty = 0.0
     no_submit_reasons: list[str] = []
@@ -505,6 +595,12 @@ def estimate_production_mimic(
     if citation_coverage is not None and _as_float(citation_coverage) < 1.0:
         extra_penalty += 0.008 * (1.0 - _as_float(citation_coverage))
         no_submit_reasons.append("citation coverage below strict local bar")
+    if citation_floor_failures:
+        extra_penalty += min(0.012, 0.02 * sum(_as_float(item.get("gap")) for item in citation_floor_failures))
+        no_submit_reasons.append(
+            "citation floor miss: "
+            + ", ".join(f"{item.get('answer_type') or ''}<{_as_float(item.get('floor')):.2f}" for item in citation_floor_failures)
+        )
     if grounding_g_score is not None and _as_float(grounding_g_score) < 0.8:
         extra_penalty += 0.004 * (0.8 - _as_float(grounding_g_score))
         no_submit_reasons.append("grounding score below strict local bar")
@@ -533,6 +629,25 @@ def estimate_production_mimic(
     if _as_int(candidate_row.get("page_drift")) > 0 and _as_float(candidate_row.get("hidden_g_trusted_delta")) <= 0.0:
         extra_penalty += 0.0025
         no_submit_reasons.append("page drift without trusted hidden-G gain")
+    cases_scored = _as_int(page_trace.get("cases_scored"))
+    page_precision = _as_float(page_trace.get("page_precision"))
+    page_recall = _as_float(page_trace.get("page_recall"))
+    trusted_case_count = _as_int(page_trace.get("trusted_case_count"))
+    if cases_scored >= 5 and page_precision < 0.35:
+        extra_penalty += 0.02 * (0.35 - page_precision)
+        no_submit_reasons.append("page-id precision below strict local floor")
+    if cases_scored >= 5 and page_recall < 0.50:
+        extra_penalty += 0.015 * (0.50 - page_recall)
+        no_submit_reasons.append("page-id recall below strict local floor")
+    if cases_scored > 0 and trusted_case_count == 0:
+        extra_penalty += 0.003
+        no_submit_reasons.append("changed-set page trace has no trusted page-id cases")
+    elif 0 < trusted_case_count < 5:
+        extra_penalty += 0.0015
+        no_submit_reasons.append("trusted page-id slice still narrow")
+    if cases_scored > 0 and _as_float(page_trace.get("explained_ratio")) < 0.95:
+        extra_penalty += 0.004 * (0.95 - _as_float(page_trace.get("explained_ratio")))
+        no_submit_reasons.append("page-trace stage explanation below strict local bar")
     support_shape_penalty, support_shape_reasons = _support_shape_penalty(support_shape)
     extra_penalty += support_shape_penalty
     no_submit_reasons.extend(support_shape_reasons)
@@ -557,6 +672,7 @@ def estimate_production_mimic(
         and _as_float(candidate_row.get("hidden_g_trusted_delta")) >= 0.0
         and lineage_confidence == "high"
         and not unresolved_qids
+        and not citation_floor_failures
         and not _as_bool(hybrid_judge.get("judge_timeout_or_failure"))
         and (pass_rate is None or _as_float(pass_rate) >= 1.0)
     )
@@ -584,9 +700,12 @@ def estimate_production_mimic(
         "judge": hybrid_judge,
         "eval": {
             "citation_coverage": citation_coverage,
+            "citation_coverage_by_answer_type": citation_coverage_by_answer_type,
+            "citation_floor_failures": citation_floor_failures,
             "answer_type_format_compliance": format_compliance,
             "grounding_g_score_beta_2_5": grounding_g_score,
         },
+        "page_trace": page_trace,
         "support_shape": support_shape,
         "platform_like_total_estimate": platform_like_total_estimate,
         "strict_total_estimate": strict_total_estimate,

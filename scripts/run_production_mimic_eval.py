@@ -15,7 +15,6 @@ except ModuleNotFoundError:  # pragma: no cover
 from rag_challenge.eval.production_mimic import (
     JsonDict,
     JsonList,
-    build_page_trace_summary,
     build_public_history_calibration,
     estimate_production_mimic,
 )
@@ -135,6 +134,8 @@ def _render_markdown(
         "## Eval Aggregates",
         "",
         f"- citation_coverage: `{eval_block.get('citation_coverage')}`",
+        f"- citation_coverage_by_answer_type: `{eval_block.get('citation_coverage_by_answer_type')}`",
+        f"- citation_floor_failures: `{eval_block.get('citation_floor_failures')}`",
         f"- answer_type_format_compliance: `{eval_block.get('answer_type_format_compliance')}`",
         f"- grounding_g_score_beta_2_5: `{eval_block.get('grounding_g_score_beta_2_5')}`",
         "",
@@ -146,6 +147,10 @@ def _render_markdown(
         f"- gold_in_reranked_count: `{page_trace.get('gold_in_reranked_count')}`",
         f"- gold_in_used_count: `{page_trace.get('gold_in_used_count')}`",
         f"- false_positive_case_count: `{page_trace.get('false_positive_case_count')}`",
+        f"- page_precision: `{page_trace.get('page_precision')}`",
+        f"- page_recall: `{page_trace.get('page_recall')}`",
+        f"- trusted_page_precision: `{page_trace.get('trusted_page_precision')}`",
+        f"- trusted_page_recall: `{page_trace.get('trusted_page_recall')}`",
         f"- explained_ratio: `{page_trace.get('explained_ratio')}`",
         "",
         "## Score Envelope",
@@ -195,6 +200,7 @@ def main() -> int:
         calibration=calibration,
         raw_results_payload=raw_results_payload,
         scaffold_payload=_load_json(args.scaffold_json),
+        page_trace_payload=_load_json(args.page_trace_json),
     )
     result["platform_like_rank_estimate"] = _rank_for_total(
         leaderboard_path=args.leaderboard,
@@ -211,7 +217,6 @@ def main() -> int:
         team_name=args.team,
         total=cast("float", result.get("paranoid_total_estimate", 0.0)),
     )
-    result["page_trace"] = build_page_trace_summary(_load_json(args.page_trace_json))
     payload: JsonDict = {
         "leaderboard": str(args.leaderboard),
         "team_name": args.team,
