@@ -316,6 +316,16 @@ def _load_run_manifest(path: Path | None) -> JsonDict | None:
     return payload
 
 
+def _load_candidate_fingerprint(path: Path | None) -> JsonDict | None:
+    payload = _load_json(path)
+    if not payload:
+        return None
+    nested = payload.get("candidate_fingerprint")
+    if isinstance(nested, dict):
+        return cast("JsonDict", nested)
+    return payload
+
+
 def _load_exactness(path: Path | None) -> JsonDict | None:
     payload = _load_json(path)
     return payload or None
@@ -676,6 +686,8 @@ def _hydrate_row(
         "lineage_confidence": spec.get("lineage_confidence") or "unknown",
         "run_manifest_status": spec.get("run_manifest_status") or "unknown",
         "run_manifest_fingerprint": None,
+        "candidate_fingerprint": None,
+        "duplicate_of_label": None,
         "answer_drift": None,
         "page_drift": None,
         "hidden_g_trusted": None,
@@ -779,6 +791,19 @@ def _hydrate_row(
         else:
             row["run_manifest_status"] = "legacy_unknown"
 
+    candidate_fingerprint_path = _resolve_path(spec.get("candidate_fingerprint_json") or spec.get("fingerprint_json"))
+    candidate_fingerprint_payload = _load_candidate_fingerprint(candidate_fingerprint_path)
+    if candidate_fingerprint_payload is not None:
+        row["candidate_fingerprint"] = candidate_fingerprint_payload.get("fingerprint")
+        row["duplicate_of_label"] = candidate_fingerprint_payload.get("duplicate_of_label")
+        duplicate_of_label = str(row.get("duplicate_of_label") or "").strip()
+        if duplicate_of_label:
+            row["notes"] = (
+                f"{row['notes']} [duplicate_of={duplicate_of_label}]".strip()
+                if row["notes"]
+                else f"duplicate_of={duplicate_of_label}"
+            )
+
     exactness_payload = _load_exactness(_resolve_path(spec.get("exactness_json")))
     if exactness_payload is not None:
         row["exactness_resolved_qids"] = exactness_payload.get("resolved_incorrect_qids") or []
@@ -873,6 +898,7 @@ def _summary_block(*, leaderboard_summary: JsonDict, rows: list[JsonDict], super
         "missing_blocking": sum(1 for row in rows if str(row.get("run_manifest_status") or "") == "missing_blocking"),
         "legacy_unknown": sum(1 for row in rows if str(row.get("run_manifest_status") or "") == "legacy_unknown"),
     }
+    duplicate_count = sum(1 for row in rows if str(row.get("duplicate_of_label") or "").strip())
     lines = [
         "# Competition Matrix",
         "",
@@ -897,6 +923,7 @@ def _summary_block(*, leaderboard_summary: JsonDict, rows: list[JsonDict], super
         f"- Current S: `{_fmt_float(leaderboard_summary.get('s'))}`",
         f"- Current G: `{_fmt_float(leaderboard_summary.get('g'))}`",
         f"- Run manifest coverage: present=`{manifest_counts['present']}` missing_blocking=`{manifest_counts['missing_blocking']}` legacy_unknown=`{manifest_counts['legacy_unknown']}`",
+        f"- Candidate duplicates detected: `{duplicate_count}`",
     ]
     gap_map = {int(_as_int(item.get("rank"))): item for item in gap_targets}
     for rank in (1, 3, 5):
@@ -930,6 +957,8 @@ def _render_matrix(rows: list[JsonDict], *, leaderboard_summary: JsonDict, super
         "lineage_confidence",
         "run_manifest_status",
         "run_manifest_fingerprint",
+        "candidate_fingerprint",
+        "duplicate_of_label",
         "answer_drift",
         "page_drift",
         "hidden_g_trusted",
@@ -969,6 +998,8 @@ def _render_matrix(rows: list[JsonDict], *, leaderboard_summary: JsonDict, super
             str(row.get("lineage_confidence") or "-"),
             str(row.get("run_manifest_status") or "-"),
             _short_hash(row.get("run_manifest_fingerprint")),
+            _short_hash(row.get("candidate_fingerprint")),
+            str(row.get("duplicate_of_label") or "-"),
             _fmt_int(row.get("answer_drift")),
             _fmt_int(row.get("page_drift")),
             _fmt_small(row.get("hidden_g_trusted")),

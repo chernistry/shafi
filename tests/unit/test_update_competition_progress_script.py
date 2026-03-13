@@ -562,3 +562,126 @@ def test_hydrate_row_blocks_active_candidates_without_run_manifest() -> None:
 
     assert row["run_manifest_status"] == "missing_blocking"
     assert "manifest=missing_blocking" in str(row["notes"])
+
+
+def test_candidate_fingerprint_script_marks_duplicate_and_matrix_links_it(tmp_path: Path) -> None:
+    module = _load_update_competition_progress_module()
+    submission_a = tmp_path / "submission_a.json"
+    submission_b = tmp_path / "submission_b.json"
+    raw_results_a = tmp_path / "raw_results_a.json"
+    raw_results_b = tmp_path / "raw_results_b.json"
+    fingerprint_a = tmp_path / "fingerprint_a.json"
+    fingerprint_b = tmp_path / "fingerprint_b.json"
+
+    submission_payload = {
+        "architecture_summary": "test",
+        "answers": [
+            {
+                "question_id": "q1",
+                "answer": "Acme Ltd",
+                "telemetry": {"model_name": "gpt-4o-mini"},
+            },
+            {
+                "question_id": "q2",
+                "answer": True,
+                "telemetry": {"model_name": "gpt-4o-mini"},
+            },
+        ],
+    }
+    raw_results_payload = [
+        {
+            "telemetry": {
+                "question_id": "q1",
+                "answer_type": "name",
+                "context_page_ids": ["docA_1", "docA_2"],
+                "used_page_ids": ["docA_1"],
+                "model_embed": "kanon-2-embedder",
+                "model_rerank": "zerank-2",
+                "model_llm": "gpt-4o-mini",
+                "generation_mode": "strict",
+                "llm_provider": "openai",
+            }
+        },
+        {
+            "telemetry": {
+                "question_id": "q2",
+                "answer_type": "boolean",
+                "context_page_ids": ["docB_4"],
+                "used_page_ids": ["docB_4"],
+                "model_embed": "kanon-2-embedder",
+                "model_rerank": "zerank-2",
+                "model_llm": "gpt-4o-mini",
+                "generation_mode": "strict",
+                "llm_provider": "openai",
+            }
+        },
+    ]
+
+    submission_a.write_text(json.dumps(submission_payload), encoding="utf-8")
+    submission_b.write_text(json.dumps(submission_payload), encoding="utf-8")
+    raw_results_a.write_text(json.dumps(raw_results_payload), encoding="utf-8")
+    raw_results_b.write_text(json.dumps(raw_results_payload), encoding="utf-8")
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/candidate_fingerprint.py",
+            "--label",
+            "candidate_alpha",
+            "--submission-json",
+            str(submission_a),
+            "--raw-results-json",
+            str(raw_results_a),
+            "--out-json",
+            str(fingerprint_a),
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/candidate_fingerprint.py",
+            "--label",
+            "candidate_beta",
+            "--submission-json",
+            str(submission_b),
+            "--raw-results-json",
+            str(raw_results_b),
+            "--known-candidate-fingerprint-json",
+            str(fingerprint_a),
+            "--out-json",
+            str(fingerprint_b),
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    duplicate_payload = json.loads(fingerprint_b.read_text(encoding="utf-8"))["candidate_fingerprint"]
+    assert duplicate_payload["should_skip"] is True
+    assert duplicate_payload["duplicate_of_label"] == "candidate_alpha"
+    assert duplicate_payload["answers_hash"]
+    assert duplicate_payload["used_pages_hash"]
+    assert duplicate_payload["context_pages_hash"]
+    assert duplicate_payload["route_map_hash"]
+
+    row = module._hydrate_row(
+        spec={
+            "label": "candidate_beta",
+            "status": "candidate",
+            "candidate_fingerprint_json": str(fingerprint_b),
+        },
+        history_rows={},
+        global_cycle_index={},
+        cycle_index_cache={},
+        global_production_mimic=None,
+        supervisor_action=None,
+    )
+
+    assert row["candidate_fingerprint"] == duplicate_payload["fingerprint"]
+    assert row["duplicate_of_label"] == "candidate_alpha"
+    assert "duplicate_of=candidate_alpha" in str(row["notes"])
