@@ -64,6 +64,15 @@ The system was developed with support from [SDDRush](https://github.com/chernist
 
 ---
 
+## License
+
+This repository is source-available under the PolyForm Noncommercial License 1.0.0.
+
+Commercial use requires a separate written license from Alex Chernysh.
+See [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md) for contact details.
+
+---
+
 ## Quick Start
 
 ```bash
