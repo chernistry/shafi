@@ -248,6 +248,61 @@ def _discover_spec_paths(root: Path) -> list[Path]:
     return [path.resolve() for path in paths]
 
 
+def _discover_research_json_paths(root: Path) -> list[Path]:
+    research = root / ".sdd" / "researches"
+    if not research.exists():
+        return []
+    return sorted(path.resolve() for path in research.rglob("*.json"))
+
+
+def _slug_variants(label: str) -> set[str]:
+    text = label.strip()
+    if not text:
+        return set()
+    variants = {
+        text,
+        text.lower(),
+        text.replace("-", "_"),
+        text.replace("_", "-"),
+        text.lower().replace("-", "_"),
+        text.lower().replace("_", "-"),
+    }
+    if text.startswith("v10_local_"):
+        variants.add(text.removeprefix("v10_local_"))
+    if text.startswith("v10_prod_"):
+        variants.add(text.removeprefix("v10_prod_"))
+    return {variant for variant in variants if variant}
+
+
+def _auto_discover_production_mimic_path(
+    *,
+    root: Path,
+    research_json_paths: list[Path],
+    label: str,
+    candidate_label: str,
+) -> Path | None:
+    candidates = _slug_variants(label) | _slug_variants(candidate_label)
+    if not candidates:
+        return None
+    best_path: Path | None = None
+    best_score = -1
+    for path in research_json_paths:
+        name = path.name.lower()
+        if "production_mimic" not in name:
+            continue
+        score = 0
+        for candidate in candidates:
+            lowered = candidate.lower()
+            if lowered and lowered in name:
+                score = max(score, len(lowered))
+        if score == 0:
+            continue
+        if score > best_score:
+            best_score = score
+            best_path = path
+    return best_path if best_score > 0 else None
+
+
 def _load_lineage(path: Path | None) -> JsonDict | None:
     if path is None or not path.exists():
         return None
@@ -644,6 +699,7 @@ def _hydrate_row(
     global_cycle_index: dict[str, JsonDict],
     cycle_index_cache: dict[str, dict[str, JsonDict]],
     global_production_mimic: JsonDict | None,
+    research_json_paths: list[Path],
     supervisor_action: str | None,
 ) -> JsonDict:
     row: JsonDict = {
@@ -742,7 +798,15 @@ def _hydrate_row(
         row["exactness_resolved_qids"] = exactness_payload.get("resolved_incorrect_qids") or []
         row["exactness_unresolved_qids"] = exactness_payload.get("still_mismatched_incorrect_qids") or []
 
-    row_production_mimic = _load_production_mimic(_resolve_path(spec.get("production_mimic_json")))
+    row_production_mimic_path = _resolve_path(spec.get("production_mimic_json"))
+    if row_production_mimic_path is None:
+        row_production_mimic_path = _auto_discover_production_mimic_path(
+            root=ROOT,
+            research_json_paths=research_json_paths,
+            label=str(row.get("label") or ""),
+            candidate_label=candidate_label,
+        )
+    row_production_mimic = _load_production_mimic(row_production_mimic_path)
     effective_production_mimic = row_production_mimic
     if effective_production_mimic is None and global_production_mimic is not None and candidate_label and candidate_label == str(global_production_mimic.get("candidate_class") or candidate_label):
         effective_production_mimic = global_production_mimic
@@ -962,6 +1026,7 @@ def build_competition_matrix(
     cycle_index = _load_candidate_cycle_index(candidate_cycle_json)
     cycle_index_cache: dict[str, dict[str, JsonDict]] = {}
     production_mimic = _load_production_mimic(production_mimic_json)
+    research_json_paths = _discover_research_json_paths(ROOT)
     supervisor_action = _load_supervisor_action(supervisor_runs_json)
     specs = _load_specs(specs_path, root=ROOT)
     production_mimic_label = str(production_mimic.get("candidate_class") or "") if production_mimic is not None else ""
@@ -978,6 +1043,7 @@ def build_competition_matrix(
                 or str(spec.get("candidate_label") or "") == production_mimic_label
             )
             else None,
+            research_json_paths=research_json_paths,
             supervisor_action=supervisor_action
             if production_mimic is not None
             and (
