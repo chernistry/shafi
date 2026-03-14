@@ -13,7 +13,11 @@ from rag_challenge.config import get_settings
 from rag_challenge.core.classifier import QueryClassifier
 from rag_challenge.core.conflict_detector import ConflictDetector
 from rag_challenge.core.decomposer import QueryDecomposer
-from rag_challenge.core.local_page_reranker import score_pages_from_chunk_scores, select_top_pages_per_doc
+from rag_challenge.core.local_page_reranker import (
+    PageRerankScore,
+    score_pages_from_chunk_scores,
+    select_top_pages_per_doc,
+)
 from rag_challenge.core.premise_guard import check_query_premise
 from rag_challenge.core.strict_answerer import StrictAnswerer
 from rag_challenge.models import Citation, QueryComplexity, RankedChunk, RetrievedChunk, TelemetryPayload
@@ -67,6 +71,7 @@ _COMMENCEMENT_FIELD_RE = re.compile(
     r"\b(?:come(?:s)?\s+into\s+force|effective\s+date\s+is)\s+([^()]+?)(?=\s+\(cite:|$)",
     re.IGNORECASE,
 )
+_TOC_ENTRY_RE = re.compile(r"^(?P<label>[A-Za-z][A-Za-z0-9 ,()'/-]+?)\s+\.{2,}\s+(?P<page>\d+)\s*$")
 _SUPPORT_STOPWORDS = {
     "the",
     "a",
@@ -118,6 +123,17 @@ _MONTH_NAME_TO_NUMBER = {
     "october": 10,
     "november": 11,
     "december": 12,
+}
+_METADATA_TOC_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "citation_title": (re.compile(r"^title(?: and repeal)?$", re.IGNORECASE),),
+    "who_made": (re.compile(r"legislative authority", re.IGNORECASE),),
+    "enactment": (re.compile(r"date of enactment", re.IGNORECASE),),
+    "commencement": (re.compile(r"^commencement$", re.IGNORECASE),),
+    "administration": (
+        re.compile(r"administration of the law", re.IGNORECASE),
+        re.compile(r"administered by", re.IGNORECASE),
+    ),
+    "no_waiver": (re.compile(r"no waiver", re.IGNORECASE),),
 }
 _MONTH_NUMBER_TO_NAME = {value: key for key, value in _MONTH_NAME_TO_NUMBER.items()}
 _STRICT_REPAIR_HINT_TEMPLATE = load_prompt("llm/strict_repair_hint")
@@ -394,6 +410,56 @@ def _is_restriction_effectiveness_query(query: str) -> bool:
         and "actual knowledge" in q
         and ("effective" in q or "ineffective" in q)
     )
+
+
+def _is_boolean_admin_compare_query(query: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if "administ" not in q:
+        return False
+    if "same entity" in q or "same authority" in q or "same administrator" in q:
+        return True
+    if "that administers" in q:
+        return True
+    admin_phrase = "administered by" in q or "administers" in q or "administer" in q
+    if not admin_phrase:
+        return False
+    return any(marker in q for marker in (" both ", " each ", " respectively ", " same "))
+
+
+def _is_party_overlap_compare_query(query: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if not q:
+        return False
+    if any(
+        phrase in q
+        for phrase in (
+            "same legal",
+            "same parties",
+            "same party",
+            "same entities",
+            "main party common to both",
+            "main party to both",
+            "appeared in both",
+            "appears in both",
+            "appears as a main party in both",
+            "named as a main party in both",
+        )
+    ):
+        return True
+    has_party_subject = any(
+        token in q
+        for token in (
+            "party",
+            "parties",
+            "claimant",
+            "defendant",
+            "entity",
+            "individual",
+            "company",
+        )
+    )
+    has_overlap_signal = any(token in q for token in ("common", "same", "appeared", "appears", "named", "both"))
+    return has_party_subject and has_overlap_signal
 
 
 def _is_citation_title_query(query: str) -> bool:
@@ -1137,7 +1203,7 @@ class RAGPipelineBuilder:
 
         if (
             answer_type == "boolean"
-            and "administ" in re.sub(r"\s+", " ", str(state.get("query") or "")).strip().lower()
+            and _is_boolean_admin_compare_query(str(state.get("query") or ""))
             and not _is_broad_enumeration_query(state["query"])
         ):
             admin_refs = self._extract_title_refs_from_query(state["query"]) or self._support_question_refs(state["query"])
@@ -2040,7 +2106,7 @@ class RAGPipelineBuilder:
                 return self._boolean_year_seed_chunk_score(ref=ref, chunk=chunk)
 
             scorer = _score_year_seed
-        elif answer_type == "boolean" and "administ" in normalized_query:
+        elif answer_type == "boolean" and _is_boolean_admin_compare_query(query):
             def _score_admin_seed(chunk: RetrievedChunk) -> int:
                 return self._boolean_admin_seed_chunk_score(ref=ref, chunk=chunk)
 
@@ -2384,7 +2450,7 @@ class RAGPipelineBuilder:
                     retrieved=retrieved_all,
                     top_n=max(int(top_n), min(4, len(refs_for_judge_compare) * 2)),
                 )
-        if is_boolean and "administ" in normalized_query:
+        if is_boolean and _is_boolean_admin_compare_query(str(state.get("query") or "")):
             refs_for_admin_compare = self._support_question_refs(str(state.get("query") or ""))
             if len(refs_for_admin_compare) >= 2:
                 reranked = self._ensure_boolean_admin_compare_context(
@@ -2610,15 +2676,28 @@ class RAGPipelineBuilder:
 
         q_lower = re.sub(r"\s+", " ", query).strip().lower()
         normalized_answer_type = answer_type.strip().lower()
-        compare_like = normalized_answer_type in {"boolean", "name", "names", "date", "number"} and (
+        boolean_compare_like = normalized_answer_type == "boolean" and (
             len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
-            or len(cls._support_question_refs(query)) >= 2
-            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
             or _is_common_judge_compare_query(query)
             or "same year" in q_lower
             or "same party" in q_lower
             or "appeared in both" in q_lower
-            or "administ" in q_lower
+            or _is_boolean_admin_compare_query(query)
+        )
+        compare_like = (
+            boolean_compare_like
+            or (
+                normalized_answer_type in {"name", "names", "date", "number"}
+                and (
+                    len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
+                    or len(cls._support_question_refs(query)) >= 2
+                    or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+                    or _is_common_judge_compare_query(query)
+                    or "same year" in q_lower
+                    or "same party" in q_lower
+                    or "appeared in both" in q_lower
+                )
+            )
         )
         metadata_like = (
             cls._is_named_metadata_support_query(query)
@@ -2702,6 +2781,16 @@ class RAGPipelineBuilder:
         context_chunks: Sequence[RankedChunk],
         retrieved: Sequence[RetrievedChunk],
     ) -> tuple[list[RankedChunk], bool]:
+        if cls._is_title_cover_law_number_query(query=query, answer_type=answer_type):
+            rescued = cls._title_cover_law_number_context_chunks(query=query, retrieved=retrieved)
+            if rescued:
+                return rescued, True
+
+        if cls._is_title_cover_party_overlap_query(query=query, answer_type=answer_type):
+            rescued = cls._title_cover_party_overlap_context_chunks(query=query, retrieved=retrieved)
+            if rescued:
+                return rescued, True
+
         if answer_type.strip().lower() != "name":
             return list(context_chunks), False
 
@@ -3295,6 +3384,8 @@ class RAGPipelineBuilder:
         top_n: int,
     ) -> list[RankedChunk]:
         if top_n <= 0 or not retrieved:
+            return reranked[: max(0, int(top_n))]
+        if not _is_boolean_admin_compare_query(query):
             return reranked[: max(0, int(top_n))]
 
         refs = cls._paired_support_question_refs(query)
@@ -4542,6 +4633,36 @@ class RAGPipelineBuilder:
                 )
                 if isinstance(cleaned_obj, str) and cleaned_obj.strip():
                     answer = cleaned_obj.strip()
+            cleanup_named_made_by = getattr(self._generator, "cleanup_named_made_by_answer", None)
+            if callable(cleanup_named_made_by):
+                cleaned_obj = cleanup_named_made_by(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_registrar_authority = getattr(self._generator, "cleanup_named_registrar_authority_answer", None)
+            if callable(cleanup_named_registrar_authority):
+                cleaned_obj = cleanup_named_registrar_authority(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_translation_requirement = getattr(self._generator, "cleanup_named_translation_requirement_answer", None)
+            if callable(cleanup_named_translation_requirement):
+                cleaned_obj = cleanup_named_translation_requirement(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
             cleanup_account_effective_dates = getattr(self._generator, "cleanup_account_effective_dates_answer", None)
             if callable(cleanup_account_effective_dates):
                 cleaned_obj = cleanup_account_effective_dates(
@@ -5351,6 +5472,258 @@ class RAGPipelineBuilder:
             return True
         return bool(re.match(r"^[A-Z0-9\s'\"()/-]{10,}$", prefix) and len(prefix.split()) <= 12)
 
+    @staticmethod
+    def _page_text_looks_like_contents(text: str) -> bool:
+        if not text:
+            return False
+        normalized = re.sub(r"\s+", " ", text).strip().casefold()
+        if "contents" in normalized[:240]:
+            return True
+        line_matches = sum(1 for line in text.splitlines() if _TOC_ENTRY_RE.match(line.strip()))
+        if line_matches >= 3:
+            return True
+        return len(re.findall(r"\.{4,}\s+\d+\b", text)) >= 3
+
+    @staticmethod
+    def _extract_toc_entries(text: str) -> list[tuple[str, int]]:
+        entries: list[tuple[str, int]] = []
+        for line in text.splitlines():
+            match = _TOC_ENTRY_RE.match(line.strip())
+            if not match:
+                continue
+            entries.append((match.group("label").strip(), int(match.group("page"))))
+        return entries
+
+    @staticmethod
+    def _printed_page_number_from_text(text: str) -> int | None:
+        for line in text.splitlines()[:8]:
+            stripped = line.strip()
+            if stripped.isdigit():
+                return int(stripped)
+        return None
+
+    @classmethod
+    def _metadata_page_family_kind(cls, query: str) -> str:
+        q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if "citation title" in q:
+            return "citation_title"
+        if "who made" in q or "made by" in q:
+            return "who_made"
+        if "date of enactment" in q or ("enact" in q and ("when was" in q or "on what date" in q)):
+            return "enactment"
+        if "commencement" in q or "come into force" in q or "effective date" in q:
+            return "commencement"
+        if "who administers" in q or "administered by" in q:
+            return "administration"
+        if "waive" in q and "right" in q:
+            return "no_waiver"
+        return ""
+
+    @classmethod
+    def _metadata_page_family_signal_score(cls, *, family: str, text: str) -> int:
+        normalized = re.sub(r"\s+", " ", (text or "").strip()).casefold()
+        if not normalized:
+            return 0
+        if family == "citation_title":
+            return 40 if "may be cited as" in normalized or "title and repeal" in normalized else 0
+        if family == "who_made":
+            return 40 if "legislative authority" in normalized or "made by the ruler" in normalized else 0
+        if family == "enactment":
+            return 40 if "date of enactment" in normalized or "enacted on" in normalized or "enactment notice" in normalized else 0
+        if family == "commencement":
+            return 40 if "commencement" in normalized or "come into force" in normalized or "effective date" in normalized else 0
+        if family == "administration":
+            return cls._named_administration_clause_score(ref="", text=text)
+        if family == "no_waiver":
+            if "no waiver" in normalized:
+                return 40
+            if "waive" in normalized and "void" in normalized:
+                return 28
+            return 0
+        return 0
+
+    @classmethod
+    def _page_texts_by_doc_page(
+        cls,
+        *,
+        doc_id: str,
+        context_chunks: Sequence[RankedChunk],
+    ) -> dict[int, str]:
+        pages: dict[int, list[str]] = {}
+        target_doc_id = str(doc_id or "").strip()
+        if not target_doc_id:
+            return {}
+        for chunk in context_chunks:
+            chunk_doc_id = str(getattr(chunk, "doc_id", "") or chunk.chunk_id).strip()
+            if chunk_doc_id != target_doc_id:
+                continue
+            page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+            if page_num <= 0 or page_num >= 10_000:
+                continue
+            pages.setdefault(page_num, []).append(str(getattr(chunk, "text", "") or ""))
+        return {page_num: "\n".join(parts) for page_num, parts in pages.items()}
+
+    @classmethod
+    def _used_metadata_pages_include_contents(
+        cls,
+        *,
+        used_ids: Sequence[str],
+        context_chunks: Sequence[RankedChunk],
+    ) -> bool:
+        context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+        page_text_cache: dict[tuple[str, int], str] = {}
+        for raw_chunk_id in used_ids:
+            chunk = context_by_id.get(str(raw_chunk_id).strip())
+            if chunk is None:
+                continue
+            doc_id = str(getattr(chunk, "doc_id", "") or chunk.chunk_id).strip()
+            page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+            if not doc_id or page_num <= 0 or page_num >= 10_000:
+                continue
+            key = (doc_id, page_num)
+            if key not in page_text_cache:
+                page_text_cache[key] = cls._page_texts_by_doc_page(doc_id=doc_id, context_chunks=context_chunks).get(page_num, "")
+            if cls._page_text_looks_like_contents(page_text_cache[key]):
+                return True
+        return False
+
+    @classmethod
+    def _page_rows_include_contents(
+        cls,
+        *,
+        rows: Sequence[PageRerankScore],
+        context_chunks: Sequence[RankedChunk],
+    ) -> bool:
+        page_text_cache: dict[tuple[str, int], str] = {}
+        for row in rows:
+            doc_id, _, page_raw = row.page_id.rpartition("_")
+            if not doc_id or not page_raw.isdigit():
+                continue
+            page_num = int(page_raw)
+            key = (doc_id, page_num)
+            if key not in page_text_cache:
+                page_text_cache[key] = cls._page_texts_by_doc_page(doc_id=doc_id, context_chunks=context_chunks).get(page_num, "")
+            if cls._page_text_looks_like_contents(page_text_cache[key]):
+                return True
+        return False
+
+    @classmethod
+    def _metadata_toc_destination_page(
+        cls,
+        *,
+        family: str,
+        doc_id: str,
+        context_chunks: Sequence[RankedChunk],
+    ) -> int | None:
+        if family not in _METADATA_TOC_PATTERNS:
+            return None
+        page_texts = cls._page_texts_by_doc_page(doc_id=doc_id, context_chunks=context_chunks)
+        if not page_texts:
+            return None
+
+        toc_pages: list[int] = []
+        toc_entries: list[tuple[str, int]] = []
+        for page_num in sorted(page_texts):
+            text = page_texts[page_num]
+            if page_num > 5 and not toc_pages:
+                break
+            if cls._page_text_looks_like_contents(text):
+                toc_pages.append(page_num)
+                toc_entries.extend(cls._extract_toc_entries(text))
+                continue
+            if toc_pages:
+                break
+        if not toc_pages or not toc_entries:
+            return None
+
+        matched_entry: tuple[str, int] | None = None
+        for label, printed_page in toc_entries:
+            if any(pattern.search(label) for pattern in _METADATA_TOC_PATTERNS[family]):
+                matched_entry = (label, printed_page)
+                break
+        if matched_entry is None:
+            return None
+
+        _matched_label, printed_page = matched_entry
+        printed_anchor_page = min(
+            (
+                page_num
+                for page_num, text in page_texts.items()
+                if not cls._page_text_looks_like_contents(text) and cls._printed_page_number_from_text(text) == 1
+            ),
+            default=0,
+        )
+        if printed_anchor_page > 0:
+            target_page = printed_anchor_page + printed_page - 1
+        else:
+            last_toc_page = max(toc_pages)
+            target_page = last_toc_page + printed_page
+        best_page: int | None = None
+        best_score = 0
+        for candidate_page in (target_page, target_page + 1):
+            text = page_texts.get(candidate_page, "")
+            if not text:
+                continue
+            base_score = cls._metadata_page_family_signal_score(family=family, text=text)
+            if base_score <= 0:
+                continue
+            score = base_score
+            if candidate_page == target_page:
+                score += 4
+            elif candidate_page == target_page + 1:
+                score += 1
+            if score > best_score:
+                best_score = score
+                best_page = candidate_page
+
+        if best_page is not None and best_score > 0:
+            return best_page
+        return None
+
+    @classmethod
+    def _apply_metadata_toc_page_jump(
+        cls,
+        *,
+        query: str,
+        scored_pages: Sequence[PageRerankScore],
+        selected_pages: Sequence[PageRerankScore],
+        context_chunks: Sequence[RankedChunk],
+    ) -> list[PageRerankScore]:
+        family = cls._metadata_page_family_kind(query)
+        if family not in _METADATA_TOC_PATTERNS or not scored_pages or not selected_pages:
+            return list(selected_pages)
+
+        rows_by_id = {row.page_id: row for row in scored_pages}
+        selected_by_doc: dict[str, list[PageRerankScore]] = {}
+        for row in selected_pages:
+            doc_id, _, _page = row.page_id.rpartition("_")
+            if not doc_id:
+                continue
+            selected_by_doc.setdefault(doc_id, []).append(row)
+
+        adjusted: list[PageRerankScore] = []
+        for doc_id, doc_rows in selected_by_doc.items():
+            destination_page = cls._metadata_toc_destination_page(
+                family=family,
+                doc_id=doc_id,
+                context_chunks=context_chunks,
+            )
+            if destination_page is None:
+                adjusted.extend(doc_rows)
+                continue
+            replacement: list[PageRerankScore] = []
+            cover_row = rows_by_id.get(f"{doc_id}_1")
+            if cover_row is not None:
+                replacement.append(cover_row)
+            destination_row = rows_by_id.get(f"{doc_id}_{destination_page}")
+            if destination_row is not None and destination_row.page_id not in {row.page_id for row in replacement}:
+                replacement.append(destination_row)
+            if not replacement:
+                adjusted.extend(doc_rows)
+                continue
+            adjusted.extend(replacement[:2])
+        return adjusted or list(selected_pages)
+
     @classmethod
     def _expand_page_spanning_support_chunk_ids(
         cls,
@@ -6150,6 +6523,8 @@ class RAGPipelineBuilder:
             doc_title = cls._normalize_support_text(str(getattr(chunk, "doc_title", "") or "")).casefold()
             doc_summary = cls._normalize_support_text(str(getattr(chunk, "doc_summary", "") or "")).casefold()
             text = cls._normalize_support_text(str(getattr(chunk, "text", "") or "")).casefold()
+            chunk_id = str(getattr(chunk, "chunk_id", "") or "")
+            page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
             score = 0
             if normalized_title and normalized_title in doc_title:
                 score += 300
@@ -6158,8 +6533,18 @@ class RAGPipelineBuilder:
             if normalized_title and normalized_title in text:
                 score += 60
             text_raw = str(getattr(chunk, "text", "") or "")
+            if page_num == 1:
+                score += 220
+            elif page_num == 2:
+                score += 40
+            if "title-anchor" in chunk_id or "caption-anchor" in chunk_id:
+                score += 180
+            elif "page2-anchor" in chunk_id:
+                score += 60
             if "may be cited as" in text_raw.casefold() or "title:" in text_raw.casefold():
                 score += 80
+            if any(marker in text_raw.casefold() for marker in ("claimant", "defendant", "respondent", "appellant", "applicant")):
+                score += 40
             if score > best_score or (score == best_score and idx == 0):
                 best_score = score
                 best_chunk_id = chunk.chunk_id
@@ -6167,6 +6552,157 @@ class RAGPipelineBuilder:
         if best_score <= 0:
             return ""
         return best_chunk_id
+
+    @classmethod
+    def _best_retrieved_chunk_for_doc_page(
+        cls,
+        *,
+        doc_id: str | None,
+        page_num: int,
+        retrieved: Sequence[RetrievedChunk],
+    ) -> RetrievedChunk | None:
+        if page_num <= 0:
+            return None
+
+        target_doc_id = str(doc_id or "").strip()
+        best_raw: RetrievedChunk | None = None
+        best_key: tuple[int, float, int] | None = None
+        for idx, raw in enumerate(retrieved):
+            raw_doc_id = str(getattr(raw, "doc_id", "") or raw.chunk_id).strip()
+            if target_doc_id and raw_doc_id != target_doc_id:
+                continue
+            if cls._page_num(str(getattr(raw, "section_path", "") or "")) != page_num:
+                continue
+            chunk_id = str(getattr(raw, "chunk_id", "") or "")
+            text = cls._normalize_support_text(str(getattr(raw, "text", "") or "")).casefold()
+            score = 0
+            if page_num == 1:
+                score += 220
+                if "title-anchor" in chunk_id or "caption-anchor" in chunk_id:
+                    score += 180
+                if any(marker in text for marker in ("law no.", "claimant", "defendant", "respondent", "appellant", "applicant")):
+                    score += 60
+                if "may be cited as" in text or "judgment" in text or "orders" in text:
+                    score += 40
+            elif page_num == 2 and "page2-anchor" in chunk_id:
+                score += 120
+            candidate = (score, float(getattr(raw, "score", 0.0) or 0.0), -idx)
+            if best_key is None or candidate > best_key:
+                best_key = candidate
+                best_raw = raw
+        return best_raw
+
+    @classmethod
+    def _is_title_cover_law_number_query(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+    ) -> bool:
+        if answer_type.strip().lower() != "number":
+            return False
+        q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if not q:
+            return False
+        if not any(term in q for term in ("official law number", "official difc law number", "law number", "law no")):
+            return False
+        return any(term in q for term in ("title page", "cover page", "title/cover page"))
+
+    @classmethod
+    def _is_title_cover_party_overlap_query(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+    ) -> bool:
+        if answer_type.strip().lower() != "boolean":
+            return False
+        q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if not q or not any(term in q for term in ("title page", "cover page", "title/cover page")):
+            return False
+        return _is_party_overlap_compare_query(q)
+
+    @classmethod
+    def _title_cover_law_number_context_chunks(
+        cls,
+        *,
+        query: str,
+        retrieved: Sequence[RetrievedChunk],
+    ) -> list[RankedChunk]:
+        rescued: list[RankedChunk] = []
+        seen_doc_ids: set[str] = set()
+        for ref in cls._support_question_refs(query)[:4]:
+            matched = cls._matched_doc_chunks_for_ref(ref=ref, retrieved=retrieved)
+            doc_id = str(matched[0].doc_id or "").strip() if matched else ""
+            best_raw = cls._best_retrieved_chunk_for_doc_page(
+                doc_id=doc_id or None,
+                page_num=1,
+                retrieved=matched or retrieved,
+            )
+            if best_raw is None:
+                continue
+            best_doc_id = str(getattr(best_raw, "doc_id", "") or best_raw.chunk_id).strip()
+            if best_doc_id in seen_doc_ids:
+                continue
+            seen_doc_ids.add(best_doc_id)
+            rescued.append(cls._raw_to_ranked(best_raw))
+        if rescued:
+            return rescued
+        fallback = cls._best_retrieved_chunk_for_doc_page(doc_id=None, page_num=1, retrieved=retrieved)
+        return [cls._raw_to_ranked(fallback)] if fallback is not None else []
+
+    @classmethod
+    def _title_cover_party_overlap_context_chunks(
+        cls,
+        *,
+        query: str,
+        retrieved: Sequence[RetrievedChunk],
+    ) -> list[RankedChunk]:
+        refs = cls._paired_support_question_refs(query)
+        if len(refs) < 2:
+            case_refs: list[str] = []
+            seen_case_refs: set[str] = set()
+            for prefix, number, year in _DIFC_CASE_ID_RE.findall(query or ""):
+                ref = f"{prefix.upper()} {int(number):03d}/{year}"
+                if ref in seen_case_refs:
+                    continue
+                seen_case_refs.add(ref)
+                case_refs.append(ref)
+            refs = case_refs
+        if len(refs) < 2:
+            return []
+
+        rescued: list[RankedChunk] = []
+        seen_chunk_ids: set[str] = set()
+        selected_refs = refs[:4]
+        for ref in selected_refs:
+            best_by_doc: dict[str, tuple[tuple[int, float, int], RetrievedChunk]] = {}
+            for idx, raw in enumerate(retrieved):
+                if cls._page_num(str(getattr(raw, "section_path", "") or "")) != 1:
+                    continue
+                identity_score = cls._case_ref_identity_score(ref=ref, chunk=raw)
+                if identity_score <= 0:
+                    continue
+                chunk_id = str(getattr(raw, "chunk_id", "") or "")
+                text = cls._normalize_support_text(str(getattr(raw, "text", "") or "")).casefold()
+                bonus = 0
+                if "title-anchor" in chunk_id or "caption-anchor" in chunk_id:
+                    bonus += 180
+                if any(marker in text for marker in ("claimant", "defendant", "respondent", "appellant", "applicant")):
+                    bonus += 60
+                candidate = (identity_score + bonus, float(getattr(raw, "score", 0.0) or 0.0), -idx)
+                doc_id = str(getattr(raw, "doc_id", "") or raw.chunk_id).strip()
+                current = best_by_doc.get(doc_id)
+                if current is None or candidate > current[0]:
+                    best_by_doc[doc_id] = (candidate, raw)
+            if not best_by_doc:
+                return []
+            for _key, best_raw in sorted(best_by_doc.values(), key=lambda item: item[0], reverse=True)[:2]:
+                if best_raw.chunk_id in seen_chunk_ids:
+                    continue
+                rescued.append(cls._raw_to_ranked(best_raw))
+                seen_chunk_ids.add(best_raw.chunk_id)
+        return rescued
 
     @classmethod
     def _doc_ids_for_chunk_ids(
@@ -6321,7 +6857,7 @@ class RAGPipelineBuilder:
             or "same year" in q_lower
             or "same party" in q_lower
             or "appeared in both" in q_lower
-            or "administ" in q_lower
+            or _is_boolean_admin_compare_query(query)
         )
         metadata_like = (
             cls._is_named_metadata_support_query(query)
@@ -6329,14 +6865,22 @@ class RAGPipelineBuilder:
             or _is_named_commencement_query(query)
             or _is_named_amendment_query(query)
         )
-        if cls._named_metadata_requires_support_union(query):
+        metadata_page_family_query = cls._is_metadata_page_family_query(query)
+        metadata_used_contents = False
+        if cls._named_metadata_requires_support_union(query) or metadata_page_family_query:
             context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
             used_pages = {
                 cls._page_num(str(getattr(context_by_id.get(chunk_id), "section_path", "") or ""))
                 for chunk_id in ordered_used_ids
                 if chunk_id in context_by_id
             }
-            if len(used_pages) >= 2:
+            metadata_used_contents = cls._used_metadata_pages_include_contents(
+                used_ids=ordered_used_ids,
+                context_chunks=context_chunks,
+            )
+            if cls._named_metadata_requires_support_union(query) and len(used_pages) >= 2:
+                return ordered_used_ids
+            if metadata_page_family_query and len(used_pages) == 2 and not metadata_used_contents:
                 return ordered_used_ids
         if not (compare_like or metadata_like):
             return ordered_used_ids
@@ -6379,8 +6923,36 @@ class RAGPipelineBuilder:
         selected_pages = select_top_pages_per_doc(
             scored_pages=scored_pages,
             doc_order=doc_order,
-            per_doc_pages=1,
+            per_doc_pages=2 if metadata_page_family_query else 1,
         )
+        if metadata_page_family_query and metadata_used_contents and selected_pages:
+            rows_by_id = {row.page_id: row for row in scored_pages}
+            original_pages: list[PageRerankScore] = []
+            seen_page_ids: set[str] = set()
+            context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+            for chunk_id in ordered_used_ids:
+                chunk = context_by_id.get(chunk_id)
+                if chunk is None:
+                    continue
+                doc_id = str(getattr(chunk, "doc_id", "") or chunk.chunk_id).strip()
+                page_num = cls._page_num(str(getattr(chunk, "section_path", "") or ""))
+                if not doc_id or page_num <= 0 or page_num >= 10_000:
+                    continue
+                page_id = f"{doc_id}_{page_num}"
+                row = rows_by_id.get(page_id)
+                if row is None or page_id in seen_page_ids:
+                    continue
+                seen_page_ids.add(page_id)
+                original_pages.append(row)
+            if original_pages and not cls._page_rows_include_contents(rows=selected_pages, context_chunks=context_chunks):
+                selected_pages = original_pages[:2]
+        if metadata_page_family_query and selected_pages:
+            selected_pages = cls._apply_metadata_toc_page_jump(
+                query=query,
+                scored_pages=scored_pages,
+                selected_pages=selected_pages,
+                context_chunks=context_chunks,
+            )
         if not selected_pages:
             return ordered_used_ids
 
@@ -6458,6 +7030,31 @@ class RAGPipelineBuilder:
         return atoms >= 2 or (atoms >= 1 and multiple_named_refs)
 
     @classmethod
+    def _is_metadata_page_family_query(cls, query: str) -> bool:
+        q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if not cls._is_named_metadata_support_query(query):
+            return False
+        if cls._named_metadata_requires_support_union(query):
+            return False
+        return any(
+            term in q
+            for term in (
+                "citation title",
+                "official law number",
+                "official difc law number",
+                "who made",
+                "made by",
+                "date of enactment",
+                "when was",
+                "on what date",
+                "commencement",
+                "come into force",
+                "who administers",
+                "administered by",
+            )
+        )
+
+    @classmethod
     def _apply_support_shape_policy(
         cls,
         *,
@@ -6516,13 +7113,17 @@ class RAGPipelineBuilder:
             if len(case_refs) >= 2:
                 compare_refs = case_refs
         compare_shape = len(compare_refs) >= 2 and kind in {"boolean", "name", "number", "date"} and (
-            kind == "boolean"
+            (
+                kind == "boolean"
+                and (
+                    "same year" in q_lower
+                    or _is_boolean_admin_compare_query(query)
+                    or "same party" in q_lower
+                    or "appeared in both" in q_lower
+                    or ("judge" in q_lower and "both" in q_lower)
+                )
+            )
             or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
-            or "same year" in q_lower
-            or "administ" in q_lower
-            or "same party" in q_lower
-            or "appeared in both" in q_lower
-            or ("judge" in q_lower and "both" in q_lower)
         )
         compare_doc_ids: set[str] = set()
         if compare_shape:
@@ -6547,8 +7148,9 @@ class RAGPipelineBuilder:
                 _push(chunk_id)
 
         metadata_query = cls._named_metadata_requires_support_union(query)
+        metadata_page_family_query = cls._is_metadata_page_family_query(query)
         metadata_doc_ids: set[str] = set()
-        if metadata_query:
+        if metadata_query or metadata_page_family_query:
             for ref in cls._support_question_refs(query)[:4]:
                 title_chunk_id = cls._best_title_support_chunk_id(title=ref, context_chunks=context_chunks)
                 if not title_chunk_id:
@@ -6557,11 +7159,12 @@ class RAGPipelineBuilder:
                 metadata_doc_ids.update(
                     cls._doc_ids_for_chunk_ids(chunk_ids=[title_chunk_id], context_chunks=context_chunks)
                 )
-            for chunk_id in cls._context_family_chunk_ids(
-                doc_ids=metadata_doc_ids,
-                context_chunks=context_chunks,
-            ):
-                _push(chunk_id)
+            if metadata_query:
+                for chunk_id in cls._context_family_chunk_ids(
+                    doc_ids=metadata_doc_ids,
+                    context_chunks=context_chunks,
+                ):
+                    _push(chunk_id)
 
         costs_query = kind == "free_text" and _is_case_outcome_query(query) and (
             "cost" in q_lower or "final ruling" in q_lower
@@ -6811,7 +7414,7 @@ class RAGPipelineBuilder:
         if "same year" in query_lower:
             def scorer(ref: str, chunk: RankedChunk) -> int:
                 return cls._boolean_year_seed_chunk_score(ref=ref, chunk=chunk)
-        elif "administ" in query_lower:
+        elif _is_boolean_admin_compare_query(query):
             def scorer(ref: str, chunk: RankedChunk) -> int:
                 clause_score = cls._named_administration_clause_score(
                     ref=ref,

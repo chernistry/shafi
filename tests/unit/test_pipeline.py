@@ -106,6 +106,26 @@ def test_extract_title_refs_from_query_strips_administers_lead_tokens(mock_setti
     assert refs == ["Intellectual Property Law", "Trust Law"]
 
 
+def test_is_boolean_admin_compare_query_requires_real_compare_cue() -> None:
+    from rag_challenge.core.pipeline import _is_boolean_admin_compare_query
+
+    assert (
+        _is_boolean_admin_compare_query(
+            "Is the Intellectual Property Law No. 4 of 2019 administered by the same entity "
+            "that administers the Trust Law No. 4 of 2018?"
+        )
+        is True
+    )
+    assert (
+        _is_boolean_admin_compare_query(
+            "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct business "
+            "in or from the DIFC without being incorporated, registered, or continued under a Prescribed Law or "
+            "other Legislation administered by the Registrar?"
+        )
+        is False
+    )
+
+
 @pytest.fixture
 def mock_settings():
     settings = SimpleNamespace(
@@ -905,7 +925,7 @@ def test_apply_support_shape_policy_keeps_title_page_for_multi_atom_named_metada
     assert flags == []
 
 
-def test_apply_support_shape_policy_does_not_inflate_single_atom_named_metadata_query() -> None:
+def test_apply_support_shape_policy_adds_title_page_for_single_atom_named_metadata_query() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
     context_chunks = [
@@ -942,7 +962,7 @@ def test_apply_support_shape_policy_does_not_inflate_single_atom_named_metadata_
         support_ids=["law:maker"],
     )
 
-    assert shaped_ids == ["law:maker"]
+    assert shaped_ids == ["law:maker", "law:title"]
     assert flags == []
 
 
@@ -1310,6 +1330,200 @@ def test_apply_support_shape_policy_prunes_nonrequested_title_page_noise_when_ti
 
     assert shaped_ids == ["law:title"]
     assert flags == ["explicit_page_reference_pruned"]
+
+
+def test_augment_strict_context_chunks_rescues_cover_page_for_official_law_number() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+    from rag_challenge.core.strict_answerer import StrictAnswerer
+
+    cover_raw = _make_retrieved_chunk(
+        chunk_id="trust:title-anchor",
+        doc_id="trust-law",
+        doc_title="Trust Law",
+        section_path="page:1",
+        text="TRUST LAW DIFC LAW NO. 4 OF 2018 Consolidated Version No. 3 (March 2024).",
+        score=0.82,
+    )
+    repeal_raw = _make_retrieved_chunk(
+        chunk_id="trust:page4",
+        doc_id="trust-law",
+        doc_title="Trust Law",
+        section_path="page:4",
+        text=(
+            "This Law repeals and replaces the Trust Law 2005 (DIFC Law No. 11 of 2005) "
+            "and references Law No. 5 of 2006."
+        ),
+        score=0.97,
+    )
+    context_chunks = [
+        RankedChunk(
+            chunk_id="trust:page4",
+            doc_id="trust-law",
+            doc_title="Trust Law",
+            doc_type=DocType.STATUTE,
+            section_path="page:4",
+            text=repeal_raw.text,
+            retrieval_score=repeal_raw.score,
+            rerank_score=repeal_raw.score,
+            doc_summary="",
+        )
+    ]
+
+    augmented, changed = RAGPipelineBuilder._augment_strict_context_chunks(
+        query="What official law number is stated on the cover page of the DIFC Trust Law?",
+        answer_type="number",
+        context_chunks=context_chunks,
+        retrieved=[repeal_raw, cover_raw],
+    )
+
+    assert changed is True
+    assert [chunk.chunk_id for chunk in augmented] == ["trust:title-anchor"]
+
+    result = StrictAnswerer().answer(
+        answer_type="number",
+        query="What official law number is stated on the cover page of the DIFC Trust Law?",
+        context_chunks=augmented,
+        max_chunks=4,
+    )
+
+    assert result is not None
+    assert result.answer == "4"
+    assert result.cited_chunk_ids == ["trust:title-anchor"]
+
+
+def test_augment_strict_context_chunks_rescues_title_pages_for_party_overlap_compare() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+    from rag_challenge.core.strict_answerer import StrictAnswerer
+
+    case_a_title = _make_retrieved_chunk(
+        chunk_id="case-a:caption-anchor",
+        doc_id="case-a",
+        doc_title="CA 005/2025 Coinmena v Foloosi",
+        section_path="page:1",
+        text="CA 005/2025 Coinmena Claimant and Foloosi Defendant.",
+        score=0.84,
+    )
+    case_a_late = _make_retrieved_chunk(
+        chunk_id="case-a:page8",
+        doc_id="case-a",
+        doc_title="CA 005/2025 Coinmena v Foloosi",
+        section_path="page:8",
+        text="Later costs discussion with no caption parties.",
+        score=0.99,
+    )
+    case_b_title = _make_retrieved_chunk(
+        chunk_id="case-b:title-anchor",
+        doc_id="case-b",
+        doc_title="CFI 067/2025 Omar Ben Hallam v Natixis",
+        section_path="page:1",
+        text="CFI 067/2025 Omar Ben Hallam Claimant and Natixis Defendant.",
+        score=0.86,
+    )
+    case_b_late = _make_retrieved_chunk(
+        chunk_id="case-b:page4",
+        doc_id="case-b",
+        doc_title="CFI 067/2025 Omar Ben Hallam v Natixis",
+        section_path="page:4",
+        text="Later analysis page without the full title-page party list.",
+        score=0.98,
+    )
+    context_chunks = [
+        RankedChunk(
+            chunk_id="case-a:page8",
+            doc_id="case-a",
+            doc_title=case_a_late.doc_title,
+            doc_type=DocType.CASE_LAW,
+            section_path="page:8",
+            text=case_a_late.text,
+            retrieval_score=case_a_late.score,
+            rerank_score=case_a_late.score,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="case-b:page4",
+            doc_id="case-b",
+            doc_title=case_b_late.doc_title,
+            doc_type=DocType.CASE_LAW,
+            section_path="page:4",
+            text=case_b_late.text,
+            retrieval_score=case_b_late.score,
+            rerank_score=case_b_late.score,
+            doc_summary="",
+        ),
+    ]
+
+    query = (
+        "From the title pages of all documents in case CA 005/2025 and case CFI 067/2025, "
+        "identify whether any individual or company is named as a main party in both cases."
+    )
+    augmented, changed = RAGPipelineBuilder._augment_strict_context_chunks(
+        query=query,
+        answer_type="boolean",
+        context_chunks=context_chunks,
+        retrieved=[case_a_late, case_b_late, case_a_title, case_b_title],
+    )
+
+    assert changed is True
+    assert [chunk.chunk_id for chunk in augmented] == ["case-a:caption-anchor", "case-b:title-anchor"]
+
+    result = StrictAnswerer().answer(
+        answer_type="boolean",
+        query=query,
+        context_chunks=augmented,
+        max_chunks=4,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["case-a:caption-anchor", "case-b:title-anchor"]
+
+
+def test_augment_strict_context_chunks_does_not_rescue_party_overlap_without_both_cases() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    case_a_late = _make_retrieved_chunk(
+        chunk_id="case-a:page8",
+        doc_id="case-a",
+        doc_title="CA 005/2025 Example",
+        section_path="page:8",
+        text="Later appeal reasoning with no title-page party names.",
+        score=0.99,
+    )
+    case_b_title = _make_retrieved_chunk(
+        chunk_id="case-b:caption-anchor",
+        doc_id="case-b",
+        doc_title="CFI 067/2025 Coinmena v Foloosi",
+        section_path="page:1",
+        text="CFI 067/2025 Coinmena Claimant and Foloosi Defendant.",
+        score=0.86,
+    )
+    context_chunks = [
+        RankedChunk(
+            chunk_id="case-a:page8",
+            doc_id="case-a",
+            doc_title=case_a_late.doc_title,
+            doc_type=DocType.CASE_LAW,
+            section_path="page:8",
+            text=case_a_late.text,
+            retrieval_score=case_a_late.score,
+            rerank_score=case_a_late.score,
+            doc_summary="",
+        ),
+    ]
+
+    query = (
+        "From the title pages of all documents in case CA 005/2025 and case CFI 067/2025, "
+        "identify whether any individual or company is named as a main party in both cases."
+    )
+    augmented, changed = RAGPipelineBuilder._augment_strict_context_chunks(
+        query=query,
+        answer_type="boolean",
+        context_chunks=context_chunks,
+        retrieved=[case_a_late, case_b_title],
+    )
+
+    assert changed is False
+    assert [chunk.chunk_id for chunk in augmented] == ["case-a:page8"]
 
 
 def test_expand_page_spanning_support_chunk_ids_includes_adjacent_continuation_page() -> None:
@@ -3970,6 +4184,67 @@ def test_ensure_boolean_admin_compare_context_prefers_one_admin_page_per_ref(moc
     assert [chunk.chunk_id for chunk in filtered] == ["ip:admin", "trust:admin"]
 
 
+def test_ensure_boolean_admin_compare_context_skips_single_law_registrar_reference(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+
+    query = (
+        "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct business "
+        "in or from the DIFC without being incorporated, registered, or continued under a Prescribed Law or "
+        "other Legislation administered by the Registrar?"
+    )
+    operating_title = _make_retrieved_chunk(
+        chunk_id="operating:title",
+        doc_id="operating",
+        doc_title="OPERATING LAW 2018",
+        section_path="page:4",
+        text='This Law may be cited as the "Operating Law 2018".',
+        score=0.93,
+    )
+    operating_article = _make_retrieved_chunk(
+        chunk_id="operating:article8",
+        doc_id="operating",
+        doc_title="OPERATING LAW 2018",
+        section_path="page:8",
+        text=(
+            "No person shall operate or conduct business in or from the DIFC unless that person is incorporated, "
+            "registered or continued under a Prescribed Law."
+        ),
+        score=0.92,
+    )
+    surrogate_general = _make_retrieved_chunk(
+        chunk_id="general:admin",
+        doc_id="general-partnership",
+        doc_title="GENERAL PARTNERSHIP LAW",
+        section_path="page:4",
+        text="Administration of this Law. This Law is administered by the Registrar.",
+        score=0.91,
+    )
+    surrogate_llp = _make_retrieved_chunk(
+        chunk_id="llp:admin",
+        doc_id="limited-liability-partnership",
+        doc_title="LIMITED LIABILITY PARTNERSHIP LAW",
+        section_path="page:4",
+        text="Administration of this Law. This Law is administered by the Registrar.",
+        score=0.90,
+    )
+
+    reranked = [
+        RAGPipelineBuilder._raw_to_ranked(operating_article),
+        RAGPipelineBuilder._raw_to_ranked(operating_title),
+    ]
+
+    filtered = RAGPipelineBuilder._ensure_boolean_admin_compare_context(
+        query=query,
+        reranked=reranked,
+        retrieved=[operating_article, surrogate_general, surrogate_llp, operating_title],
+        top_n=2,
+    )
+
+    assert [chunk.chunk_id for chunk in filtered] == ["operating:article8", "operating:title"]
+
+
 def test_ensure_page_one_context_matches_exact_page_one_only(mock_settings):
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
@@ -4190,6 +4465,277 @@ def test_rerank_support_pages_within_selected_docs_prefers_page_one_for_named_me
     )
 
     assert reranked_ids == ["companies:title"]
+
+
+def test_rerank_support_pages_within_selected_docs_keeps_page_family_for_single_atom_metadata(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="ppl:title",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text='This Law may be cited as the "Personal Property Law 2005".',
+            retrieval_score=0.82,
+            rerank_score=0.83,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ppl:maker",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text="This Law is made by the Ruler of Dubai.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ppl:noise",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:18",
+            text="Definitions and schedules unrelated to legislative authority.",
+            retrieval_score=0.75,
+            rerank_score=0.74,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="According to Article 2 of the DIFC Personal Property Law 2005, who made this Law?",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        used_ids=["ppl:maker", "ppl:title", "ppl:noise"],
+    )
+
+    assert reranked_ids == ["ppl:title", "ppl:maker"]
+
+
+def test_rerank_support_pages_within_selected_docs_toc_jump_replaces_contents_page(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:cover",
+            doc_id="law",
+            doc_title="Law on the Application of Civil and Commercial Laws in the DIFC 2004",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="LAW ON THE APPLICATION OF CIVIL AND COMMERCIAL LAWS IN THE DIFC\nDIFC LAW NO. 3 OF 2004",
+            retrieval_score=0.88,
+            rerank_score=0.87,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:contents",
+            doc_id="law",
+            doc_title="Law on the Application of Civil and Commercial Laws in the DIFC 2004",
+            doc_type=DocType.STATUTE,
+            section_path="page:2",
+            text=(
+                "CONTENTS\n"
+                "Title ................................ 1\n"
+                "Legislative Authority ................................ 1\n"
+                "Date of enactment ................................ 1\n"
+                "Commencement ................................ 1\n"
+            ),
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:maker",
+            doc_id="law",
+            doc_title="Law on the Application of Civil and Commercial Laws in the DIFC 2004",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                "1\n"
+                "Title\n"
+                "This Law may be cited as the Law on the Application of Civil and Commercial Laws in the DIFC 2004.\n"
+                "Legislative Authority\n"
+                "This Law is made by the Ruler of Dubai."
+            ),
+            retrieval_score=0.79,
+            rerank_score=0.78,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="According to Article 2 of the DIFC Personal Property Law 2005, who made this Law?",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        used_ids=["law:cover", "law:contents"],
+    )
+
+    assert reranked_ids == ["law:cover", "law:maker"]
+
+
+def test_rerank_support_pages_within_selected_docs_toc_jump_handles_contents_continuation(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="employment:cover",
+            doc_id="employment",
+            doc_title="Employment Law 2019",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="EMPLOYMENT LAW\nDIFC LAW NO. 2 OF 2019",
+            retrieval_score=0.87,
+            rerank_score=0.86,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="employment:contents1",
+            doc_id="employment",
+            doc_title="Employment Law 2019",
+            doc_type=DocType.STATUTE,
+            section_path="page:2",
+            text=(
+                "CONTENTS\n"
+                "Title and repeal ................................ 1\n"
+                "Date of enactment ................................ 2\n"
+                "Commencement ................................ 2\n"
+                "Administration of the Law ................................ 2\n"
+            ),
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="employment:contents2",
+            doc_id="employment",
+            doc_title="Employment Law 2019",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                "47. Lighting ................................ 17\n"
+                "48. Cleanliness ................................ 17\n"
+                "49. Room dimensions and space ................................ 18\n"
+            ),
+            retrieval_score=0.76,
+            rerank_score=0.76,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="employment:enactment",
+            doc_id="employment",
+            doc_title="Employment Law 2019",
+            doc_type=DocType.STATUTE,
+            section_path="page:5",
+            text=(
+                "2\n"
+                "Date of enactment\n"
+                "This Law is enacted on the date specified in the Enactment Notice.\n"
+                "Commencement\n"
+                "This Law comes into force on the date ninety (90) days following the date specified in the Enactment Notice."
+            ),
+            retrieval_score=0.74,
+            rerank_score=0.73,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="employment:admin",
+            doc_id="employment",
+            doc_title="Employment Law 2019",
+            doc_type=DocType.STATUTE,
+            section_path="page:6",
+            text="3\nAdministration of the Law\nThis Law and any Regulations made under it shall be administered by the DIFCA.",
+            retrieval_score=0.71,
+            rerank_score=0.70,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="Who administers this Law?",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        used_ids=["employment:cover", "employment:contents1"],
+    )
+
+    assert reranked_ids == ["employment:cover", "employment:admin"]
+
+
+def test_rerank_support_pages_within_selected_docs_toc_jump_requires_destination_signal(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="personal:contents",
+            doc_id="personal",
+            doc_title="PERSONAL PROPERTY LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:2",
+            text=(
+                "CONTENTS\n"
+                "Legislative authority ................................ 10\n"
+                "Date of enactment ................................ 16\n"
+            ),
+            retrieval_score=0.51,
+            rerank_score=0.50,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="personal:maker",
+            doc_id="personal",
+            doc_title="PERSONAL PROPERTY LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                "1\n"
+                "Title\n"
+                "This Law may be cited as the Personal Property Law 2005.\n"
+                "Legislative authority\n"
+                "This Law is made by the Ruler of Dubai."
+            ),
+            retrieval_score=0.89,
+            rerank_score=0.88,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="personal:page12",
+            doc_id="personal",
+            doc_title="PERSONAL PROPERTY LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:12",
+            text="10\nSecurity interests may be enforced against the relevant investment intermediary.",
+            retrieval_score=0.93,
+            rerank_score=0.92,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="personal:page18",
+            doc_id="personal",
+            doc_title="PERSONAL PROPERTY LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:18",
+            text="16\nSchedule 1 contains rules of interpretation for this Law.",
+            retrieval_score=0.91,
+            rerank_score=0.90,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="According to Article 2 of the DIFC Personal Property Law 2005, who made this Law?",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        used_ids=["personal:contents", "personal:maker"],
+    )
+
+    assert reranked_ids == ["personal:contents", "personal:maker"]
 
 
 def test_rerank_support_pages_within_selected_docs_picks_one_page_per_doc_for_compare(mock_settings):

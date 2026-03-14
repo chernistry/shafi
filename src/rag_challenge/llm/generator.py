@@ -478,8 +478,24 @@ class RAGGenerator:
                 doc_refs=doc_refs,
             )
 
+        if self._is_named_made_by_question(question):
+            return self.cleanup_named_made_by_answer(
+                "",
+                question=question,
+                chunks=chunks,
+                doc_refs=doc_refs,
+            )
+
         if "administ" in q and not self._is_broad_enumeration_question(question):
             return self.cleanup_named_administration_answer(
+                "",
+                question=question,
+                chunks=chunks,
+                doc_refs=doc_refs,
+            )
+
+        if self._is_named_registrar_authority_question(question):
+            return self.cleanup_named_registrar_authority_answer(
                 "",
                 question=question,
                 chunks=chunks,
@@ -496,6 +512,14 @@ class RAGGenerator:
 
         if self._is_named_liability_question(question):
             return self.cleanup_named_liability_answer(
+                "",
+                question=question,
+                chunks=chunks,
+                doc_refs=doc_refs,
+            )
+
+        if self._is_named_translation_requirement_question(question):
+            return self.cleanup_named_translation_requirement_answer(
                 "",
                 question=question,
                 chunks=chunks,
@@ -1203,6 +1227,38 @@ class RAGGenerator:
         if any(term in q for term in ("commencement", "come into force", "effective date", "enactment notice")):
             return False
         return any(term in q for term in ("on what date", "what date", "date of enactment", "when was"))
+
+    @staticmethod
+    def _is_named_made_by_question(question: str) -> bool:
+        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
+        if not q or RAGGenerator._is_broad_enumeration_question(question):
+            return False
+        if len(RAGGenerator._question_named_refs(question=question)) < 1:
+            return False
+        return "who made this law" in q or ("who made" in q and "law" in q)
+
+    @staticmethod
+    def _is_named_registrar_authority_question(question: str) -> bool:
+        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
+        if not q or RAGGenerator._is_broad_enumeration_question(question):
+            return False
+        if len(RAGGenerator._question_named_refs(question=question)) < 1:
+            return False
+        return "registrar" in q and "appoint" in q and "dismiss" in q
+
+    @staticmethod
+    def _is_named_translation_requirement_question(question: str) -> bool:
+        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
+        if not q or RAGGenerator._is_broad_enumeration_question(question):
+            return False
+        if len(RAGGenerator._question_named_refs(question=question)) < 1:
+            return False
+        return (
+            "language other than english" in q
+            and "upon request" in q
+            and "provide" in q
+            and "relevant authority" in q
+        )
 
     @staticmethod
     def _is_interpretative_provisions_enumeration_question(question: str) -> bool:
@@ -3020,6 +3076,92 @@ class RAGGenerator:
         return "\n".join(rebuilt) if rebuilt else cleaned
 
     @classmethod
+    def _extract_made_by_support(
+        cls,
+        doc_chunks: Sequence[RankedChunk],
+    ) -> tuple[str, list[str]]:
+        best_clause = ""
+        best_ids: list[str] = []
+        best_score = 0
+
+        for chunk in doc_chunks:
+            normalized = re.sub(r"\s+", " ", (chunk.text or "")).strip()
+            if not normalized:
+                continue
+            lowered = normalized.casefold()
+            clause = ""
+
+            made_match = re.search(r"\bthis law is made by the ([A-Z][A-Za-z\s-]+?)(?:[.;,]|$)", normalized)
+            if made_match is not None:
+                entity = made_match.group(1).strip(" ,.;:")
+                clause = f"This Law was made by the {entity}."
+            elif "made by the ruler of dubai" in lowered or ("ruler of dubai" in lowered and "hereby enact" in lowered):
+                clause = "This Law was made by the Ruler of Dubai."
+
+            if not clause:
+                continue
+
+            score = 180
+            if "ruler of dubai" in lowered:
+                score += 40
+            if "legislative authority" in lowered:
+                score += 20
+            if cls._page_num(chunk.section_path) <= 3:
+                score += 10
+            if score > best_score:
+                best_clause = clause
+                best_ids = [chunk.chunk_id]
+                best_score = score
+
+        return best_clause, best_ids
+
+    @classmethod
+    def cleanup_named_made_by_answer(
+        cls,
+        answer: str,
+        *,
+        question: str,
+        chunks: Sequence[RankedChunk],
+        doc_refs: Sequence[str] | None = None,
+    ) -> str:
+        cleaned = (answer or "").strip()
+        if not cls._is_named_made_by_question(question):
+            return cleaned
+
+        refs = cls._question_named_refs(question=question, extra_refs=doc_refs, prefer_extra_refs=True)
+        doc_order, chunks_by_doc = cls._group_chunks_by_doc(chunks)
+        if not doc_order or not refs:
+            return cleaned
+
+        for ref in refs:
+            best_clause = ""
+            best_ids: list[str] = []
+            best_score = 0
+            for doc_id in doc_order:
+                doc_chunks = chunks_by_doc.get(doc_id, [])
+                if not doc_chunks:
+                    continue
+                match_score = cls._doc_group_match_score(ref, doc_chunks)
+                if match_score <= 0:
+                    continue
+                clause, cited_ids = cls._extract_made_by_support(doc_chunks)
+                if not clause or not cited_ids:
+                    continue
+                candidate_score = match_score + 120
+                if candidate_score > best_score:
+                    best_clause = clause
+                    best_ids = cited_ids
+                    best_score = candidate_score
+            if best_clause and best_ids:
+                return f"{best_clause} (cite: {', '.join(best_ids)})"
+
+        if len(doc_order) == 1:
+            clause, cited_ids = cls._extract_made_by_support(chunks_by_doc.get(doc_order[0], []))
+            if clause and cited_ids:
+                return f"{clause} (cite: {', '.join(cited_ids)})"
+        return cleaned
+
+    @classmethod
     def cleanup_named_administration_answer(
         cls,
         answer: str,
@@ -3182,6 +3324,89 @@ class RAGGenerator:
             rebuilt.append(f"{len(rebuilt) + 1}. {clean_label}: {content} (cite: {', '.join(cited_ids)})")
 
         return "\n".join(rebuilt) if rebuilt else cleaned
+
+    @classmethod
+    def _extract_registrar_authority_support(
+        cls,
+        doc_chunks: Sequence[RankedChunk],
+    ) -> tuple[str, list[str]]:
+        best_clause = ""
+        best_ids: list[str] = []
+        best_score = 0
+
+        for chunk in doc_chunks:
+            normalized = re.sub(r"\s+", " ", (chunk.text or "")).strip()
+            if not normalized:
+                continue
+            lowered = normalized.casefold()
+            if "registrar" not in lowered or "appoint" not in lowered or "dismiss" not in lowered:
+                continue
+
+            clause = ""
+            if "board of directors of the difca" in lowered:
+                clause = "The Board of Directors of the DIFCA appoints and may dismiss the Registrar."
+            elif "board of directors" in lowered:
+                clause = "The Board of Directors appoints and may dismiss the Registrar."
+            if not clause:
+                continue
+
+            score = 200
+            if "consult the president" in lowered:
+                score += 10
+            if cls._page_num(chunk.section_path) <= 5:
+                score += 10
+            if score > best_score:
+                best_clause = clause
+                best_ids = [chunk.chunk_id]
+                best_score = score
+
+        return best_clause, best_ids
+
+    @classmethod
+    def cleanup_named_registrar_authority_answer(
+        cls,
+        answer: str,
+        *,
+        question: str,
+        chunks: Sequence[RankedChunk],
+        doc_refs: Sequence[str] | None = None,
+    ) -> str:
+        cleaned = (answer or "").strip()
+        if not cls._is_named_registrar_authority_question(question):
+            return cleaned
+
+        refs = cls._question_named_refs(question=question, extra_refs=doc_refs, prefer_extra_refs=True)
+        doc_order, chunks_by_doc = cls._group_chunks_by_doc(chunks)
+        if not doc_order or not refs:
+            return cleaned
+
+        for ref in refs:
+            best_clause = ""
+            best_ids: list[str] = []
+            best_score = 0
+            for doc_id in doc_order:
+                doc_chunks = chunks_by_doc.get(doc_id, [])
+                if not doc_chunks:
+                    continue
+                match_score = cls._doc_group_match_score(ref, doc_chunks)
+                if match_score <= 0:
+                    continue
+                clause, cited_ids = cls._extract_registrar_authority_support(doc_chunks)
+                if not clause or not cited_ids:
+                    continue
+                candidate_score = match_score + 120
+                if candidate_score > best_score:
+                    best_clause = clause
+                    best_ids = cited_ids
+                    best_score = candidate_score
+            if best_clause and best_ids:
+                return f"{best_clause} (cite: {', '.join(best_ids)})"
+
+        if len(doc_order) == 1:
+            clause, cited_ids = cls._extract_registrar_authority_support(chunks_by_doc.get(doc_order[0], []))
+            if clause and cited_ids:
+                return f"{clause} (cite: {', '.join(cited_ids)})"
+        return cleaned
 
     @classmethod
     def _extract_retention_period_support(
@@ -3364,6 +3589,83 @@ class RAGGenerator:
             return cleaned
 
         return f"{clause} (cite: {', '.join(cited_ids)})"
+
+    @classmethod
+    def _extract_translation_requirement_support(
+        cls,
+        doc_chunks: Sequence[RankedChunk],
+    ) -> tuple[str, list[str]]:
+        best_clause = ""
+        best_ids: list[str] = []
+        best_score = 0
+
+        for chunk in doc_chunks:
+            normalized = re.sub(r"\s+", " ", (chunk.text or "")).strip()
+            if not normalized:
+                continue
+            lowered = normalized.casefold()
+            if "language other than english" not in lowered:
+                continue
+            if "english translation" not in lowered or "relevant authority" not in lowered:
+                continue
+
+            score = 200
+            if "upon request" in lowered:
+                score += 20
+            if cls._page_num(chunk.section_path) <= 8:
+                score += 10
+            if score > best_score:
+                best_clause = "It must provide an English translation to the Relevant Authority."
+                best_ids = [chunk.chunk_id]
+                best_score = score
+
+        return best_clause, best_ids
+
+    @classmethod
+    def cleanup_named_translation_requirement_answer(
+        cls,
+        answer: str,
+        *,
+        question: str,
+        chunks: Sequence[RankedChunk],
+        doc_refs: Sequence[str] | None = None,
+    ) -> str:
+        cleaned = (answer or "").strip()
+        if not cls._is_named_translation_requirement_question(question):
+            return cleaned
+
+        refs = cls._question_named_refs(question=question, extra_refs=doc_refs, prefer_extra_refs=True)
+        doc_order, chunks_by_doc = cls._group_chunks_by_doc(chunks)
+        if not doc_order or not refs:
+            return cleaned
+
+        for ref in refs:
+            best_clause = ""
+            best_ids: list[str] = []
+            best_score = 0
+            for doc_id in doc_order:
+                doc_chunks = chunks_by_doc.get(doc_id, [])
+                if not doc_chunks:
+                    continue
+                match_score = cls._doc_group_match_score(ref, doc_chunks)
+                if match_score <= 0:
+                    continue
+                clause, cited_ids = cls._extract_translation_requirement_support(doc_chunks)
+                if not clause or not cited_ids:
+                    continue
+                candidate_score = match_score + 120
+                if candidate_score > best_score:
+                    best_clause = clause
+                    best_ids = cited_ids
+                    best_score = candidate_score
+            if best_clause and best_ids:
+                return f"{best_clause} (cite: {', '.join(best_ids)})"
+
+        if len(doc_order) == 1:
+            clause, cited_ids = cls._extract_translation_requirement_support(chunks_by_doc.get(doc_order[0], []))
+            if clause and cited_ids:
+                return f"{clause} (cite: {', '.join(cited_ids)})"
+        return cleaned
 
     @classmethod
     def _extract_penalty_support(

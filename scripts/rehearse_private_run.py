@@ -15,12 +15,15 @@ if TYPE_CHECKING:
 
 JsonDict = dict[str, Any]
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
 WARMUP_DIR = ROOT / "platform_runs" / "warmup"
 DEFAULT_QUESTIONS = WARMUP_DIR / "questions.json"
 DEFAULT_TRUTH_AUDIT = WARMUP_DIR / "truth_audit_scaffold.json"
 
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+for candidate in (SRC, ROOT):
+    candidate_text = str(candidate)
+    if candidate_text not in sys.path:
+        sys.path.insert(0, candidate_text)
 
 
 def _as_json_dict(value: object) -> JsonDict | None:
