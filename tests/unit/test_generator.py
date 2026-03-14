@@ -3218,6 +3218,103 @@ def test_build_structured_free_text_answer_handles_single_doc_enactment_date_que
     )
 
 
+def test_build_structured_free_text_answer_handles_single_doc_made_by_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="personal:authority",
+            doc_id="personal-property",
+            doc_title="PERSONAL PROPERTY LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text=(
+                'This Law may be cited as the "Personal Property Law 2005". '
+                "Legislative authority. This Law is made by the Ruler of Dubai."
+            ),
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="**Document Title:** Personal Property Law 2005",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="According to Article 2 of the DIFC Personal Property Law 2005, who made this Law?",
+        chunks=chunks,
+        doc_refs=["DIFC Personal Property Law 2005"],
+    )
+
+    assert answer == "This Law was made by the Ruler of Dubai. (cite: personal:authority)"
+
+
+def test_build_structured_free_text_answer_handles_single_doc_registrar_authority_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="operating:registrar",
+            doc_id="operating-law",
+            doc_title="OPERATING LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:5",
+            text=(
+                "The Board of Directors of the DIFCA shall appoint an individual to serve as the Registrar "
+                "and may dismiss such a person from the office of Registrar. "
+                "The Board of Directors of the DIFCA shall consult the President prior to appointing or dismissing the Registrar."
+            ),
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="Operating Law DIFC Law No. 7 of 2018",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question="Under the Operating Law - DIFC Law No. 7 of 2018, who is responsible for appointing and dismissing the Registrar?",
+        chunks=chunks,
+        doc_refs=["Law No. 7 of 2018"],
+    )
+
+    assert answer == (
+        "The Board of Directors of the DIFCA appoints and may dismiss the Registrar. "
+        "(cite: operating:registrar)"
+    )
+
+
+def test_build_structured_free_text_answer_handles_single_doc_translation_requirement_question(mock_settings) -> None:
+    from rag_challenge.llm.generator import RAGGenerator
+
+    generator = RAGGenerator(llm=MagicMock())
+    chunks = [
+        RankedChunk(
+            chunk_id="crs:translation",
+            doc_id="crs",
+            doc_title="COMMON REPORTING STANDARD LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text=(
+                "A Reporting Financial Institution that obtains or creates records for any purpose under this Law, "
+                "in a language other than English shall, upon request, provide an English translation to the Relevant Authority."
+            ),
+            retrieval_score=0.98,
+            rerank_score=0.98,
+            doc_summary="Common Reporting Standard Law 2018",
+        )
+    ]
+
+    answer = generator.build_structured_free_text_answer(
+        question=(
+            "If a Reporting Financial Institution obtains or creates records in a language other than English "
+            "under the Common Reporting Standard Law 2018, what must it provide upon request to the Relevant Authority?"
+        ),
+        chunks=chunks,
+        doc_refs=["Common Reporting Standard Law 2018"],
+    )
+
+    assert answer == "It must provide an English translation to the Relevant Authority. (cite: crs:translation)"
+
+
 def test_extract_doc_title_from_text_rejects_commencement_clause_as_title() -> None:
     from rag_challenge.llm.generator import RAGGenerator
 

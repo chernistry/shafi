@@ -81,6 +81,44 @@
         "unsupported_with_support_pages",
         "unsupported_with_retrieved_pages"
       ]
+    },
+    {
+      "case_id": "unseen-title-free-text",
+      "question": "Who administers the Imaginary Governance Code 2031?",
+      "answer_type": "free_text",
+      "answer_text": "There is no information on this question.",
+      "telemetry": {
+        "doc_refs": [
+          "Imaginary Governance Code 2031"
+        ]
+      },
+      "expected_submission_answer": "There is no information on this question in the provided documents.",
+      "expected_submission_pages": [],
+      "expected_platform_answer": "There is no information on this question in the provided documents.",
+      "expected_platform_pages": [],
+      "expected_anomaly_flags": [
+        "specific_question_unsupported",
+        "unsupported_with_doc_refs"
+      ]
+    },
+    {
+      "case_id": "nonexistent-doc-strict-null",
+      "question": "According to Section 99 of the Nonexistent Law 2099, how many days of notice are required?",
+      "answer_type": "number",
+      "answer_text": "",
+      "telemetry": {
+        "doc_refs": [
+          "Nonexistent Law 2099"
+        ]
+      },
+      "expected_submission_answer": null,
+      "expected_submission_pages": [],
+      "expected_platform_answer": null,
+      "expected_platform_pages": [],
+      "expected_anomaly_flags": [
+        "specific_question_unsupported",
+        "unsupported_with_doc_refs"
+      ]
     }
   ]
 }

@@ -4542,6 +4542,36 @@ class RAGPipelineBuilder:
                 )
                 if isinstance(cleaned_obj, str) and cleaned_obj.strip():
                     answer = cleaned_obj.strip()
+            cleanup_named_made_by = getattr(self._generator, "cleanup_named_made_by_answer", None)
+            if callable(cleanup_named_made_by):
+                cleaned_obj = cleanup_named_made_by(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_registrar_authority = getattr(self._generator, "cleanup_named_registrar_authority_answer", None)
+            if callable(cleanup_named_registrar_authority):
+                cleaned_obj = cleanup_named_registrar_authority(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_translation_requirement = getattr(self._generator, "cleanup_named_translation_requirement_answer", None)
+            if callable(cleanup_named_translation_requirement):
+                cleaned_obj = cleanup_named_translation_requirement(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
             cleanup_account_effective_dates = getattr(self._generator, "cleanup_account_effective_dates_answer", None)
             if callable(cleanup_account_effective_dates):
                 cleaned_obj = cleanup_account_effective_dates(
@@ -6329,14 +6359,17 @@ class RAGPipelineBuilder:
             or _is_named_commencement_query(query)
             or _is_named_amendment_query(query)
         )
-        if cls._named_metadata_requires_support_union(query):
+        metadata_page_family_query = cls._is_metadata_page_family_query(query)
+        if cls._named_metadata_requires_support_union(query) or metadata_page_family_query:
             context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
             used_pages = {
                 cls._page_num(str(getattr(context_by_id.get(chunk_id), "section_path", "") or ""))
                 for chunk_id in ordered_used_ids
                 if chunk_id in context_by_id
             }
-            if len(used_pages) >= 2:
+            if cls._named_metadata_requires_support_union(query) and len(used_pages) >= 2:
+                return ordered_used_ids
+            if metadata_page_family_query and len(used_pages) == 2:
                 return ordered_used_ids
         if not (compare_like or metadata_like):
             return ordered_used_ids
@@ -6379,7 +6412,7 @@ class RAGPipelineBuilder:
         selected_pages = select_top_pages_per_doc(
             scored_pages=scored_pages,
             doc_order=doc_order,
-            per_doc_pages=1,
+            per_doc_pages=2 if metadata_page_family_query else 1,
         )
         if not selected_pages:
             return ordered_used_ids
@@ -6456,6 +6489,31 @@ class RAGPipelineBuilder:
             )
         )
         return atoms >= 2 or (atoms >= 1 and multiple_named_refs)
+
+    @classmethod
+    def _is_metadata_page_family_query(cls, query: str) -> bool:
+        q = re.sub(r"\s+", " ", (query or "").strip()).casefold()
+        if not cls._is_named_metadata_support_query(query):
+            return False
+        if cls._named_metadata_requires_support_union(query):
+            return False
+        return any(
+            term in q
+            for term in (
+                "citation title",
+                "official law number",
+                "official difc law number",
+                "who made",
+                "made by",
+                "date of enactment",
+                "when was",
+                "on what date",
+                "commencement",
+                "come into force",
+                "who administers",
+                "administered by",
+            )
+        )
 
     @classmethod
     def _apply_support_shape_policy(
@@ -6547,8 +6605,9 @@ class RAGPipelineBuilder:
                 _push(chunk_id)
 
         metadata_query = cls._named_metadata_requires_support_union(query)
+        metadata_page_family_query = cls._is_metadata_page_family_query(query)
         metadata_doc_ids: set[str] = set()
-        if metadata_query:
+        if metadata_query or metadata_page_family_query:
             for ref in cls._support_question_refs(query)[:4]:
                 title_chunk_id = cls._best_title_support_chunk_id(title=ref, context_chunks=context_chunks)
                 if not title_chunk_id:
@@ -6557,11 +6616,12 @@ class RAGPipelineBuilder:
                 metadata_doc_ids.update(
                     cls._doc_ids_for_chunk_ids(chunk_ids=[title_chunk_id], context_chunks=context_chunks)
                 )
-            for chunk_id in cls._context_family_chunk_ids(
-                doc_ids=metadata_doc_ids,
-                context_chunks=context_chunks,
-            ):
-                _push(chunk_id)
+            if metadata_query:
+                for chunk_id in cls._context_family_chunk_ids(
+                    doc_ids=metadata_doc_ids,
+                    context_chunks=context_chunks,
+                ):
+                    _push(chunk_id)
 
         costs_query = kind == "free_text" and _is_case_outcome_query(query) and (
             "cost" in q_lower or "final ruling" in q_lower

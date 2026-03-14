@@ -905,7 +905,7 @@ def test_apply_support_shape_policy_keeps_title_page_for_multi_atom_named_metada
     assert flags == []
 
 
-def test_apply_support_shape_policy_does_not_inflate_single_atom_named_metadata_query() -> None:
+def test_apply_support_shape_policy_adds_title_page_for_single_atom_named_metadata_query() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
     context_chunks = [
@@ -942,7 +942,7 @@ def test_apply_support_shape_policy_does_not_inflate_single_atom_named_metadata_
         support_ids=["law:maker"],
     )
 
-    assert shaped_ids == ["law:maker"]
+    assert shaped_ids == ["law:maker", "law:title"]
     assert flags == []
 
 
@@ -4190,6 +4190,56 @@ def test_rerank_support_pages_within_selected_docs_prefers_page_one_for_named_me
     )
 
     assert reranked_ids == ["companies:title"]
+
+
+def test_rerank_support_pages_within_selected_docs_keeps_page_family_for_single_atom_metadata(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="ppl:title",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text='This Law may be cited as the "Personal Property Law 2005".',
+            retrieval_score=0.82,
+            rerank_score=0.83,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ppl:maker",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text="This Law is made by the Ruler of Dubai.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ppl:noise",
+            doc_id="personal-property-law",
+            doc_title="Personal Property Law 2005",
+            doc_type=DocType.STATUTE,
+            section_path="page:18",
+            text="Definitions and schedules unrelated to legislative authority.",
+            retrieval_score=0.75,
+            rerank_score=0.74,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="According to Article 2 of the DIFC Personal Property Law 2005, who made this Law?",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        used_ids=["ppl:maker", "ppl:title", "ppl:noise"],
+    )
+
+    assert reranked_ids == ["ppl:title", "ppl:maker"]
 
 
 def test_rerank_support_pages_within_selected_docs_picks_one_page_per_doc_for_compare(mock_settings):
