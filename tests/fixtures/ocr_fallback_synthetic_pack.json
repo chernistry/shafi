@@ -46,6 +46,36 @@
       "expected_fallback_triggered": true,
       "expected_page_identity_collapsed": false,
       "expected_mode": "not_applicable_single_page"
+    },
+    {
+      "document": "scan-screenshot-heavy-multipage.pdf",
+      "actual_pdf_pages": 6,
+      "pymupdf_pages": [
+        "",
+        "_____ screenshot _____",
+        "",
+        "scan",
+        "",
+        ""
+      ],
+      "text_sufficient": false,
+      "expected_fallback_triggered": true,
+      "expected_page_identity_collapsed": false,
+      "expected_mode": "docling_pages_preserved"
+    },
+    {
+      "document": "mixed-digital-image-multipage.pdf",
+      "actual_pdf_pages": 4,
+      "pymupdf_pages": [
+        "This first page stays readable and digital.",
+        "",
+        "_____ embedded screenshot fragment _____",
+        ""
+      ],
+      "text_sufficient": false,
+      "expected_fallback_triggered": true,
+      "expected_page_identity_collapsed": false,
+      "expected_mode": "docling_pages_preserved"
     }
   ]
 }

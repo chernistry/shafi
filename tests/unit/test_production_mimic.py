@@ -220,6 +220,12 @@ def test_build_page_trace_summary_preserves_stage_counts() -> None:
     assert summary["page_recall"] == 2 / 3
     assert summary["trusted_page_precision"] == 0.5
     assert summary["trusted_page_recall"] == 0.5
+    trusted_bootstrap = summary["trusted_bootstrap"]
+    assert trusted_bootstrap["record_count"] == 1
+    assert trusted_bootstrap["sample_count"] == 500
+    assert trusted_bootstrap["unstable_small_slice"] is True
+    assert trusted_bootstrap["precision_p50"] == 0.5
+    assert trusted_bootstrap["recall_p50"] == 0.5
 
 
 def test_estimate_production_mimic_penalizes_support_shape_issues() -> None:
@@ -333,16 +339,24 @@ def test_estimate_production_mimic_penalizes_page_trace_and_citation_floor_failu
         {"answer_type": "boolean", "observed": 0.75, "floor": 0.8, "gap": 0.05},
         {"answer_type": "free_text_structured", "observed": 0.65, "floor": 0.7, "gap": 0.05},
     ]
+    assert result["eval"]["citation_floor_failure_count"] == 2
+    assert result["eval"]["citation_floor_failure_answer_types"] == ["boolean", "free_text_structured"]
     assert result["eval"]["citation_hard_floor_blocked"] is True
     assert result["eval"]["citation_page_trace_disagreement"] is True
     assert result["eval"]["citation_page_trace_disagreement_penalty"] > 0.0
     assert result["page_trace"]["page_precision"] == 2 / 9
     assert result["page_trace"]["page_recall"] == 0.4
     assert result["submit_eligibility"] is False
+    assert "citation coverage below strict local bar" not in str(result["no_submit_reason"])
     assert "citation floor miss" in str(result["no_submit_reason"])
     assert "citation/page-trace disagreement requires explanation" in str(result["no_submit_reason"])
     assert "page-id precision below strict local floor" in str(result["no_submit_reason"])
     assert "changed-set page trace has no trusted page-id cases" in str(result["no_submit_reason"])
+    assert result["strict_raw_total_estimate"] == result["strict_total_estimate"]
+    assert result["strict_policy_blocked_total_estimate"] < result["strict_raw_total_estimate"]
+    assert result["policy_debt"]["citation_aggregate_penalty"] > 0.0
+    assert result["policy_debt"]["citation_floor_penalty"] > 0.0
+    assert result["policy_debt"]["total"] > 0.0
 
 
 def test_estimate_production_mimic_does_not_block_clean_strict_run_on_citation_floor() -> None:
@@ -403,3 +417,9 @@ def test_estimate_production_mimic_does_not_block_clean_strict_run_on_citation_f
     assert result["eval"]["citation_floor_failures"] == []
     assert result["eval"]["citation_hard_floor_blocked"] is False
     assert result["eval"]["citation_page_trace_disagreement"] is False
+    trusted_bootstrap = result["page_trace"]["trusted_bootstrap"]
+    assert trusted_bootstrap["record_count"] == 5
+    assert trusted_bootstrap["sample_count"] == 500
+    assert trusted_bootstrap["unstable_small_slice"] is False
+    assert trusted_bootstrap["precision_p50"] == 1.0
+    assert trusted_bootstrap["recall_p50"] == 1.0

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 from typing import cast
 
 JsonDict = dict[str, object]
@@ -89,6 +90,14 @@ def _canonical_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * q)))
+    return ordered[idx]
+
+
 def _page_doc(page_id: str) -> str:
     if "_" not in page_id:
         return page_id
@@ -103,6 +112,18 @@ def _page_num(page_id: str) -> int | None:
         return int(suffix)
     except ValueError:
         return None
+
+
+def _page_f_beta(*, true_positive: int, used: int, gold: int, beta: float = 2.5) -> float:
+    precision = 0.0 if used <= 0 else true_positive / used
+    recall = 0.0 if gold <= 0 else true_positive / gold
+    if precision <= 0.0 and recall <= 0.0:
+        return 0.0
+    beta_sq = beta * beta
+    denom = (beta_sq * precision) + recall
+    if denom <= 0.0:
+        return 0.0
+    return ((1.0 + beta_sq) * precision * recall) / denom
 
 
 def _index_scaffold_records(scaffold_payload: JsonDict | None) -> dict[str, JsonDict]:
@@ -533,6 +554,7 @@ def build_page_trace_summary(page_trace_payload: JsonDict | None) -> JsonDict:
     trusted_page_true_positive_count = 0
     trusted_page_used_count = 0
     trusted_page_gold_count = 0
+    trusted_records: list[tuple[str, int, int, int]] = []
     if isinstance(records_obj, list):
         for raw_record in cast("list[object]", records_obj):
             if not isinstance(raw_record, dict):
@@ -548,6 +570,59 @@ def build_page_trace_summary(page_trace_payload: JsonDict | None) -> JsonDict:
                 trusted_page_true_positive_count += true_positive_count
                 trusted_page_used_count += len(used_pages)
                 trusted_page_gold_count += len(gold_pages)
+                trusted_records.append(
+                    (
+                        str(record.get("qid") or "").strip(),
+                        true_positive_count,
+                        len(used_pages),
+                        len(gold_pages),
+                    )
+                )
+    trusted_bootstrap: JsonDict = {
+        "record_count": len(trusted_records),
+        "sample_count": 0,
+        "precision_p05": 0.0,
+        "precision_p50": 0.0,
+        "precision_p95": 0.0,
+        "recall_p05": 0.0,
+        "recall_p50": 0.0,
+        "recall_p95": 0.0,
+        "f_beta_2_5_p05": 0.0,
+        "f_beta_2_5_p50": 0.0,
+        "f_beta_2_5_p95": 0.0,
+        "unstable_small_slice": len(trusted_records) < 5,
+    }
+    if trusted_records:
+        seed_payload = [[qid, tp, used, gold] for qid, tp, used, gold in trusted_records]
+        rng = random.Random(_sha256_text(_canonical_json(seed_payload)))
+        sample_count = 500
+        precision_samples: list[float] = []
+        recall_samples: list[float] = []
+        f_beta_samples: list[float] = []
+        for _ in range(sample_count):
+            sampled = [trusted_records[rng.randrange(len(trusted_records))] for _ in range(len(trusted_records))]
+            tp = sum(item[1] for item in sampled)
+            used = sum(item[2] for item in sampled)
+            gold = sum(item[3] for item in sampled)
+            precision = 0.0 if used <= 0 else tp / used
+            recall = 0.0 if gold <= 0 else tp / gold
+            precision_samples.append(precision)
+            recall_samples.append(recall)
+            f_beta_samples.append(_page_f_beta(true_positive=tp, used=used, gold=gold))
+        trusted_bootstrap = {
+            "record_count": len(trusted_records),
+            "sample_count": sample_count,
+            "precision_p05": round(_percentile(precision_samples, 0.05), 4),
+            "precision_p50": round(_percentile(precision_samples, 0.50), 4),
+            "precision_p95": round(_percentile(precision_samples, 0.95), 4),
+            "recall_p05": round(_percentile(recall_samples, 0.05), 4),
+            "recall_p50": round(_percentile(recall_samples, 0.50), 4),
+            "recall_p95": round(_percentile(recall_samples, 0.95), 4),
+            "f_beta_2_5_p05": round(_percentile(f_beta_samples, 0.05), 4),
+            "f_beta_2_5_p50": round(_percentile(f_beta_samples, 0.50), 4),
+            "f_beta_2_5_p95": round(_percentile(f_beta_samples, 0.95), 4),
+            "unstable_small_slice": len(trusted_records) < 5,
+        }
     return {
         "cases_scored": _as_int(summary.get("cases_scored")),
         "trusted_case_count": _as_int(summary.get("trusted_case_count")),
@@ -572,6 +647,7 @@ def build_page_trace_summary(page_trace_payload: JsonDict | None) -> JsonDict:
         "trusted_page_recall": (
             0.0 if trusted_page_gold_count <= 0 else trusted_page_true_positive_count / trusted_page_gold_count
         ),
+        "trusted_bootstrap": trusted_bootstrap,
     }
 
 
@@ -726,30 +802,59 @@ def estimate_production_mimic(
 
     extra_penalty = 0.0
     no_submit_reasons: list[str] = []
+    policy_debt: JsonDict = {
+        "lineage_penalty": 0.0,
+        "unresolved_exactness_penalty": 0.0,
+        "format_penalty": 0.0,
+        "citation_aggregate_penalty": 0.0,
+        "citation_floor_penalty": 0.0,
+        "citation_page_trace_penalty": 0.0,
+        "grounding_penalty": 0.0,
+        "judge_penalty": 0.0,
+        "page_drift_without_gain_penalty": 0.0,
+        "page_precision_penalty": 0.0,
+        "page_recall_penalty": 0.0,
+        "trusted_slice_penalty": 0.0,
+        "page_trace_explained_penalty": 0.0,
+        "support_shape_penalty": 0.0,
+    }
 
     if lineage_confidence != "high":
+        policy_debt["lineage_penalty"] = 0.004
         extra_penalty += 0.004
         no_submit_reasons.append(f"lineage_confidence={lineage_confidence}")
     if unresolved_qids:
-        extra_penalty += 0.0035 * len(unresolved_qids)
+        unresolved_penalty = 0.0035 * len(unresolved_qids)
+        policy_debt["unresolved_exactness_penalty"] = unresolved_penalty
+        extra_penalty += unresolved_penalty
         no_submit_reasons.append("known incorrect scaffold cases remain unresolved")
     if format_compliance is not None and _as_float(format_compliance) < 1.0:
-        extra_penalty += 0.008 * (1.0 - _as_float(format_compliance))
+        format_penalty = 0.008 * (1.0 - _as_float(format_compliance))
+        policy_debt["format_penalty"] = format_penalty
+        extra_penalty += format_penalty
         no_submit_reasons.append("format compliance below strict local bar")
     if citation_coverage is not None and _as_float(citation_coverage) < 1.0:
-        extra_penalty += 0.008 * (1.0 - _as_float(citation_coverage))
-        no_submit_reasons.append("citation coverage below strict local bar")
+        citation_aggregate_penalty = 0.008 * (1.0 - _as_float(citation_coverage))
+        policy_debt["citation_aggregate_penalty"] = citation_aggregate_penalty
+        extra_penalty += citation_aggregate_penalty
+        if _as_float(citation_coverage) < 0.90:
+            no_submit_reasons.append("overall citation coverage below strict local warning floor")
     if citation_floor_failures:
-        extra_penalty += min(0.012, 0.02 * sum(_as_float(item.get("gap")) for item in citation_floor_failures))
+        citation_floor_penalty = min(0.012, 0.02 * sum(_as_float(item.get("gap")) for item in citation_floor_failures))
+        policy_debt["citation_floor_penalty"] = citation_floor_penalty
+        extra_penalty += citation_floor_penalty
         no_submit_reasons.append(
             "citation floor miss: "
             + ", ".join(f"{item.get('answer_type') or ''}<{_as_float(item.get('floor')):.2f}" for item in citation_floor_failures)
         )
     if citation_page_trace_disagreement:
+        policy_debt["citation_page_trace_penalty"] = citation_page_trace_disagreement_penalty
         extra_penalty += citation_page_trace_disagreement_penalty
         no_submit_reasons.append("citation/page-trace disagreement requires explanation")
     if grounding_g_score is not None and _as_float(grounding_g_score) < 0.8:
-        extra_penalty += 0.004 * (0.8 - _as_float(grounding_g_score))
+        grounding_penalty = 0.004 * (0.8 - _as_float(grounding_g_score))
+        policy_debt["grounding_penalty"] = grounding_penalty
+        extra_penalty += grounding_penalty
         no_submit_reasons.append("grounding score below strict local bar")
 
     pass_rate = hybrid_judge.get("pass_rate")
@@ -783,8 +888,16 @@ def estimate_production_mimic(
         judge_timeout_penalty = 0.004
         extra_penalty += judge_timeout_penalty
         no_submit_reasons.append("judge timeout/failure present")
+    policy_debt["judge_penalty"] = (
+        judge_pass_rate_penalty
+        + judge_grounding_penalty
+        + judge_accuracy_penalty
+        + judge_disagreement_penalty
+        + judge_timeout_penalty
+    )
 
     if _as_int(candidate_row.get("page_drift")) > 0 and _as_float(candidate_row.get("hidden_g_trusted_delta")) <= 0.0:
+        policy_debt["page_drift_without_gain_penalty"] = 0.0025
         extra_penalty += 0.0025
         no_submit_reasons.append("page drift without trusted hidden-G gain")
     cases_scored = _as_int(page_trace.get("cases_scored"))
@@ -792,21 +905,30 @@ def estimate_production_mimic(
     page_recall = _as_float(page_trace.get("page_recall"))
     trusted_case_count = _as_int(page_trace.get("trusted_case_count"))
     if cases_scored >= 5 and page_precision < 0.35:
-        extra_penalty += 0.02 * (0.35 - page_precision)
+        page_precision_penalty = 0.02 * (0.35 - page_precision)
+        policy_debt["page_precision_penalty"] = page_precision_penalty
+        extra_penalty += page_precision_penalty
         no_submit_reasons.append("page-id precision below strict local floor")
     if cases_scored >= 5 and page_recall < 0.50:
-        extra_penalty += 0.015 * (0.50 - page_recall)
+        page_recall_penalty = 0.015 * (0.50 - page_recall)
+        policy_debt["page_recall_penalty"] = page_recall_penalty
+        extra_penalty += page_recall_penalty
         no_submit_reasons.append("page-id recall below strict local floor")
     if cases_scored > 0 and trusted_case_count == 0:
+        policy_debt["trusted_slice_penalty"] = 0.003
         extra_penalty += 0.003
         no_submit_reasons.append("changed-set page trace has no trusted page-id cases")
     elif 0 < trusted_case_count < 5:
+        policy_debt["trusted_slice_penalty"] = 0.0015
         extra_penalty += 0.0015
         no_submit_reasons.append("trusted page-id slice still narrow")
     if cases_scored > 0 and _as_float(page_trace.get("explained_ratio")) < 0.95:
-        extra_penalty += 0.004 * (0.95 - _as_float(page_trace.get("explained_ratio")))
+        explained_penalty = 0.004 * (0.95 - _as_float(page_trace.get("explained_ratio")))
+        policy_debt["page_trace_explained_penalty"] = explained_penalty
+        extra_penalty += explained_penalty
         no_submit_reasons.append("page-trace stage explanation below strict local bar")
     support_shape_penalty, support_shape_reasons = _support_shape_penalty(support_shape)
+    policy_debt["support_shape_penalty"] = support_shape_penalty
     extra_penalty += support_shape_penalty
     no_submit_reasons.extend(support_shape_reasons)
 
@@ -814,11 +936,12 @@ def estimate_production_mimic(
     platform_like_offset = _as_float(calibration_block.get("platform_like_offset"))
     paranoid_offset = _as_float(calibration_block.get("paranoid_offset"))
 
-    strict_total_estimate = max(0.0, strict_total - strict_offset)
+    strict_raw_total_estimate = max(0.0, strict_total - strict_offset)
     platform_like_total_estimate = max(
         0.0,
-        strict_total_estimate - platform_like_offset - (extra_penalty * 0.5),
+        strict_raw_total_estimate - platform_like_offset - (extra_penalty * 0.5),
     )
+    strict_policy_blocked_total_estimate = max(0.0, strict_raw_total_estimate - extra_penalty)
     paranoid_total_estimate = max(
         0.0,
         min(paranoid_total - paranoid_offset, platform_like_total_estimate - (extra_penalty * 0.5)),
@@ -874,6 +997,10 @@ def estimate_production_mimic(
             "citation_coverage": citation_coverage,
             "citation_coverage_by_answer_type": citation_coverage_by_answer_type,
             "citation_floor_failures": citation_floor_failures,
+            "citation_floor_failure_count": len(citation_floor_failures),
+            "citation_floor_failure_answer_types": [
+                str(item.get("answer_type") or "").strip() for item in citation_floor_failures if str(item.get("answer_type") or "").strip()
+            ],
             "citation_hard_floor_blocked": citation_hard_floor_blocked,
             "citation_page_trace_disagreement": citation_page_trace_disagreement,
             "citation_page_trace_disagreement_penalty": citation_page_trace_disagreement_penalty,
@@ -882,11 +1009,17 @@ def estimate_production_mimic(
         },
         "page_trace": page_trace,
         "support_shape": support_shape,
+        "strict_raw_total_estimate": strict_raw_total_estimate,
+        "strict_policy_blocked_total_estimate": strict_policy_blocked_total_estimate,
         "platform_like_total_estimate": platform_like_total_estimate,
-        "strict_total_estimate": strict_total_estimate,
+        "strict_total_estimate": strict_raw_total_estimate,
         "paranoid_total_estimate": paranoid_total_estimate,
         "upper_total_estimate": upper_total,
         "extra_paranoid_penalty": extra_penalty,
+        "policy_debt": {
+            **policy_debt,
+            "total": extra_penalty,
+        },
         "submit_eligibility": submit_eligibility,
         "no_submit_reason": "; ".join(no_submit_reasons) if no_submit_reasons else "",
     }

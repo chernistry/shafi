@@ -95,7 +95,7 @@ def _render_markdown(*, audits: list[OcrBoundaryAudit], documents_root: Path) ->
         f"- fallback_triggered_docs: `{len(fallback_docs)}`",
         f"- page_identity_collapsed_docs: `{len(collapsed)}`",
         f"- verdict: `{verdict}`",
-        "- current_parser_behavior: `when PDF fallback triggers, parser._read_pdf collapses output to a single merged pseudo-page`",
+        "- current_parser_behavior: `when PDF fallback triggers, parser._read_pdf preserves per-page Docling OCR pages`",
         "",
     ]
     if collapsed:
@@ -111,8 +111,8 @@ def _render_markdown(*, audits: list[OcrBoundaryAudit], documents_root: Path) ->
             [
                 "## Conclusion",
                 "",
-                "- No warm-up corpus PDFs currently trigger the merged single-page fallback path.",
-                "- The code path still exists and remains a private-phase OCR watchpoint until ticket 32 either repairs provenance or the private corpus proves clean.",
+                "- No audited PDFs triggered a page-identity collapse on the current OCR fallback path.",
+                "- Keep this as a private-phase OCR watchpoint only for new screenshot-heavy documents, not as evidence of a known live parser bug.",
                 "",
             ]
         )

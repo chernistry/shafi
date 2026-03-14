@@ -121,8 +121,15 @@ def _render_markdown(
     judge_penalties = cast("JsonDict", production_mimic.get("judge_penalties") or {})
     eval_block = cast("JsonDict", production_mimic.get("eval") or {})
     page_trace = cast("JsonDict", production_mimic.get("page_trace") or {})
+    trusted_bootstrap = cast("JsonDict", page_trace.get("trusted_bootstrap") or {})
+    policy_debt = cast("JsonDict", production_mimic.get("policy_debt") or {})
     platform_like_total = cast("float", production_mimic.get("platform_like_total_estimate", 0.0))
     strict_total = cast("float", production_mimic.get("strict_total_estimate", 0.0))
+    strict_raw_total = cast("float", production_mimic.get("strict_raw_total_estimate", strict_total))
+    strict_policy_blocked_total = cast(
+        "float",
+        production_mimic.get("strict_policy_blocked_total_estimate", strict_total),
+    )
     paranoid_total = cast("float", production_mimic.get("paranoid_total_estimate", 0.0))
     lines = [
         "# Production-Mimic Local Eval",
@@ -176,6 +183,8 @@ def _render_markdown(
         "",
         f"- citation_coverage: `{eval_block.get('citation_coverage')}`",
         f"- citation_coverage_by_answer_type: `{eval_block.get('citation_coverage_by_answer_type')}`",
+        f"- citation_floor_failure_count: `{eval_block.get('citation_floor_failure_count')}`",
+        f"- citation_floor_failure_answer_types: `{eval_block.get('citation_floor_failure_answer_types')}`",
         f"- citation_floor_failures: `{eval_block.get('citation_floor_failures')}`",
         f"- answer_type_format_compliance: `{eval_block.get('answer_type_format_compliance')}`",
         f"- grounding_g_score_beta_2_5: `{eval_block.get('grounding_g_score_beta_2_5')}`",
@@ -192,16 +201,42 @@ def _render_markdown(
         f"- page_recall: `{page_trace.get('page_recall')}`",
         f"- trusted_page_precision: `{page_trace.get('trusted_page_precision')}`",
         f"- trusted_page_recall: `{page_trace.get('trusted_page_recall')}`",
+        f"- trusted_bootstrap_record_count: `{trusted_bootstrap.get('record_count')}`",
+        f"- trusted_bootstrap_samples: `{trusted_bootstrap.get('sample_count')}`",
+        f"- trusted_bootstrap_f_beta_2_5_p05_p50_p95: `({trusted_bootstrap.get('f_beta_2_5_p05')}, {trusted_bootstrap.get('f_beta_2_5_p50')}, {trusted_bootstrap.get('f_beta_2_5_p95')})`",
+        f"- trusted_bootstrap_precision_p05_p50_p95: `({trusted_bootstrap.get('precision_p05')}, {trusted_bootstrap.get('precision_p50')}, {trusted_bootstrap.get('precision_p95')})`",
+        f"- trusted_bootstrap_recall_p05_p50_p95: `({trusted_bootstrap.get('recall_p05')}, {trusted_bootstrap.get('recall_p50')}, {trusted_bootstrap.get('recall_p95')})`",
+        f"- trusted_bootstrap_unstable_small_slice: `{trusted_bootstrap.get('unstable_small_slice')}`",
         f"- explained_ratio: `{page_trace.get('explained_ratio')}`",
         "",
         "## Score Envelope",
         "",
+        f"- strict_raw_total_estimate: `{strict_raw_total:.6f}`",
+        f"- strict_policy_blocked_total_estimate: `{strict_policy_blocked_total:.6f}`",
         f"- platform_like_total_estimate: `{platform_like_total:.6f}`",
         f"- strict_total_estimate: `{strict_total:.6f}`",
         f"- paranoid_total_estimate: `{paranoid_total:.6f}`",
         f"- platform_like_rank_estimate: `{_rank_for_total(leaderboard_path=leaderboard_path, team_name=team_name, total=platform_like_total)}`",
         f"- strict_rank_estimate: `{_rank_for_total(leaderboard_path=leaderboard_path, team_name=team_name, total=strict_total)}`",
         f"- paranoid_rank_estimate: `{_rank_for_total(leaderboard_path=leaderboard_path, team_name=team_name, total=paranoid_total)}`",
+        "",
+        "## Policy Debt",
+        "",
+        f"- total: `{policy_debt.get('total')}`",
+        f"- lineage_penalty: `{policy_debt.get('lineage_penalty')}`",
+        f"- unresolved_exactness_penalty: `{policy_debt.get('unresolved_exactness_penalty')}`",
+        f"- format_penalty: `{policy_debt.get('format_penalty')}`",
+        f"- citation_aggregate_penalty: `{policy_debt.get('citation_aggregate_penalty')}`",
+        f"- citation_floor_penalty: `{policy_debt.get('citation_floor_penalty')}`",
+        f"- citation_page_trace_penalty: `{policy_debt.get('citation_page_trace_penalty')}`",
+        f"- grounding_penalty: `{policy_debt.get('grounding_penalty')}`",
+        f"- judge_penalty: `{policy_debt.get('judge_penalty')}`",
+        f"- page_drift_without_gain_penalty: `{policy_debt.get('page_drift_without_gain_penalty')}`",
+        f"- page_precision_penalty: `{policy_debt.get('page_precision_penalty')}`",
+        f"- page_recall_penalty: `{policy_debt.get('page_recall_penalty')}`",
+        f"- trusted_slice_penalty: `{policy_debt.get('trusted_slice_penalty')}`",
+        f"- page_trace_explained_penalty: `{policy_debt.get('page_trace_explained_penalty')}`",
+        f"- support_shape_penalty: `{policy_debt.get('support_shape_penalty')}`",
     ]
     return "\n".join(lines) + "\n"
 
