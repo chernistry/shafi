@@ -527,8 +527,15 @@ class StrictAnswerer:
             pos_hit = False
             neg_hit = False
             cited_id = ""
-            claimant_pos = False
-            claimant_neg = False
+            asked_party_pos = False
+            asked_party_neg = False
+            asked_party_terms: tuple[str, ...] = ()
+            if any(token in q_lower for token in ("claimant", "claimants", "plaintiff", "plaintiffs")):
+                asked_party_terms = ("claimant", "plaintiff")
+            elif any(token in q_lower for token in ("defendant", "defendants", "respondent", "respondents")):
+                asked_party_terms = ("defendant", "respondent")
+            elif any(token in q_lower for token in ("appellant", "appellants")):
+                asked_party_terms = ("appellant",)
             for chunk in _relevant_chunks(case_refs[0]):
                 window = _collapse_ws(chunk.text).lower()
                 if not window:
@@ -536,24 +543,34 @@ class StrictAnswerer:
                 if any(cue in window for cue in _GRANT_CUES) and ("application" in window or "order" in window):
                     pos_hit = True
                     cited_id = cited_id or chunk.chunk_id
-                    if "claimant" in window or "plaintiff" in window:
-                        claimant_pos = True
                 if any(cue in window for cue in _DENY_CUES) and ("application" in window or "order" in window):
                     neg_hit = True
                     cited_id = cited_id or chunk.chunk_id
-                    if "claimant" in window or "plaintiff" in window:
-                        claimant_neg = True
+                if asked_party_terms:
+                    if self._has_party_scoped_order_outcome(
+                        window=window,
+                        party_terms=asked_party_terms,
+                        outcome_terms=_GRANT_CUES,
+                    ):
+                        asked_party_pos = True
+                    if self._has_party_scoped_order_outcome(
+                        window=window,
+                        party_terms=asked_party_terms,
+                        outcome_terms=_DENY_CUES,
+                    ):
+                        asked_party_neg = True
 
             if cited_id:
-                # If we have an explicit claimant outcome, prefer that.
-                if claimant_pos and not claimant_neg:
+                # If we have an explicit asked-party outcome, prefer that.
+                if asked_party_pos and not asked_party_neg:
                     return StrictAnswerResult(answer="Yes", cited_chunk_ids=[cited_id], confident=True)
-                if claimant_neg and not claimant_pos:
+                if asked_party_neg and not asked_party_pos:
                     return StrictAnswerResult(answer="No", cited_chunk_ids=[cited_id], confident=True)
 
                 # If outcomes conflict (e.g., "order discharged" + "defendant's application granted"),
-                # treat as "not granted" for "main claim/application" style questions.
-                if neg_hit and not claimant_pos:
+                # treat as "not granted" for the queried application/order unless we saw an explicit
+                # positive outcome scoped to the asked party.
+                if neg_hit and not asked_party_pos:
                     return StrictAnswerResult(answer="No", cited_chunk_ids=[cited_id], confident=True)
                 if pos_hit and not neg_hit:
                     return StrictAnswerResult(answer="Yes", cited_chunk_ids=[cited_id], confident=True)
@@ -1415,6 +1432,23 @@ class StrictAnswerer:
         # Otherwise, split on " and " / ";" / "," as a best-effort list separator.
         parts = re.split(r"\s+and\s+|[;,]", raw, flags=re.IGNORECASE)
         return [part.strip() for part in parts if part.strip()]
+
+    @staticmethod
+    def _has_party_scoped_order_outcome(
+        *,
+        window: str,
+        party_terms: tuple[str, ...],
+        outcome_terms: tuple[str, ...],
+    ) -> bool:
+        if not window or not party_terms or not outcome_terms:
+            return False
+        party_pattern = "|".join(re.escape(term) for term in party_terms)
+        outcome_pattern = "|".join(re.escape(term) for term in sorted(outcome_terms, key=len, reverse=True))
+        patterns = (
+            rf"\b(?:{party_pattern})(?:['`]s)?\b[^.]{{0,60}}\b(?:application|order)\b[^.]{{0,40}}\b(?:{outcome_pattern})\b",
+            rf"\b(?:{outcome_pattern})\b[^.]{{0,40}}\b(?:the\s+)?(?:{party_pattern})(?:['`]s)?\b[^.]{{0,60}}\b(?:application|order)\b",
+        )
+        return any(re.search(pattern, window, re.IGNORECASE) is not None for pattern in patterns)
 
     def _extract_caption_parties_from_text(self, text: str) -> set[str]:
         lines = [re.sub(r"\s+", " ", line).strip() for line in str(text or "").splitlines()]

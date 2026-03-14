@@ -434,6 +434,47 @@ def test_answer_boolean_handles_employment_article_11_2_b() -> None:
     assert result.cited_chunk_ids == ["employment:11-2b"]
 
 
+def test_answer_boolean_handles_claimant_application_not_granted_when_defendant_set_aside_is_granted() -> None:
+    answerer = StrictAnswerer()
+    chunks = [
+        _case_chunk(
+            chunk_id="arb034:2",
+            doc_id="arb034",
+            doc_title="ARB 034/2025 Ohtli v Onora",
+            page=2,
+            text=(
+                "IT IS HEREBY ORDERED THAT: "
+                "1. The ASI Order is discharged with immediate effect. "
+                "2. The Defendant's Set Aside Application is granted. "
+                "3. The Claimant shall pay the Defendant its costs of the Set Aside Application on the standard basis."
+            ),
+        ),
+        _case_chunk(
+            chunk_id="arb034:4",
+            doc_id="arb034",
+            doc_title="ARB 034/2025 Ohtli v Onora",
+            page=4,
+            text=(
+                "I am not persuaded that such concern justifies the continuation of an injunction where the "
+                "conduct complained of has ceased and the dispute is progressing through arbitration."
+            ),
+        ),
+    ]
+
+    result = answerer.answer(
+        answer_type="boolean",
+        query=(
+            "Based on the second page of the document, was the Claimant's application for continuation "
+            "of the ASI Order granted by the court in case ARB 034/2025?"
+        ),
+        context_chunks=chunks,
+    )
+
+    assert result is not None
+    assert result.answer == "No"
+    assert result.cited_chunk_ids == ["arb034:2"]
+
+
 def test_answer_boolean_handles_crs_article_17_b() -> None:
     answerer = StrictAnswerer()
     chunks = [
