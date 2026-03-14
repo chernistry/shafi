@@ -106,6 +106,20 @@ def test_extract_title_refs_from_query_strips_administers_lead_tokens(mock_setti
     assert refs == ["Intellectual Property Law", "Trust Law"]
 
 
+def test_is_boolean_admin_compare_query_requires_compare_signal() -> None:
+    from rag_challenge.core.pipeline import _is_boolean_admin_compare_query
+
+    assert _is_boolean_admin_compare_query(
+        "Is the Intellectual Property Law No. 4 of 2019 administered by the same entity "
+        "that administers the Trust Law No. 4 of 2018?"
+    )
+    assert not _is_boolean_admin_compare_query(
+        "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct business "
+        "in or from the DIFC without being incorporated, registered, or continued under a Prescribed Law or "
+        "other Legislation administered by the Registrar?"
+    )
+
+
 @pytest.fixture
 def mock_settings():
     settings = SimpleNamespace(
@@ -3968,6 +3982,64 @@ def test_ensure_boolean_admin_compare_context_prefers_one_admin_page_per_ref(moc
     )
 
     assert [chunk.chunk_id for chunk in filtered] == ["ip:admin", "trust:admin"]
+
+
+def test_ensure_boolean_admin_compare_context_skips_single_law_registrar_reference(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    query = (
+        "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct business "
+        "in or from the DIFC without being incorporated, registered, or continued under a Prescribed Law or "
+        "other Legislation administered by the Registrar?"
+    )
+    operating_title = _make_retrieved_chunk(
+        chunk_id="operating:title",
+        doc_id="operating",
+        doc_title="OPERATING LAW 2018",
+        section_path="page:4",
+        text='This Law may be cited as the "Operating Law 2018".',
+        score=0.93,
+    )
+    operating_article = _make_retrieved_chunk(
+        chunk_id="operating:article8",
+        doc_id="operating",
+        doc_title="OPERATING LAW 2018",
+        section_path="page:8",
+        text=(
+            "No person shall operate or conduct business in or from the DIFC unless that person is incorporated, "
+            "registered or continued under a Prescribed Law."
+        ),
+        score=0.92,
+    )
+    surrogate_general = _make_retrieved_chunk(
+        chunk_id="general:admin",
+        doc_id="general-partnership",
+        doc_title="GENERAL PARTNERSHIP LAW",
+        section_path="page:4",
+        text="Administration of this Law. This Law is administered by the Registrar.",
+        score=0.91,
+    )
+    surrogate_llp = _make_retrieved_chunk(
+        chunk_id="llp:admin",
+        doc_id="limited-liability-partnership",
+        doc_title="LIMITED LIABILITY PARTNERSHIP LAW",
+        section_path="page:4",
+        text="Administration of this Law. This Law is administered by the Registrar.",
+        score=0.90,
+    )
+    reranked = [
+        RAGPipelineBuilder._raw_to_ranked(operating_article),
+        RAGPipelineBuilder._raw_to_ranked(operating_title),
+    ]
+
+    filtered = RAGPipelineBuilder._ensure_boolean_admin_compare_context(
+        query=query,
+        reranked=reranked,
+        retrieved=[operating_article, surrogate_general, surrogate_llp, operating_title],
+        top_n=2,
+    )
+
+    assert [chunk.chunk_id for chunk in filtered] == ["operating:article8", "operating:title"]
 
 
 def test_ensure_page_one_context_matches_exact_page_one_only(mock_settings):

@@ -396,6 +396,20 @@ def _is_restriction_effectiveness_query(query: str) -> bool:
     )
 
 
+def _is_boolean_admin_compare_query(query: str) -> bool:
+    q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+    if "administ" not in q:
+        return False
+    if "same entity" in q or "same authority" in q or "same administrator" in q:
+        return True
+    if "that administers" in q:
+        return True
+    admin_phrase = "administered by" in q or "administers" in q or "administer" in q
+    if not admin_phrase:
+        return False
+    return any(marker in q for marker in (" both ", " each ", " respectively ", " same "))
+
+
 def _is_citation_title_query(query: str) -> bool:
     q = (query or "").strip().lower()
     return "citation title" in q or "citation titles" in q
@@ -1137,7 +1151,7 @@ class RAGPipelineBuilder:
 
         if (
             answer_type == "boolean"
-            and "administ" in re.sub(r"\s+", " ", str(state.get("query") or "")).strip().lower()
+            and _is_boolean_admin_compare_query(str(state.get("query") or ""))
             and not _is_broad_enumeration_query(state["query"])
         ):
             admin_refs = self._extract_title_refs_from_query(state["query"]) or self._support_question_refs(state["query"])
@@ -2040,7 +2054,7 @@ class RAGPipelineBuilder:
                 return self._boolean_year_seed_chunk_score(ref=ref, chunk=chunk)
 
             scorer = _score_year_seed
-        elif answer_type == "boolean" and "administ" in normalized_query:
+        elif answer_type == "boolean" and _is_boolean_admin_compare_query(query):
             def _score_admin_seed(chunk: RetrievedChunk) -> int:
                 return self._boolean_admin_seed_chunk_score(ref=ref, chunk=chunk)
 
@@ -2384,7 +2398,7 @@ class RAGPipelineBuilder:
                     retrieved=retrieved_all,
                     top_n=max(int(top_n), min(4, len(refs_for_judge_compare) * 2)),
                 )
-        if is_boolean and "administ" in normalized_query:
+        if is_boolean and _is_boolean_admin_compare_query(str(state.get("query") or "")):
             refs_for_admin_compare = self._support_question_refs(str(state.get("query") or ""))
             if len(refs_for_admin_compare) >= 2:
                 reranked = self._ensure_boolean_admin_compare_context(
@@ -2610,15 +2624,24 @@ class RAGPipelineBuilder:
 
         q_lower = re.sub(r"\s+", " ", query).strip().lower()
         normalized_answer_type = answer_type.strip().lower()
-        compare_like = normalized_answer_type in {"boolean", "name", "names", "date", "number"} and (
+        boolean_compare_like = normalized_answer_type == "boolean" and (
             len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
-            or len(cls._support_question_refs(query)) >= 2
-            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
             or _is_common_judge_compare_query(query)
             or "same year" in q_lower
             or "same party" in q_lower
             or "appeared in both" in q_lower
-            or "administ" in q_lower
+            or _is_boolean_admin_compare_query(query)
+        )
+        compare_like = boolean_compare_like or (
+            normalized_answer_type in {"name", "names", "date", "number"} and (
+                len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
+                or len(cls._support_question_refs(query)) >= 2
+                or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+                or _is_common_judge_compare_query(query)
+                or "same year" in q_lower
+                or "same party" in q_lower
+                or "appeared in both" in q_lower
+            )
         )
         metadata_like = (
             cls._is_named_metadata_support_query(query)
@@ -3295,6 +3318,8 @@ class RAGPipelineBuilder:
         top_n: int,
     ) -> list[RankedChunk]:
         if top_n <= 0 or not retrieved:
+            return reranked[: max(0, int(top_n))]
+        if not _is_boolean_admin_compare_query(query):
             return reranked[: max(0, int(top_n))]
 
         refs = cls._paired_support_question_refs(query)
@@ -6343,15 +6368,24 @@ class RAGPipelineBuilder:
 
         q_lower = re.sub(r"\s+", " ", query).strip().lower()
         normalized_answer_type = answer_type.strip().lower()
-        compare_like = normalized_answer_type in {"boolean", "name", "names", "date", "number"} and (
+        boolean_compare_like = normalized_answer_type == "boolean" and (
             len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
-            or len(cls._support_question_refs(query)) >= 2
-            or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
             or _is_common_judge_compare_query(query)
             or "same year" in q_lower
             or "same party" in q_lower
             or "appeared in both" in q_lower
-            or "administ" in q_lower
+            or _is_boolean_admin_compare_query(query)
+        )
+        compare_like = boolean_compare_like or (
+            normalized_answer_type in {"name", "names", "date", "number"} and (
+                len(_DIFC_CASE_ID_RE.findall(query or "")) >= 2
+                or len(cls._support_question_refs(query)) >= 2
+                or _is_case_issue_date_name_compare_query(query, answer_type=answer_type)
+                or _is_common_judge_compare_query(query)
+                or "same year" in q_lower
+                or "same party" in q_lower
+                or "appeared in both" in q_lower
+            )
         )
         metadata_like = (
             cls._is_named_metadata_support_query(query)
