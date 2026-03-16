@@ -22,6 +22,7 @@ def test_private_doctor_preflight_happy_path(tmp_path: Path, monkeypatch) -> Non
     concurrency_path = tmp_path / "concurrency_drift_report.json"
     ocr_path = tmp_path / "ocr_audit.json"
     unsupported_path = Path(__file__).resolve().parents[1] / "fixtures" / "unsupported_synthetic_pack.json"
+    scanner_path = tmp_path / "scan_results.jsonl"
     out_json = tmp_path / "doctor.json"
     out_md = tmp_path / "doctor.md"
 
@@ -52,6 +53,11 @@ def test_private_doctor_preflight_happy_path(tmp_path: Path, monkeypatch) -> Non
             "chunk_page_mismatch_docs": 0,
         },
     )
+    scanner_path.write_text(
+        json.dumps({"doc_id": "doc-a", "filename": "doc-a.pdf", "suspicion_score": 22, "reason_tags": ["tracked_changes_visual_semantics"]})
+        + "\n",
+        encoding="utf-8",
+    )
 
     exit_code = main(
         [
@@ -67,6 +73,8 @@ def test_private_doctor_preflight_happy_path(tmp_path: Path, monkeypatch) -> Non
             str(ocr_path),
             "--unsupported-pack-json",
             str(unsupported_path),
+            "--scanner-jsonl",
+            str(scanner_path),
             "--out-json",
             str(out_json),
             "--out-md",
@@ -83,6 +91,7 @@ def test_private_doctor_preflight_happy_path(tmp_path: Path, monkeypatch) -> Non
     assert payload["checks"]["docling_runtime"] == {"ready": True, "detail": "ok"}
     assert payload["checks"]["sparse_runtime"] == {"ready": True, "detail": "indices=5"}
     assert payload["checks"]["ocr_runtime"] == {"ready": True, "detail": "pages=2 section_lengths=100,100"}
+    assert payload["checks"]["scanner_advisory"]["risk_level"] == "medium"
     assert "overall_ready: `True`" in out_md.read_text(encoding="utf-8")
 
 
@@ -97,6 +106,7 @@ def test_private_doctor_preflight_reports_failures(tmp_path: Path, monkeypatch) 
     concurrency_path = tmp_path / "concurrency_drift_report.json"
     ocr_path = tmp_path / "ocr_audit.json"
     unsupported_path = Path(__file__).resolve().parents[1] / "fixtures" / "unsupported_synthetic_pack.json"
+    scanner_path = tmp_path / "missing_scan_results.jsonl"
     out_json = tmp_path / "doctor.json"
     out_md = tmp_path / "doctor.md"
 
@@ -136,6 +146,8 @@ def test_private_doctor_preflight_reports_failures(tmp_path: Path, monkeypatch) 
             str(ocr_path),
             "--unsupported-pack-json",
             str(unsupported_path),
+            "--scanner-jsonl",
+            str(scanner_path),
             "--out-json",
             str(out_json),
             "--out-md",
@@ -158,6 +170,7 @@ def test_private_doctor_preflight_reports_failures(tmp_path: Path, monkeypatch) 
         "ocr_audit",
     }
     assert "manifest: ready=`False`" in out_md.read_text(encoding="utf-8")
+    assert payload["checks"]["scanner_advisory"]["detail"] == "missing"
 
 
 def test_check_ocr_audit_accepts_list_shaped_fields(tmp_path: Path) -> None:

@@ -266,6 +266,60 @@ def _check_unsupported_pack(path: Path) -> tuple[bool, str, int]:
     return (failures == 0, "ok" if failures == 0 else "contract_failures", failures)
 
 
+def _check_scanner_results(path: Path | None) -> JsonDict | None:
+    if path is None:
+        return None
+    if not path.exists():
+        return {"ready": True, "detail": "missing", "advisory_only": True}
+    rows: list[JsonDict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        if isinstance(payload, dict):
+            rows.append(cast("JsonDict", payload))
+    high_risk = [row for row in rows if int(row.get("suspicion_score") or 0) >= 20]
+    top_docs = [
+        {
+            "doc_id": row.get("doc_id"),
+            "filename": row.get("filename"),
+            "score": row.get("suspicion_score"),
+            "reason_tags": cast("list[str]", row.get("reason_tags") or [])[:3],
+        }
+        for row in sorted(rows, key=lambda item: (-int(item.get("suspicion_score") or 0), str(item.get("filename") or "")))[:3]
+    ]
+    clustered_families = {
+        family
+        for row in high_risk
+        for family in cast("list[str]", row.get("reason_tags") or [])
+        if family
+        in {
+            "tracked_changes_visual_semantics",
+            "enactment_notice_pairing",
+            "same_family_duplicate",
+            "mixed_script_early_pages",
+        }
+    }
+    risk_level = "low"
+    if len(high_risk) >= 5:
+        risk_level = "high"
+    elif high_risk:
+        risk_level = "medium"
+    detail = f"docs={len(rows)} high_risk={len(high_risk)} risk={risk_level}"
+    if clustered_families:
+        detail += f" clustered={','.join(sorted(clustered_families))}"
+    return {
+        "ready": True,
+        "detail": detail,
+        "advisory_only": True,
+        "docs_scanned": len(rows),
+        "high_risk_doc_count": len(high_risk),
+        "risk_level": risk_level,
+        "top_docs": top_docs,
+        "clustered_families": sorted(clustered_families),
+    }
+
+
 def _render_markdown(summary: JsonDict) -> str:
     checks = cast("JsonDict", summary["checks"])
     lines = [
@@ -288,7 +342,10 @@ def _render_markdown(summary: JsonDict) -> str:
         "ocr_runtime",
         "ocr_audit",
         "unsupported_pack",
+        "scanner_advisory",
     ):
+        if key not in checks:
+            continue
         row = cast("JsonDict", checks[key])
         lines.append(f"- {key}: ready=`{row['ready']}` detail=`{row['detail']}`")
     lines.append("")
@@ -311,6 +368,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--concurrency-report-json", type=Path, required=True)
     parser.add_argument("--ocr-audit-json", type=Path, required=True)
     parser.add_argument("--unsupported-pack-json", type=Path, required=True)
+    parser.add_argument("--scanner-jsonl", type=Path)
     parser.add_argument("--out-json", type=Path, required=True)
     parser.add_argument("--out-md", type=Path, required=True)
     return parser.parse_args(argv)
@@ -329,6 +387,7 @@ def main(argv: list[str] | None = None) -> int:
     ocr_runtime_ready, ocr_runtime_detail = _check_ocr_runtime()
     ocr_ready, ocr_detail = _check_ocr_audit(args.ocr_audit_json)
     unsupported_ready, unsupported_detail, unsupported_failures = _check_unsupported_pack(args.unsupported_pack_json)
+    scanner_summary = _check_scanner_results(args.scanner_jsonl)
 
     fingerprint_payload = _load_json(args.candidate_fingerprint_json) if args.candidate_fingerprint_json.exists() else {}
     candidate_payload_obj: object = fingerprint_payload.get("candidate_fingerprint") or {}
@@ -351,10 +410,14 @@ def main(argv: list[str] | None = None) -> int:
             "failure_count": unsupported_failures,
         },
     }
+    if scanner_summary is not None:
+        checks["scanner_advisory"] = scanner_summary
     blocking_issues = [
         key
         for key, row in checks.items()
-        if isinstance(row, dict) and not bool(cast("JsonDict", row).get("ready"))
+        if isinstance(row, dict)
+        and not bool(cast("JsonDict", row).get("ready"))
+        and not bool(cast("JsonDict", row).get("advisory_only"))
     ]
     summary: JsonDict = {
         "candidate_label": candidate_label,

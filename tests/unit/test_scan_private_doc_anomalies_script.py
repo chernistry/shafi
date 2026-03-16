@@ -83,8 +83,10 @@ def test_scan_private_doc_anomalies_empty_directory_writes_outputs(tmp_path: Pat
     assert (output_dir / "scan_results.jsonl").exists()
     assert (output_dir / "scan_results.jsonl").read_text(encoding="utf-8") == ""
     summary = (output_dir / "summary.md").read_text(encoding="utf-8")
+    top20 = (output_dir / "top20_report.md").read_text(encoding="utf-8")
     assert "Docs scanned: 0" in summary
-    assert "Weighted suspicion scoring deferred to ticket 339." in summary
+    assert "Weighted suspicion scoring is heuristic" in summary
+    assert "Top 20 Suspicious Documents" in top20
 
 
 def test_scan_private_doc_anomalies_single_clean_pdf_emits_record(tmp_path: Path) -> None:
@@ -111,6 +113,10 @@ def test_scan_private_doc_anomalies_single_clean_pdf_emits_record(tmp_path: Path
     assert isinstance(row["doc_family_tags"], list)
     assert row["internal_link_count"] == 0
     assert row["exact_duplicate_cluster_id"] is None
+    assert "family_query_coverage_bucket" in row
+    assert "toc_pointer_type" in row
+    assert isinstance(row["suspicion_score"], int)
+    assert isinstance(row["reason_tags"], list)
 
 
 def test_scan_private_doc_anomalies_structural_smoke_detects_title_and_contents(tmp_path: Path) -> None:
@@ -334,6 +340,7 @@ def test_scan_private_doc_anomalies_exact_duplicate_clusters(tmp_path: Path) -> 
     assert len(records[0]["exact_duplicate_cluster_members"]) == 2
     summary = module.build_summary_markdown(records)
     assert "## Exact Duplicate Clusters" in summary
+    assert "Weighted suspicion scoring is heuristic" in summary
 
 
 def test_scan_private_doc_anomalies_doc_family_and_tracked_changes_tags(tmp_path: Path) -> None:
@@ -371,3 +378,29 @@ def test_scan_private_doc_anomalies_doc_family_and_tracked_changes_tags(tmp_path
     assert by_id["tracked_amendment"]["tracked_changes_confidence"] == "medium"
     assert "tracked_changes_amendment_law" in by_id["tracked_amendment"]["doc_family_tags"]
     assert "visual-diff semantics" in by_id["tracked_amendment"]["risk_note"]
+    assert by_id["tracked_amendment"]["suspicion_score"] > 0
+    assert "tracked_changes_visual_semantics" in by_id["tracked_amendment"]["reason_tags"]
+
+
+def test_scan_private_doc_anomalies_toc_and_top20_output(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "toc_doc.pdf"
+    _write_pdf(
+        pdf_path,
+        [
+            "LAW NO. 5 OF 2024\nCONTENTS\nArticle 1 ... 2\nArticle 2 ... 3",
+            "Preface page",
+            "Article 1\nSubstantive text",
+            "Article 2\nSubstantive text",
+        ],
+    )
+    output_dir = tmp_path / "out"
+
+    _run_cli(input_dir=tmp_path, output_dir=output_dir)
+
+    rows = [
+        json.loads(line)
+        for line in (output_dir / "scan_results.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert rows[0]["toc_pointer_type"] in {"internal_like", "linked", "pdf_like", "uncertain"}
+    assert (output_dir / "top20_report.md").exists()
