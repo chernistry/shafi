@@ -57,13 +57,21 @@ def _run_cli(
     )
 
 
-def _default_metadata(module, *, page_num: int = 1, image_count: int = 0, internal_link_count: int = 0):
+def _default_metadata(
+    module,
+    *,
+    page_num: int = 1,
+    image_count: int = 0,
+    internal_link_count: int = 0,
+    link_destinations: list[str] | None = None,
+    external_urls: list[str] | None = None,
+):
     return module.PdfPageMetadata(
         page_num=page_num,
         image_count=image_count,
         internal_link_count=internal_link_count,
-        link_destinations=["page:2"] if internal_link_count else [],
-        external_urls=[],
+        link_destinations=link_destinations if link_destinations is not None else (["page:2"] if internal_link_count else []),
+        external_urls=external_urls if external_urls is not None else [],
     )
 
 
@@ -100,6 +108,9 @@ def test_scan_private_doc_anomalies_single_clean_pdf_emits_record(tmp_path: Path
     assert row["extracted_page_count"] == 2
     assert row["signals"]
     assert len(row["per_page"]) == 2
+    assert isinstance(row["doc_family_tags"], list)
+    assert row["internal_link_count"] == 0
+    assert row["exact_duplicate_cluster_id"] is None
 
 
 def test_scan_private_doc_anomalies_structural_smoke_detects_title_and_contents(tmp_path: Path) -> None:
@@ -252,7 +263,12 @@ def test_scan_private_doc_anomalies_link_smoke() -> None:
         text="CONTENTS\nArticle 1 ... 2\nArticle 2 ... 4\nArticle 3 ... 6",
         page_num=1,
         page_count=2,
-        metadata=_default_metadata(module, internal_link_count=3),
+        metadata=_default_metadata(
+            module,
+            internal_link_count=3,
+            link_destinations=["page:2", "page:4", "page:6"],
+            external_urls=["https://legislation.difc.ae/law"],
+        ),
         fallback_triggered=False,
     )
     doc_analysis = module.analyze_doc_signals(
@@ -261,15 +277,26 @@ def test_scan_private_doc_anomalies_link_smoke() -> None:
         extraction_page_count=2,
         page_records=[{**page_analysis.page_record, "_raw_text": "CONTENTS\nArticle 1 ... 2\nArticle 2 ... 4"}],
         page_metadata=[
-            _default_metadata(module, internal_link_count=3),
+            _default_metadata(
+                module,
+                internal_link_count=3,
+                link_destinations=["page:2", "page:4", "page:6"],
+                external_urls=["https://legislation.difc.ae/law"],
+            ),
             _default_metadata(module, page_num=2),
         ],
         full_text="CONTENTS\nArticle 1 ... 2\nArticle 2 ... 4\nArticle 3 ... 6",
     )
 
     assert page_analysis.page_record["signals"]["contents_internal_link_density"] > 0.0
+    assert page_analysis.page_record["page_internal_link_count"] == 3
+    assert page_analysis.page_record["link_destinations"] == ["page:2", "page:4", "page:6"]
     assert doc_analysis.signals["pdf_internal_link_graph_present"] is True
     assert doc_analysis.signals["contents_internal_link_density"] > 0.0
+    assert doc_analysis.extras["internal_link_count"] == 3
+    assert doc_analysis.extras["contents_link_count"] == 3
+    assert doc_analysis.extras["toc_target_pages"] == [2, 4, 6]
+    assert doc_analysis.extras["external_link_targets"] == ["https://legislation.difc.ae/law"]
 
 
 def test_scan_private_doc_anomalies_coverage_priors_round_trip(tmp_path: Path) -> None:
@@ -288,3 +315,59 @@ def test_scan_private_doc_anomalies_coverage_priors_round_trip(tmp_path: Path) -
         if line.strip()
     ]
     assert rows[0]["coverage_priors"] == coverage_priors
+
+
+def test_scan_private_doc_anomalies_exact_duplicate_clusters(tmp_path: Path) -> None:
+    module = _load_module()
+    duplicate_pages = [
+        "LAW NO. 7 OF 2024\nThis Law may be cited as the Duplicate Law.",
+        "Article 1\nThis is duplicate text.",
+    ]
+    _write_pdf(tmp_path / "dup_a.pdf", duplicate_pages)
+    _write_pdf(tmp_path / "dup_b.pdf", duplicate_pages)
+
+    records = module.scan_pdf_corpus(input_dir=tmp_path, mode="raw-pdf-corpus", coverage_priors={})
+    clusters = {record["doc_id"]: record["exact_duplicate_cluster_id"] for record in records}
+
+    assert clusters["dup_a"] is not None
+    assert clusters["dup_a"] == clusters["dup_b"]
+    assert len(records[0]["exact_duplicate_cluster_members"]) == 2
+    summary = module.build_summary_markdown(records)
+    assert "## Exact Duplicate Clusters" in summary
+
+
+def test_scan_private_doc_anomalies_doc_family_and_tracked_changes_tags(tmp_path: Path) -> None:
+    module = _load_module()
+    _write_pdf(
+        tmp_path / "law_doc.pdf",
+        [
+            "LAW NO. 8 OF 2024\nThis Law may be cited as the Example Law.",
+            "CONTENTS\nArticle 1 ... 2\nArticle 2 ... 4",
+            "Article 1\nThis Law applies in the DIFC.",
+        ],
+    )
+    _write_pdf(
+        tmp_path / "judgment_doc.pdf",
+        [
+            "IN THE DIFC COURTS\nJudgment",
+            "Claimant v Defendant\nBackground\nDiscussion\nThe court considers the claim.",
+        ],
+    )
+    _write_pdf(
+        tmp_path / "tracked_amendment.pdf",
+        [
+            "LAW NO. 9 OF 2024\nAmendment Law",
+            "This law shall be amended as follows.\nThe following shall be substituted.\nThe words are deleted.",
+        ],
+    )
+
+    records = module.scan_pdf_corpus(input_dir=tmp_path, mode="raw-pdf-corpus", coverage_priors={})
+    by_id = {record["doc_id"]: record for record in records}
+
+    assert "consolidated_law" in by_id["law_doc"]["doc_family_tags"]
+    assert "judgment" in by_id["judgment_doc"]["doc_family_tags"]
+    assert by_id["tracked_amendment"]["tracked_changes_detected"] is True
+    assert by_id["tracked_amendment"]["tracked_changes_page_count"] >= 1
+    assert by_id["tracked_amendment"]["tracked_changes_confidence"] == "medium"
+    assert "tracked_changes_amendment_law" in by_id["tracked_amendment"]["doc_family_tags"]
+    assert "visual-diff semantics" in by_id["tracked_amendment"]["risk_note"]

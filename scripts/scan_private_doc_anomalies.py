@@ -53,6 +53,16 @@ _TRACKED_CHANGES_RE = re.compile(
     r"\b(?:underlined|struck through|strikethrough|deleted|inserted|substituted|amended by)\b",
     re.IGNORECASE,
 )
+_AMENDMENT_RE = re.compile(
+    r"\b(?:amendment|amended|repealed|substituted|replaced by|deleted and replaced|shall be amended as follows)\b",
+    re.IGNORECASE,
+)
+_REGULATIONS_RE = re.compile(r"\b(?:regulations|rules?)\b", re.IGNORECASE)
+_JUDGMENT_RE = re.compile(
+    r"\b(?:judgment|claimant|defendant|respondent|appellant|before justice|background|discussion|analysis)\b",
+    re.IGNORECASE,
+)
+_AMENDED_JUDGMENT_RE = re.compile(r"\b(?:amended judgment|corrected judgment|corrigendum)\b", re.IGNORECASE)
 _CASE_REF_PATTERNS = (
     re.compile(r"\b(?:CFI|CA|ARB|SCT|CMC)\s*\d{1,4}/\d{2,4}\b", re.IGNORECASE),
     re.compile(r"\b(?:Case|Claim)\s+No\.?\s*[A-Za-z0-9./-]+\b", re.IGNORECASE),
@@ -99,6 +109,7 @@ class DocAnalysis:
     fired_signals: list[str]
     coarse_artifact_kind: str
     case_references: list[str]
+    extras: JsonDict
 
 
 def _safe_ratio(numerator: int | float, denominator: int | float) -> float:
@@ -163,6 +174,121 @@ def _extract_case_references(text: str) -> list[str]:
         for match in pattern.findall(text):
             refs.add(re.sub(r"\s+", " ", match.strip()))
     return sorted(refs)
+
+
+def _normalize_title_key(text: str) -> str:
+    normalized = unicodedata.normalize("NFKC", text).strip().lower()
+    normalized = re.sub(r"^#+\s*", "", normalized)
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _extract_normalized_title(path: Path, page_records: list[JsonDict], full_text: str) -> str:
+    law_match = _LAW_NUMBER_RE.search(full_text)
+    if law_match is not None:
+        return _normalize_title_key(law_match.group(0))
+
+    for page_record in page_records[:3]:
+        raw_text = page_record.get("_raw_text")
+        if not isinstance(raw_text, str):
+            continue
+        for line in raw_text.splitlines():
+            stripped = line.strip()
+            if stripped:
+                return _normalize_title_key(stripped)
+    return _normalize_title_key(path.stem)
+
+
+def _normalized_text_hash(full_text: str) -> str:
+    normalized = unicodedata.normalize("NFKC", full_text)
+    collapsed = re.sub(r"\s+", "", normalized)
+    return hashlib.sha256(collapsed.encode("utf-8")).hexdigest()
+
+
+def _parse_link_destination(dest: str) -> int | None:
+    if not dest.startswith("page:"):
+        return None
+    page_num = dest.split(":", 1)[1]
+    return int(page_num) if page_num.isdigit() else None
+
+
+def _classify_doc_family_tags(
+    *,
+    normalized_text: str,
+    page_count: int,
+    page_signals: list[JsonDict],
+    coarse_artifact_kind: str,
+    external_link_targets: list[str],
+    tracked_changes_detected: bool,
+) -> list[str]:
+    schedule_pages = sum(1 for page_signal in page_signals if bool(page_signal["schedule_signature"]))
+    annex_pages = sum(1 for page_signal in page_signals if bool(page_signal["annex_signature"]))
+    table_pages = sum(1 for page_signal in page_signals if bool(page_signal["table_heavy_signature"]))
+    form_pages = sum(1 for page_signal in page_signals if bool(page_signal["form_checkbox_signature"]))
+    glossary_pages = sum(
+        1
+        for page_signal in page_signals
+        if bool(page_signal["glossary_like_signature"]) or bool(page_signal["glossary_definition_table"])
+    )
+    enactment_pages = sum(1 for page_signal in page_signals if bool(page_signal["enactment_notice_signature"]))
+    reasons_pages = sum(1 for page_signal in page_signals if bool(page_signal["reasons_like_signature"]))
+    order_pages = sum(1 for page_signal in page_signals if bool(page_signal["order_operatives_signature"]))
+    one_page_enactment = any(bool(page_signal["one_page_enactment_notice"]) for page_signal in page_signals)
+    has_articles = bool(_ARTICLE_REF_RE.search(normalized_text))
+    has_law = bool(_LAW_NUMBER_RE.search(normalized_text)) or " law " in f" {normalized_text} "
+    amendment_language = bool(_AMENDMENT_RE.search(normalized_text))
+    judgment_language = bool(_JUDGMENT_RE.search(normalized_text))
+    regulations_language = bool(_REGULATIONS_RE.search(normalized_text))
+    translation_caveat = bool(_TRANSLATION_CAVEAT_RE.search(normalized_text))
+
+    tags: list[str] = []
+    if has_law and not amendment_language and not regulations_language and coarse_artifact_kind == "law_like":
+        tags.append("consolidated_law")
+    if has_law and amendment_language:
+        tags.append("amendment_law")
+    if one_page_enactment or (page_count <= 2 and enactment_pages > 0 and not has_articles):
+        tags.append("enactment_notice")
+    if regulations_language and "regulations" not in tags:
+        tags.append("regulations")
+    if judgment_language and reasons_pages > 0 and "judgment" not in tags:
+        tags.append("judgment")
+    if order_pages > 0 and (page_count <= 6 or coarse_artifact_kind == "order_like"):
+        tags.append("order")
+    if judgment_language and bool(_AMENDED_JUDGMENT_RE.search(normalized_text)):
+        tags.append("amended_judgment")
+    if annex_pages > 0 and schedule_pages == 0:
+        tags.append("annex_copy")
+    if glossary_pages > 0:
+        tags.append("glossary_heavy")
+    if table_pages >= max(1, math.ceil(max(page_count, 1) * 0.4)):
+        tags.append("table_heavy")
+    if schedule_pages + annex_pages >= max(2, math.ceil(max(page_count, 1) * 0.3)):
+        tags.append("schedule_annex_heavy")
+    if form_pages > 0:
+        tags.append("form_like")
+    if tracked_changes_detected and "amendment_law" in tags:
+        tags.append("tracked_changes_amendment_law")
+    if translation_caveat:
+        tags.append("translation_caveat_doc")
+    if one_page_enactment:
+        tags.append("enactment_notice_one_page")
+    if len(external_link_targets) >= 3:
+        tags.append("cross_law_link_heavy")
+
+    deduped_tags = list(dict.fromkeys(tags))
+    if deduped_tags:
+        return deduped_tags
+    if coarse_artifact_kind == "law_like":
+        return ["consolidated_law"]
+    if coarse_artifact_kind == "order_like":
+        return ["order"]
+    if coarse_artifact_kind == "judgment_like":
+        return ["judgment"]
+    if table_pages > 0:
+        return ["table_heavy"]
+    if form_pages > 0:
+        return ["form_like"]
+    return ["judgment"] if judgment_language else ["consolidated_law"]
 
 
 def _load_coverage_priors(path: Path | None) -> Any:
@@ -427,6 +553,9 @@ def analyze_page_signals(
     page_record: JsonDict = {
         "page_num": page_num,
         "char_count": char_count,
+        "page_internal_link_count": metadata.internal_link_count,
+        "link_destinations": metadata.link_destinations,
+        "external_urls": metadata.external_urls,
         "signals": signals,
         "fired_signals": sorted(fired_signals),
     }
@@ -479,13 +608,34 @@ def analyze_doc_signals(
     )
 
     case_references = _extract_case_references(full_text)
+    contents_page_records = [
+        page_record for page_record in page_records if bool(cast("JsonDict", page_record["signals"])["contents_signature"])
+    ]
     contents_link_densities = [
         float(cast("JsonDict", page_record["signals"])["contents_internal_link_density"])
-        for page_record in page_records
-        if bool(cast("JsonDict", page_record["signals"])["contents_signature"])
+        for page_record in contents_page_records
     ]
     contents_internal_link_density = (
         round(sum(contents_link_densities) / len(contents_link_densities), 4) if contents_link_densities else 0.0
+    )
+    internal_link_count = sum(page.internal_link_count for page in page_metadata)
+    contents_link_count = sum(int(page_record["page_internal_link_count"]) for page_record in contents_page_records)
+    external_link_targets = sorted(
+        {
+            url
+            for page in page_metadata
+            for url in page.external_urls
+            if url.startswith("http://") or url.startswith("https://")
+        }
+    )
+    toc_target_pages = sorted(
+        {
+            parsed_page
+            for page_record in contents_page_records
+            for dest in cast("list[str]", page_record["link_destinations"])
+            for parsed_page in [_parse_link_destination(dest)]
+            if parsed_page is not None
+        }
     )
 
     confidential_marker_present = bool(_CONFIDENTIAL_RE.search(normalized))
@@ -499,6 +649,23 @@ def analyze_doc_signals(
     )
     pdf_internal_link_graph_present = any(page.internal_link_count > 0 for page in page_metadata)
     page_number_mismatch = page_count != extraction_page_count
+    tracked_changes_page_count = sum(
+        1 for page_signal in page_signals if bool(page_signal["tracked_changes_visual_semantics"])
+    )
+    tracked_changes_detected = tracked_changes_page_count > 0
+    tracked_changes_confidence: str | None
+    if tracked_changes_page_count >= 3:
+        tracked_changes_confidence = "high"
+    elif tracked_changes_page_count > 0:
+        tracked_changes_confidence = "medium"
+    else:
+        tracked_changes_confidence = None
+    risk_note = (
+        "Amendment law with visual-diff semantics. Extracted text does not distinguish insertions from deletions. "
+        "LLM answers about specific amendments may be unreliable."
+        if tracked_changes_detected
+        else None
+    )
 
     per_page_categories = [
         cast("str", page_record["dominant_arabic_category"])
@@ -522,6 +689,16 @@ def analyze_doc_signals(
         coarse_artifact_kind = "order_like"
     elif re.search(r"\b(?:judgment|claimant|defendant|respondent|appellant)\b", normalized, re.IGNORECASE):
         coarse_artifact_kind = "judgment_like"
+
+    normalized_title = _extract_normalized_title(path, page_records, full_text)
+    doc_family_tags = _classify_doc_family_tags(
+        normalized_text=normalized,
+        page_count=page_count,
+        page_signals=page_signals,
+        coarse_artifact_kind=coarse_artifact_kind,
+        external_link_targets=external_link_targets,
+        tracked_changes_detected=tracked_changes_detected,
+    )
 
     signals: JsonDict = {
         "page_number_mismatch": page_number_mismatch,
@@ -568,6 +745,8 @@ def analyze_doc_signals(
         "arabic_categories_present": arabic_categories_present,
         "case_references": case_references,
         "coarse_artifact_kind": coarse_artifact_kind,
+        "tracked_changes_detected": tracked_changes_detected,
+        "tracked_changes_page_count": tracked_changes_page_count,
     }
 
     fired_signals = [name for name, value in signals.items() if _signal_value_is_active(value)]
@@ -577,6 +756,22 @@ def analyze_doc_signals(
         fired_signals=sorted(fired_signals),
         coarse_artifact_kind=coarse_artifact_kind,
         case_references=case_references,
+        extras={
+            "doc_family_tags": doc_family_tags,
+            "normalized_title": normalized_title,
+            "internal_link_count": internal_link_count,
+            "contents_link_count": contents_link_count,
+            "external_link_targets": external_link_targets,
+            "toc_target_pages": toc_target_pages,
+            "exact_duplicate_cluster_id": None,
+            "exact_duplicate_cluster_members": [],
+            "duplicate_same_family_doc_ids": [],
+            "same_case_family_doc_ids": [],
+            "tracked_changes_detected": tracked_changes_detected,
+            "tracked_changes_page_count": tracked_changes_page_count,
+            "tracked_changes_confidence": tracked_changes_confidence,
+            "risk_note": risk_note,
+        },
     )
 
 
@@ -599,9 +794,65 @@ def _apply_same_case_multi_artifact_hint(records: list[JsonDict]) -> None:
             record = records[index]
             signals = cast("JsonDict", record["signals"])
             signals["same_case_multi_artifact_hint"] = True
+            sibling_hashes = sorted(
+                records[sibling_index]["sha256"]
+                for sibling_index in refs_to_indices[case_ref]
+                if sibling_index != index
+            )
+            record["same_case_family_doc_ids"] = sibling_hashes
+            family_tags = cast("list[str]", record["doc_family_tags"])
+            if (
+                any(tag in family_tags for tag in ("order", "judgment", "amended_judgment"))
+                and "same_case_order_or_judgment_candidate" not in family_tags
+            ):
+                family_tags.append("same_case_order_or_judgment_candidate")
             fired_signals = cast("list[str]", record["_fired_signals"])
             if "same_case_multi_artifact_hint" not in fired_signals:
                 fired_signals.append("same_case_multi_artifact_hint")
+
+
+def _apply_same_title_same_family_candidates(records: list[JsonDict]) -> None:
+    title_groups: dict[str, list[int]] = defaultdict(list)
+    for index, record in enumerate(records):
+        normalized_title = str(record.get("normalized_title") or "").strip()
+        if normalized_title:
+            title_groups[normalized_title].append(index)
+
+    for indices in title_groups.values():
+        if len(indices) < 2:
+            continue
+        family_intersection = set(cast("list[str]", records[indices[0]]["doc_family_tags"]))
+        for index in indices[1:]:
+            family_intersection &= set(cast("list[str]", records[index]["doc_family_tags"]))
+        if not family_intersection:
+            continue
+        for index in indices:
+            record = records[index]
+            sibling_hashes = sorted(records[sibling_index]["sha256"] for sibling_index in indices if sibling_index != index)
+            record["duplicate_same_family_doc_ids"] = sibling_hashes
+            family_tags = cast("list[str]", record["doc_family_tags"])
+            if "duplicate_same_family_candidate" not in family_tags:
+                family_tags.append("duplicate_same_family_candidate")
+
+
+def _apply_exact_duplicate_clusters(records: list[JsonDict]) -> None:
+    cluster_members: dict[str, list[int]] = defaultdict(list)
+    for index, record in enumerate(records):
+        normalized_hash = str(record.get("_normalized_text_hash") or "").strip()
+        if normalized_hash:
+            cluster_members[normalized_hash].append(index)
+
+    cluster_counter = 1
+    for indices in cluster_members.values():
+        if len(indices) < 2:
+            continue
+        cluster_id = f"cluster_{cluster_counter:03d}"
+        member_hashes = sorted(records[index]["sha256"] for index in indices)
+        cluster_counter += 1
+        for index in indices:
+            record = records[index]
+            record["exact_duplicate_cluster_id"] = cluster_id
+            record["exact_duplicate_cluster_members"] = member_hashes
 
 
 def _stub_score(_record: JsonDict) -> tuple[int, list[str]]:
@@ -670,11 +921,15 @@ def scan_pdf_corpus(
             "coverage_priors": coverage_priors,
             "suspicion_score": 0,
             "reason_tags": [],
+            **doc_analysis.extras,
             "_fired_signals": fired_signals,
+            "_normalized_text_hash": _normalized_text_hash(full_text),
         }
         records.append(record)
 
+    _apply_exact_duplicate_clusters(records)
     _apply_same_case_multi_artifact_hint(records)
+    _apply_same_title_same_family_candidates(records)
 
     for record in records:
         suspicion_score, reason_tags = _stub_score(record)
@@ -688,6 +943,7 @@ def scan_pdf_corpus(
             cleaned_pages.append(page_copy)
         record["per_page"] = cleaned_pages
         record.pop("_fired_signals", None)
+        record.pop("_normalized_text_hash", None)
     return records
 
 
@@ -755,6 +1011,29 @@ def build_summary_markdown(records: list[JsonDict]) -> str:
             lines.append(f"| {signal_name} | {count} |")
     else:
         lines.append("| - | 0 |")
+
+    duplicate_clusters: dict[str, list[JsonDict]] = defaultdict(list)
+    for record in records:
+        cluster_id = record.get("exact_duplicate_cluster_id")
+        if isinstance(cluster_id, str) and cluster_id:
+            duplicate_clusters[cluster_id].append(record)
+
+    lines.extend(
+        [
+            "",
+            "## Exact Duplicate Clusters",
+            "",
+            "| cluster_id | member_count | filenames | normalized_title |",
+            "| --- | ---: | --- | --- |",
+        ]
+    )
+    if duplicate_clusters:
+        for cluster_id, members in sorted(duplicate_clusters.items()):
+            filenames = ", ".join(str(member["filename"]) for member in members)
+            normalized_title = str(members[0].get("normalized_title") or "")
+            lines.append(f"| {cluster_id} | {len(members)} | {filenames} | {normalized_title} |")
+    else:
+        lines.append("| - | 0 | - | - |")
 
     lines.extend(
         [
