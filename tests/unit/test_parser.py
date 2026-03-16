@@ -181,6 +181,40 @@ def test_parse_pdf_falls_back_to_docling_when_pymupdf_text_is_low_density(
     assert text.startswith("# OCR fallback")
 
 
+def test_extract_pdf_pages_for_scan_reports_pymupdf_fast_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parser = DocumentParser(pdf_text_min_chars=20, pdf_text_min_words=3)
+    file_path = tmp_path / "sample.pdf"
+    file_path.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(parser, "_parse_pdf_pymupdf_pages", lambda _path: ["This is extracted text from PDF."])
+    monkeypatch.setattr(parser, "_parse_pdf_docling_pages", lambda _path: ["docling"])
+
+    extraction = parser.extract_pdf_pages_for_scan(file_path)
+
+    assert extraction.pages == ["This is extracted text from PDF."]
+    assert extraction.parser_mode == "pymupdf"
+    assert extraction.fallback_triggered is False
+
+
+def test_extract_pdf_pages_for_scan_reports_docling_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parser = DocumentParser(pdf_text_min_chars=50, pdf_text_min_words=10)
+    file_path = tmp_path / "sample.pdf"
+    file_path.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(parser, "_parse_pdf_pymupdf_pages", lambda _path: ["short"])
+    monkeypatch.setattr(parser, "_parse_pdf_docling_pages", lambda _path: ["Recovered page 1", "Recovered page 2"])
+
+    extraction = parser.extract_pdf_pages_for_scan(file_path)
+
+    assert extraction.pages == ["Recovered page 1", "Recovered page 2"]
+    assert extraction.parser_mode == "docling"
+    assert extraction.fallback_triggered is True
+
+
 def test_read_pdf_preserves_docling_page_boundaries_on_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     parser = DocumentParser(pdf_text_min_chars=50, pdf_text_min_words=10)
     file_path = tmp_path / "sample.pdf"

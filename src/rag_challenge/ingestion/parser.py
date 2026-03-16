@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from rag_challenge.config.settings import IngestionSettings
 from rag_challenge.models import DocType, DocumentSection, ParsedDocument, ProvidedChunk
@@ -39,6 +40,13 @@ _HEADING_RE = re.compile(
     r"|\d+(?:\.\d+)*\s+[A-Z].+"
     r"|[A-Z][A-Z\s]{4,})$"
 )
+
+
+@dataclass(frozen=True, slots=True)
+class PdfScanExtraction:
+    pages: list[str]
+    parser_mode: Literal["pymupdf", "docling"]
+    fallback_triggered: bool
 
 
 class DocumentParser:
@@ -151,10 +159,22 @@ class DocumentParser:
         return path.read_text(encoding="utf-8", errors="replace")
 
     def _read_pdf(self, path: Path) -> tuple[str, list[str]]:
+        text, pages, _parser_mode, _fallback_triggered = self._read_pdf_with_metadata(path)
+        return text, pages
+
+    def extract_pdf_pages_for_scan(self, path: Path) -> PdfScanExtraction:
+        _text, pages, parser_mode, fallback_triggered = self._read_pdf_with_metadata(path)
+        return PdfScanExtraction(
+            pages=pages,
+            parser_mode=parser_mode,
+            fallback_triggered=fallback_triggered,
+        )
+
+    def _read_pdf_with_metadata(self, path: Path) -> tuple[str, list[str], Literal["pymupdf", "docling"], bool]:
         pages = self._parse_pdf_pymupdf_pages(path)
         fast_text = "\n\n".join(text for text in pages if text.strip()).strip()
         if self._is_pdf_text_sufficient(fast_text):
-            return fast_text, pages
+            return fast_text, pages, "pymupdf", False
 
         if fast_text.strip():
             logger.info(
@@ -166,12 +186,12 @@ class DocumentParser:
 
         docling_pages = [text.strip() for text in self._parse_pdf_docling_pages(path)]
         if any(text for text in docling_pages):
-            return "\n\n".join(text for text in docling_pages if text).strip(), docling_pages
+            return "\n\n".join(text for text in docling_pages if text).strip(), docling_pages, "docling", True
 
         # Preserve any page boundaries PyMuPDF did recover instead of collapsing to one pseudo-page.
         preserved_pages = [text.strip() for text in pages]
         merged = "\n\n".join(text for text in preserved_pages if text).strip()
-        return merged, preserved_pages if preserved_pages else []
+        return merged, preserved_pages if preserved_pages else [], "pymupdf", True
 
     def _parse_json_document(self, path: Path, *, fallback_doc_id: str) -> ParsedDocument:
         raw = path.read_text(encoding="utf-8", errors="replace")
