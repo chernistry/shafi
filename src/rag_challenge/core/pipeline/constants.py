@@ -1,4 +1,3 @@
-# pyright: reportMissingTypeStubs=false, reportMissingTypeArgument=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportTypedDictNotRequiredAccess=false, reportPrivateUsage=false, reportUnusedImport=false
 from __future__ import annotations
 
 import re
@@ -207,4 +206,3 @@ _TITLE_PREPOSITION_BAD_LEAD_RE = re.compile(
 )
 
 _LAW_NO_REF_RE = re.compile(r"\blaw\s+no\.?\s*(\d+)\s+of\s+(\d{4})\b", re.IGNORECASE)
-
