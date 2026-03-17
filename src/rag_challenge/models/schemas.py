@@ -48,6 +48,12 @@ class ChunkMetadata(BaseModel):
     ingest_version: str = ""
     chunk_text: str = ""
     doc_summary: str = ""
+    chunk_type: str = ""
+    doc_family: str = ""
+    page_family: str = ""
+    normalized_title: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    amount_roles: list[str] = Field(default_factory=list)
 
 
 class PageMetadata(BaseModel):
@@ -65,6 +71,8 @@ class PageMetadata(BaseModel):
     ingest_version: str = ""
     page_text: str = ""
     doc_summary: str = ""
+    page_family: str = ""
+    doc_family: str = ""
 
 
 class RetrievedPage(BaseModel):
@@ -255,6 +263,12 @@ class Chunk(BaseModel):
     citations: list[str] = Field(default_factory=list)
     anchors: list[str] = Field(default_factory=list)
     token_count: int = 0
+    chunk_type: str = ""
+    doc_family: str = ""
+    page_family: str = ""
+    normalized_title: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    amount_roles: list[str] = Field(default_factory=list)
 
 
 # -- LangGraph State --

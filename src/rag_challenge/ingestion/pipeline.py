@@ -6,7 +6,9 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -27,6 +29,226 @@ if TYPE_CHECKING:
     from rag_challenge.models import Chunk, PageMetadata, ParsedDocument
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Preprocessing enrichment utilities (additive metadata, no architecture changes)
+# ---------------------------------------------------------------------------
+
+_CASE_ID_RE = re.compile(r"\b(?:CFI|CA|ARB|SCT|TCD|ENF)\s+\d{3}/\d{4}\b", re.IGNORECASE)
+_CURRENCY_RE = re.compile(r"(?:AED|USD|GBP|EUR)\s*[\d,]+(?:\.\d+)?", re.IGNORECASE)
+_DASH_RE = re.compile(r"[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]")
+_ZERO_WIDTH_RE = re.compile(r"[\u200B\u200C\u200D\uFEFF]")
+_QUOTE_RE = re.compile(r"[\u2018\u2019\u201A\u201B]")
+_DQUOTE_RE = re.compile(r"[\u201C\u201D\u201E\u201F]")
+_EASTERN_ARABIC_MAP = str.maketrans("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669", "0123456789")
+
+
+def _classify_doc_family(title: str, summary: str, first_page_text: str) -> str:
+    combined = f"{title} {first_page_text[:2000]}".lower()
+    if "tracked change" in combined or "tracked_change" in combined:
+        return "tracked_changes_amendment"
+    if "enactment notice" in combined and len(first_page_text) < 2000:
+        return "enactment_notice"
+    if "consolidated version" in combined or "as amended by" in combined:
+        return "consolidated_law"
+    if "amendment law" in combined:
+        return "amendment_law"
+    if re.search(r"\bregulations?\b", combined) and "law no" not in combined:
+        return "regulations"
+    if "it is hereby ordered" in combined:
+        return "order"
+    if re.search(r"\bjudgment\b", combined):
+        return "judgment"
+    if _CASE_ID_RE.search(combined):
+        return "order"
+    if re.search(r"\blaw\s+no\b", combined):
+        return "consolidated_law"
+    return "other"
+
+
+def _classify_page_family(page_text: str, page_num: int, total_pages: int) -> str:
+    t = page_text[:3000].lower() if page_text else ""
+    upper_t = page_text[:3000] if page_text else ""
+    if page_num == 1 and _CASE_ID_RE.search(t):
+        return "cover_like"
+    if "table of contents" in t or (t.strip().startswith("contents") and page_num <= 3):
+        return "contents_like"
+    if "it is hereby ordered" in t:
+        return "operative_order_like"
+    if re.search(r"\bSCHEDULE\b", upper_t):
+        return "schedule_like"
+    if re.search(r"\bANNEX\b", upper_t) or re.search(r"\bAPPENDIX\b", upper_t):
+        return "schedule_like"
+    if "enactment notice" in t or "comes into force" in t:
+        return "enactment_like"
+    if re.search(r"\bcommencement\b", t) and page_num <= 5:
+        return "commencement_like"
+    if "administered by" in t:
+        return "administration_like"
+    if _CURRENCY_RE.search(t) and ("cost" in t or "pay" in t or "award" in t or "sum of" in t):
+        return "costs_like"
+    if page_num == 1 and re.search(r"\blaw\s+no\b", t):
+        return "citation_title_like"
+    return ""
+
+
+def _normalize_identifiers(text: str) -> str:
+    if not text:
+        return ""
+    result = unicodedata.normalize("NFKC", text)
+    result = _DASH_RE.sub("-", result)
+    result = _ZERO_WIDTH_RE.sub("", result)
+    result = result.replace("\u00A0", " ")
+    result = _QUOTE_RE.sub("'", result)
+    result = _DQUOTE_RE.sub('"', result)
+    result = result.translate(_EASTERN_ARABIC_MAP)
+    return result
+
+
+def _extract_amount_roles(page_text: str) -> list[str]:
+    if not page_text or not _CURRENCY_RE.search(page_text):
+        return []
+    t = page_text.lower()
+    roles: list[str] = []
+    if any(kw in t for kw in ("claim value", "claimed amount", "claim for")):
+        roles.append("claim_amount")
+    if any(kw in t for kw in ("ordered to pay", "costs awarded", "assessed in the amount", "sum of")):
+        roles.append("costs_awarded")
+    if any(kw in t for kw in ("costs schedule", "claimed costs", "statement of costs")):
+        roles.append("costs_claimed")
+    if any(kw in t for kw in ("penalty", "fine", "prescribed penalty")):
+        roles.append("penalty")
+    if "damages" in t:
+        roles.append("damages")
+    return roles
+
+
+_ANCHOR_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("schedule_anchor", re.compile(r"\bSCHEDULE\b")),
+    ("enactment_anchor", re.compile(r"enactment\s+notice|comes?\s+into\s+force", re.IGNORECASE)),
+    ("commencement_anchor", re.compile(r"\bcommencement\b", re.IGNORECASE)),
+    ("administration_anchor", re.compile(r"administered\s+by", re.IGNORECASE)),
+    ("operative_order_anchor", re.compile(r"IT IS HEREBY ORDERED", re.IGNORECASE)),
+    ("costs_anchor", re.compile(r"(?:costs?|sum\s+of|ordered\s+to\s+pay).*(?:AED|USD|GBP)", re.IGNORECASE)),
+]
+
+
+def _enrich_chunks(
+    chunks: list[Chunk],
+    doc: ParsedDocument,
+    first_page_text: str,
+    doc_summary: str,
+) -> list[Chunk]:
+    """Enrich chunks with doc_family, page_family, normalized fields, amount roles."""
+    doc_fam = _classify_doc_family(doc.title, doc_summary, first_page_text)
+    norm_title = _normalize_identifiers(doc.title)
+    total_pages = sum(1 for s in doc.sections if s.section_path.startswith("page:"))
+
+    page_texts: dict[int, str] = {}
+    for section in doc.sections:
+        if section.section_path.startswith("page:"):
+            try:
+                pn = int(section.section_path.split(":", 1)[1])
+                page_texts[pn] = section.text
+            except (ValueError, IndexError):
+                pass
+
+    enriched: list[Chunk] = []
+    for chunk in chunks:
+        page_num = 0
+        if chunk.section_path.startswith("page:"):
+            try:
+                page_num = int(chunk.section_path.split(":", 1)[1])
+            except (ValueError, IndexError):
+                pass
+
+        pg_text = page_texts.get(page_num, "")
+        pg_fam = _classify_page_family(pg_text, page_num, total_pages)
+        norm_refs = [_normalize_identifiers(c) for c in chunk.citations] if chunk.citations else []
+        amt_roles = _extract_amount_roles(pg_text) if pg_text else []
+
+        enriched.append(chunk.model_copy(update={
+            "doc_family": doc_fam,
+            "page_family": pg_fam,
+            "normalized_title": norm_title,
+            "normalized_refs": norm_refs,
+            "amount_roles": amt_roles,
+        }))
+    return enriched
+
+
+def _emit_anchor_chunks(
+    doc: ParsedDocument,
+    doc_family: str,
+    doc_summary: str,
+) -> list[Chunk]:
+    """Emit auxiliary anchor chunks for key page sections."""
+    from rag_challenge.models import Chunk as ChunkModel
+
+    anchors: list[ChunkModel] = []
+    total_pages = sum(1 for s in doc.sections if s.section_path.startswith("page:"))
+
+    for section in doc.sections:
+        if not section.section_path.startswith("page:"):
+            continue
+        try:
+            page_num = int(section.section_path.split(":", 1)[1])
+        except (ValueError, IndexError):
+            continue
+        text = section.text.strip()
+        if not text:
+            continue
+
+        for anchor_type, pattern in _ANCHOR_PATTERNS:
+            if pattern.search(text):
+                snippet = text[:2000]
+                chunk_id_hash = hashlib.sha256(f"{doc.doc_id}:{page_num}:{anchor_type}".encode()).hexdigest()[:8]
+                chunk_id = f"{doc.doc_id}:{page_num}:anchor:{chunk_id_hash}"
+                anchors.append(ChunkModel(
+                    chunk_id=chunk_id,
+                    doc_id=doc.doc_id,
+                    doc_title=doc.title,
+                    doc_type=doc.doc_type,
+                    jurisdiction=getattr(doc, "jurisdiction", ""),
+                    section_path=section.section_path,
+                    chunk_text=snippet,
+                    chunk_text_for_embedding=f"{doc.title}\n{snippet}",
+                    doc_summary=doc_summary,
+                    citations=[],
+                    anchors=[],
+                    token_count=len(snippet.split()),
+                    chunk_type=anchor_type,
+                    doc_family=doc_family,
+                    page_family=_classify_page_family(text, page_num, total_pages),
+                    normalized_title=_normalize_identifiers(doc.title),
+                ))
+
+        is_last_pages = page_num >= total_pages - 1 and total_pages > 2
+        if is_last_pages and doc_family in ("judgment", "order"):
+            snippet = text[:2000]
+            chunk_id_hash = hashlib.sha256(f"{doc.doc_id}:{page_num}:conclusion_anchor".encode()).hexdigest()[:8]
+            chunk_id = f"{doc.doc_id}:{page_num}:anchor:{chunk_id_hash}"
+            if not any(a.chunk_id == chunk_id for a in anchors):
+                anchors.append(ChunkModel(
+                    chunk_id=chunk_id,
+                    doc_id=doc.doc_id,
+                    doc_title=doc.title,
+                    doc_type=doc.doc_type,
+                    jurisdiction=getattr(doc, "jurisdiction", ""),
+                    section_path=section.section_path,
+                    chunk_text=snippet,
+                    chunk_text_for_embedding=f"{doc.title}\n{snippet}",
+                    doc_summary=doc_summary,
+                    citations=[],
+                    anchors=[],
+                    token_count=len(snippet.split()),
+                    chunk_type="conclusion_anchor",
+                    doc_family=doc_family,
+                    page_family=_classify_page_family(text, page_num, total_pages),
+                    normalized_title=_normalize_identifiers(doc.title),
+                ))
+
+    return anchors
 
 
 def _error_list_factory() -> list[str]:
@@ -214,6 +436,17 @@ class IngestionPipeline:
                             stats.sac_summaries_generated += 1
                             augmented = self._sac.augment_chunks(chunks, summary)
 
+                            first_pg = ""
+                            for sec in doc.sections:
+                                if sec.section_path.startswith("page:"):
+                                    first_pg = sec.text
+                                    break
+                            augmented = _enrich_chunks(augmented, doc, first_pg, summary)
+                            anchor_chunks = _emit_anchor_chunks(doc, _classify_doc_family(doc.title, summary, first_pg), summary)
+                            if anchor_chunks:
+                                augmented = list(augmented) + anchor_chunks
+                                logger.info("Emitted %d anchor chunks for doc_id=%s", len(anchor_chunks), doc.doc_id)
+
                             stats.chunks_created += len(augmented)
                             logger.info(
                                 "ingestion_doc_processed",
@@ -378,6 +611,14 @@ class IngestionPipeline:
         """Build page-level points from parsed document sections and upsert into page collection."""
         from rag_challenge.models import PageMetadata
 
+        first_pg = ""
+        for sec in doc.sections:
+            if sec.section_path.startswith("page:") and sec.text.strip():
+                first_pg = sec.text
+                break
+        doc_fam = _classify_doc_family(doc.title, doc_summary, first_pg)
+        total_pages = sum(1 for s in doc.sections if s.section_path.startswith("page:"))
+
         pages: list[PageMetadata] = []
         for section in doc.sections:
             if not section.section_path.startswith("page:"):
@@ -390,6 +631,7 @@ class IngestionPipeline:
             except (ValueError, IndexError):
                 continue
             page_id = f"{doc.doc_id}_{page_num}"
+            pg_fam = _classify_page_family(page_text, page_num, total_pages)
             pages.append(PageMetadata(
                 page_id=page_id,
                 doc_id=doc.doc_id,
@@ -401,6 +643,8 @@ class IngestionPipeline:
                 ingest_version=self._settings.ingestion.ingest_version,
                 page_text=page_text,
                 doc_summary=doc_summary,
+                page_family=pg_fam,
+                doc_family=doc_fam,
             ))
 
         if not pages:

@@ -104,9 +104,11 @@ class QdrantStore:
             "jurisdiction",
             "chunk_id",
             "ingest_version",
-            # Identifier-aware retrieval (arrays of keywords).
             "citations",
             "anchors",
+            "chunk_type",
+            "doc_family",
+            "page_family",
         ]
         for field in index_fields:
             try:
