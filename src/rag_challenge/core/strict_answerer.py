@@ -182,6 +182,19 @@ class StrictAnswerer:
             return cited or ([chunks[0].chunk_id] if chunks else [])
 
         # 0) High-precision legal boolean patterns (avoid common LLM misreads).
+
+        # Prohibition pattern: "is a person permitted to X without Y" where
+        # context says "no person shall X without Y"
+        if "permitted" in q_lower and "without" in q_lower:
+            for chunk in chunks:
+                window = re.sub(r"\s+", " ", chunk.text or "").lower()
+                if (
+                    ("no person shall" in window or "shall not" in window)
+                    and "without" in window
+                    and any(t in window for t in ("incorporat", "register", "continu"))
+                ):
+                    return StrictAnswerResult(answer="No", cited_chunk_ids=[chunk.chunk_id], confident=True)
+
         # Liability + bad faith carve-out: "… cannot be held liable …; Article X does not apply if bad faith …"
         if "liable" in q_lower and "bad faith" in q_lower:
             for chunk in chunks:

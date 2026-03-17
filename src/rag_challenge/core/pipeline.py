@@ -4476,7 +4476,16 @@ class RAGPipelineBuilder:
                 context_chunks=context_chunks,
                 current_used_ids=final_used_ids,
             )
-            collector.set_used_ids(final_used_ids)
+            citation_pages = self._extract_citation_pages(
+                question=state["query"],
+                answer=answer,
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+            )
+            if citation_pages:
+                collector.set_used_page_ids_override(citation_pages)
+            else:
+                collector.set_used_ids(final_used_ids)
             citations: list[Citation] = []
             cited_ids = list(cited_ids)
         else:
@@ -4765,7 +4774,16 @@ class RAGPipelineBuilder:
                 context_chunks=context_chunks,
                 current_used_ids=final_used_ids,
             )
-            collector.set_used_ids(final_used_ids)
+            citation_pages = self._extract_citation_pages(
+                question=state["query"],
+                answer=answer,
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+            )
+            if citation_pages:
+                collector.set_used_page_ids_override(citation_pages)
+            else:
+                collector.set_used_ids(final_used_ids)
             if answer_type == "free_text" and streamed and answer.strip():
                 writer({"type": "answer_final", "text": answer})
 
@@ -6446,6 +6464,119 @@ class RAGPipelineBuilder:
         "administration": frozenset({"administration_like"}),
         "outcome": frozenset({"operative_order_like", "conclusion_like", "costs_like"}),
     }
+
+    _CITATION_STOPWORDS = frozenset({
+        "the", "a", "an", "in", "of", "to", "and", "or", "is", "are", "was",
+        "were", "that", "this", "it", "on", "at", "for", "with", "by", "from",
+        "has", "have", "had", "be", "been", "being", "not", "no", "do", "does",
+        "did", "will", "would", "could", "should", "may", "might", "shall",
+        "its", "as", "if", "but", "so", "when", "which",
+    })
+
+    @staticmethod
+    def _extract_citation_pages(
+        *,
+        question: str,
+        answer: str,
+        answer_type: str,
+        context_chunks: Sequence["RankedChunk"],
+    ) -> list[str]:
+        """Post-answer citation: return only pages that contain/support the answer."""
+        from rag_challenge.submission.common import chunk_id_to_page_id
+
+        answer_norm = re.sub(r"\s+", " ", (answer or "").strip()).lower()
+
+        if answer_norm in ("null", "none", "") or answer_norm.startswith("there is no information"):
+            return []
+
+        stopwords = RAGPipelineBuilder._CITATION_STOPWORDS
+
+        def _terms(text: str) -> set[str]:
+            return {w for w in re.sub(r"[^\w]", " ", text.lower()).split()
+                    if w and w not in stopwords and len(w) > 2}
+
+        search_patterns: list[str] = []
+        if answer_type in ("name", "names"):
+            search_patterns = [answer_norm]
+        elif answer_type == "number":
+            raw_digits = re.sub(r"[^\d.]", "", answer_norm)
+            search_patterns = [answer_norm, raw_digits]
+            if raw_digits and "." not in raw_digits:
+                try:
+                    search_patterns.append(f"{int(raw_digits):,}".lower())
+                except (ValueError, OverflowError):
+                    pass
+        elif answer_type == "date":
+            search_patterns = [answer_norm]
+            m = re.match(r"(\d{4})-(\d{2})-(\d{2})", answer_norm)
+            if m:
+                y, mo, d = m.groups()
+                months = ["", "january", "february", "march", "april", "may", "june",
+                          "july", "august", "september", "october", "november", "december"]
+                try:
+                    search_patterns.append(f"{int(d)} {months[int(mo)]} {y}")
+                    search_patterns.append(f"{months[int(mo)]} {int(d)}, {y}")
+                except (IndexError, ValueError):
+                    pass
+
+        seen_pages: set[str] = set()
+        page_scores: list[tuple[float, str]] = []
+        answer_terms = _terms(answer_norm)
+        question_terms = _terms(question)
+
+        for chunk in context_chunks:
+            page_id = chunk_id_to_page_id(chunk.chunk_id)
+            if not page_id or page_id in seen_pages:
+                continue
+            seen_pages.add(page_id)
+
+            chunk_lower = chunk.text.lower()
+            score = 0.0
+
+            if answer_type in ("name", "names", "number", "date"):
+                for pat in search_patterns:
+                    if pat and pat in chunk_lower:
+                        score = max(score, 1.0)
+                        break
+                if answer_type == "number" and score < 0.5:
+                    raw_answer_digits = re.sub(r"[^\d]", "", answer_norm)
+                    raw_chunk_digits = re.sub(r"[^\d]", "", chunk_lower)
+                    if raw_answer_digits and len(raw_answer_digits) >= 4:
+                        if raw_answer_digits in raw_chunk_digits:
+                            score = max(score, 0.8)
+
+            elif answer_type == "boolean":
+                if question_terms:
+                    chunk_terms = _terms(chunk.text)
+                    overlap = len(question_terms & chunk_terms)
+                    score = overlap / len(question_terms) if question_terms else 0
+
+            else:
+                if answer_terms:
+                    chunk_terms = _terms(chunk.text)
+                    overlap = len(answer_terms & chunk_terms)
+                    score = overlap / len(answer_terms) if answer_terms else 0
+
+            page_scores.append((score, page_id))
+
+        page_scores.sort(key=lambda x: x[0], reverse=True)
+
+        thresholds = {
+            "boolean": (0.08, 2),
+            "number": (0.5, 1),
+            "date": (0.5, 1),
+            "name": (0.5, 1),
+            "names": (0.3, 2),
+            "free_text": (0.06, 3),
+        }
+        threshold, max_pages = thresholds.get(answer_type, (0.1, 2))
+
+        cited = [pid for sc, pid in page_scores if sc >= threshold][:max_pages]
+
+        if not cited and page_scores:
+            cited = [page_scores[0][1]]
+
+        return cited
 
     @classmethod
     def _boost_family_context_chunks(
