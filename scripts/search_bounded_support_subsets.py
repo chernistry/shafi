@@ -147,8 +147,22 @@ def _seed_case_deltas_in_memory(
                 baseline_context_page_ids=baseline_context,
                 candidate_context_page_ids=candidate_context,
                 baseline_used_hit=bool(gold_set.intersection(baseline_used)),
+                baseline_used_equivalent_hit=_page_title_equivalent_hit(
+                    gold_page_ids=gold_page_ids,
+                    candidate_page_ids=baseline_used,
+                    gold_title_map=baseline_title_map,
+                    candidate_title_map=baseline_title_map,
+                    gold_record_titles=gold_record_titles,
+                ),
                 candidate_used_hit=bool(gold_set.intersection(candidate_used)),
                 baseline_context_hit=bool(gold_set.intersection(baseline_context)),
+                baseline_context_equivalent_hit=_page_title_equivalent_hit(
+                    gold_page_ids=gold_page_ids,
+                    candidate_page_ids=baseline_context,
+                    gold_title_map=baseline_title_map,
+                    candidate_title_map=baseline_title_map,
+                    gold_record_titles=gold_record_titles,
+                ),
                 candidate_context_hit=bool(gold_set.intersection(candidate_context)),
                 candidate_used_equivalent_hit=_page_title_equivalent_hit(
                     gold_page_ids=gold_page_ids,
@@ -216,7 +230,7 @@ def _recommendation_rank(value: str) -> int:
 def _result_sort_key(result: SubsetEvaluation) -> tuple[int, int, float, float, int, int, int, int, tuple[str, ...]]:
     return (
         _recommendation_rank(result.recommendation),
-        -len(result.improved_seed_cases),
+        len(result.improved_seed_cases),
         result.benchmark_trusted_candidate - result.benchmark_trusted_baseline,
         result.benchmark_all_candidate - result.benchmark_all_baseline,
         -len(result.equivalent_seed_cases),
@@ -378,6 +392,7 @@ def main() -> None:
             page_source_raw_results=page_source_raw_results,
             allowlisted_qids=set(),
             page_allowlisted_qids=set(qids),
+            page_source_pages_default="none",
         )
         merged_preflight = _build_preflight(
             merged_payload=merged_submission,
@@ -403,7 +418,12 @@ def main() -> None:
             candidate_raw_by_id=candidate_raw_by_id,
             seed_qids=seed_qids,
         )
-        recommendation, _notes = _recommendation(
+        recommendation, _notes, _staged_eval = _recommendation(
+            static_safety_status="assumed_passed",
+            static_safety_reason=None,
+            impact_canary_status="assumed_passed",
+            impact_canary_reason=None,
+            impact_canary_pack="bounded_support_subset_search",
             baseline_trusted=baseline_trusted,
             candidate_trusted=candidate_trusted,
             answer_changed_count=answer_changed_count,

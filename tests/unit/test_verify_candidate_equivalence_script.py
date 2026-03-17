@@ -3,12 +3,9 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-REPO_ROOT = "/Users/sasha/IdeaProjects/.codex-worktrees/rag_challenge-main"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _submission_payload(
@@ -92,7 +89,7 @@ def test_verify_candidate_equivalence_reports_champion_and_safe_baselines(tmp_pa
             "--out-json",
             str(json_out),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -159,7 +156,7 @@ def test_verify_candidate_equivalence_flags_page_and_answer_drift(tmp_path: Path
             "--out-json",
             str(json_out),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,

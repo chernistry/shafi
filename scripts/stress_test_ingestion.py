@@ -164,6 +164,12 @@ class FakeStore:
     async def ensure_payload_indexes(self) -> None:
         return None
 
+    async def ensure_shadow_collection(self) -> None:
+        return None
+
+    async def ensure_shadow_payload_indexes(self) -> None:
+        return None
+
     async def ensure_page_collection(self) -> None:
         return None
 
@@ -178,6 +184,20 @@ class FakeStore:
         del doc_id
 
     async def upsert_chunks(
+        self,
+        chunks: list[Chunk],
+        vectors: list[list[float]],
+        *,
+        sparse_vectors: list[object] | None = None,
+    ) -> int:
+        del vectors, sparse_vectors
+        started = time.perf_counter()
+        try:
+            return len(chunks)
+        finally:
+            self._timings.upsert_s += max(0.0, time.perf_counter() - started)
+
+    async def upsert_shadow_chunks(
         self,
         chunks: list[Chunk],
         vectors: list[list[float]],

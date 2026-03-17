@@ -3,12 +3,9 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-REPO_ROOT = "/Users/sasha/IdeaProjects/.codex-worktrees/rag_challenge-main"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _submission(*, answer_qids: dict[str, object], page_qids: dict[str, list[int]]) -> dict[str, object]:
@@ -62,7 +59,7 @@ def test_verify_candidate_lineage_accepts_allowed_qids(tmp_path: Path) -> None:
             "--out-md",
             str(out_md),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         check=True,
         capture_output=True,
         text=True,
@@ -102,7 +99,7 @@ def test_verify_candidate_lineage_flags_unexpected_qids(tmp_path: Path) -> None:
             "--out-md",
             str(out_md),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         check=True,
         capture_output=True,
         text=True,
@@ -162,7 +159,7 @@ def test_verify_candidate_lineage_blocks_unsafe_baseline_when_champion_report_pr
             "--out-md",
             str(out_md),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         check=True,
         capture_output=True,
         text=True,

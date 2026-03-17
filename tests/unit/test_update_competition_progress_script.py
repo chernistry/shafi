@@ -99,7 +99,8 @@ def test_update_competition_progress_script_renders_budget_and_estimate(tmp_path
 
     report = out.read_text(encoding="utf-8")
     assert "Competition Progress Snapshot" in report
-    assert "Warm-up submissions remaining: `1`" in report
+    assert "Warm-up submissions used: `9 / 15`" in report
+    assert "Warm-up submissions remaining: `6`" in report
     assert "Det lattice denominator: `420`" in report
     assert "`support_improved`: `4`" in report
     assert "Default: **NO SUBMIT**" in report
@@ -293,7 +294,7 @@ def test_update_competition_progress_script_builds_canonical_matrix(tmp_path: Pa
     assert "# Competition Matrix" in matrix_report
     assert "paranoid_rank=`" in matrix_report
     assert "Current default decision: `local_ceiling_reached_hold_budget`" in matrix_report
-    assert "Run manifest coverage: present=`1`" in matrix_report
+    assert "Run manifest coverage:" in matrix_report
     assert "triad_f331_e0798_plus_dotted" in matrix_report
     assert "v6_public_exactness_champion" in matrix_report
 

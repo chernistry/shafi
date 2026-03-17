@@ -4,14 +4,11 @@ import json
 import os
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import fitz
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-REPO_ROOT = "/Users/sasha/IdeaProjects/.codex-worktrees/rag_challenge-main"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _write_pdf(path: Path, pages: list[str]) -> None:
@@ -79,7 +76,7 @@ def test_score_page_benchmark_script_reports_f_beta_and_orphans(tmp_path: Path) 
             "--benchmark",
             str(benchmark_path),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -204,7 +201,7 @@ def test_build_page_trace_ledger_can_export_bounded_miss_pack(tmp_path: Path) ->
             "--miss-pack-max-per-family",
             "1",
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -256,7 +253,7 @@ def test_score_page_benchmark_respects_include_qids_file(tmp_path: Path) -> None
             "--include-qids-file",
             str(include_qids),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,

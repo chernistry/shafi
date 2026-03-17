@@ -272,6 +272,7 @@ async def _async_main(args: argparse.Namespace) -> None:
             page_source_raw_results=page_source_raw_results_payload,
             allowlisted_qids=set(),
             page_allowlisted_qids={qid},
+            page_source_pages_default="none",
         )
         merged_preflight = _build_preflight(
             merged_payload=merged_submission,

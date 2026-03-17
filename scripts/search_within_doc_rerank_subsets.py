@@ -207,7 +207,12 @@ def main() -> int:
         )
         answer_changed_count = _answer_changed_count(baseline_submission, candidate_submission)
         projection_changed_count = _retrieval_projection_changed_count(baseline_submission, candidate_submission)
-        recommendation, notes = _recommendation(
+        recommendation, notes, _staged_eval = _recommendation(
+            static_safety_status="assumed_passed",
+            static_safety_reason=None,
+            impact_canary_status="assumed_passed",
+            impact_canary_reason=None,
+            impact_canary_pack="within_doc_rerank_subset_search",
             baseline_trusted=baseline_trusted,
             candidate_trusted=candidate_trusted,
             answer_changed_count=answer_changed_count,

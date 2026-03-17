@@ -3,12 +3,9 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-REPO_ROOT = "/Users/sasha/IdeaProjects/.codex-worktrees/rag_challenge-main"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_competition_supervisor_prefers_no_submit_when_budget_is_almost_spent(tmp_path: Path) -> None:
@@ -77,7 +74,7 @@ def test_competition_supervisor_prefers_no_submit_when_budget_is_almost_spent(tm
             "--runs-json",
             str(runs_json),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -158,7 +155,7 @@ def test_competition_supervisor_accepts_nested_page_metrics_identical_with_linea
             "--runs-json",
             str(runs_json),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
@@ -232,7 +229,7 @@ def test_competition_supervisor_rejects_lineage_safe_fallback_for_wrong_baseline
             "--runs-json",
             str(runs_json),
         ],
-        cwd=REPO_ROOT,
+        cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
         check=True,
