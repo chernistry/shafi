@@ -2487,6 +2487,9 @@ class RAGPipelineBuilder:
                     # These injected chunks didn't go through the reranker; use retrieval score as a stable proxy.
                     rerank_score=float(raw.score),
                     doc_summary=raw.doc_summary,
+                    page_family=getattr(raw, "page_family", ""),
+                    doc_family=getattr(raw, "doc_family", ""),
+                    chunk_type=getattr(raw, "chunk_type", ""),
                 )
             selected.append(chunk)
             seen.add(chunk.chunk_id)
@@ -2540,6 +2543,9 @@ class RAGPipelineBuilder:
                         retrieval_score=float(page_one.score),
                         rerank_score=float(page_one.score),
                         doc_summary=page_one.doc_summary,
+                        page_family=getattr(page_one, "page_family", ""),
+                        doc_family=getattr(page_one, "doc_family", ""),
+                        chunk_type=getattr(page_one, "chunk_type", ""),
                     )
                 )
                 seen.add(page_one.chunk_id)
@@ -2691,6 +2697,9 @@ class RAGPipelineBuilder:
             retrieval_score=float(chunk.score),
             rerank_score=float(chunk.score),
             doc_summary=chunk.doc_summary,
+            page_family=getattr(chunk, "page_family", ""),
+            doc_family=getattr(chunk, "doc_family", ""),
+            chunk_type=getattr(chunk, "chunk_type", ""),
         )
 
     @classmethod
@@ -4441,6 +4450,12 @@ class RAGPipelineBuilder:
                 context_chunks=context_chunks,
                 used_ids=shaped_used_ids if shaped_used_ids else used_ids,
             )
+            final_used_ids = self._enhance_page_recall(
+                query=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_used_ids=final_used_ids,
+            )
             collector.set_used_ids(final_used_ids)
             citations: list[Citation] = []
             cited_ids = list(cited_ids)
@@ -4712,6 +4727,12 @@ class RAGPipelineBuilder:
                 context_chunks=context_chunks,
                 used_ids=shaped_used_ids,
             )
+            final_used_ids = self._enhance_page_recall(
+                query=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_used_ids=final_used_ids,
+            )
             collector.set_used_ids(final_used_ids)
             if answer_type == "free_text" and streamed and answer.strip():
                 writer({"type": "answer_final", "text": answer})
@@ -4867,6 +4888,9 @@ class RAGPipelineBuilder:
                 retrieval_score=chunk.score,
                 rerank_score=chunk.score,
                 doc_summary=chunk.doc_summary,
+                page_family=getattr(chunk, "page_family", ""),
+                doc_family=getattr(chunk, "doc_family", ""),
+                chunk_type=getattr(chunk, "chunk_type", ""),
             )
             for chunk in sorted_chunks[: max(0, int(top_n))]
         ]
@@ -5718,6 +5742,9 @@ class RAGPipelineBuilder:
                     retrieval_score=float(chunk.score),
                     rerank_score=float(chunk.score),
                     doc_summary=chunk.doc_summary,
+                    page_family=getattr(chunk, "page_family", ""),
+                    doc_family=getattr(chunk, "doc_family", ""),
+                    chunk_type=getattr(chunk, "chunk_type", ""),
                 )
             )
             overlap = len(query_terms.intersection(cls._support_terms(blob)))
@@ -6366,6 +6393,130 @@ class RAGPipelineBuilder:
             context_chunks=context_chunks,
         )
         return [fallback_chunk_id] if fallback_chunk_id else []
+
+    _OUTCOME_QUERY_RE = re.compile(
+        r"(?:ruling|order|outcome|result|decision|dismiss|grant|cost|award)", re.IGNORECASE
+    )
+    _ENACTMENT_QUERY_RE = re.compile(
+        r"(?:come[s ]? into force|enacted|enactment|commencement)", re.IGNORECASE
+    )
+    _ADMIN_QUERY_RE = re.compile(r"administered\s+by", re.IGNORECASE)
+    _SCHEDULE_QUERY_RE = re.compile(r"\b(?:schedule|annex|appendix)\b", re.IGNORECASE)
+    _LAW_REF_RE = re.compile(r"\blaw\s+no\b", re.IGNORECASE)
+
+    @classmethod
+    def _enhance_page_recall(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        context_chunks: Sequence["RankedChunk"],
+        current_used_ids: list[str],
+    ) -> list[str]:
+        """Add family-relevant chunk IDs to used_ids to boost page recall.
+
+        Only ADDS chunks, never removes. Since G uses beta=2.5 (recall 6x more
+        important than precision), extra relevant pages are cheap while missing
+        necessary ones is catastrophic.
+        """
+        doc_ids: set[str] = set()
+        for chunk in context_chunks:
+            if chunk.doc_id:
+                doc_ids.add(chunk.doc_id)
+
+        if not doc_ids:
+            return current_used_ids
+
+        q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+        existing = set(current_used_ids)
+        additions: list[str] = []
+
+        page1_chunks: dict[str, str] = {}
+        family_chunks: dict[str, list[tuple[str, str]]] = {}
+        last_page_chunks: dict[str, list[tuple[str, int]]] = {}
+
+        for chunk in context_chunks:
+            if chunk.doc_id not in doc_ids:
+                continue
+            cid = chunk.chunk_id
+            if cid in existing:
+                continue
+
+            page_num = 0
+            if chunk.section_path.startswith("page:"):
+                try:
+                    page_num = int(chunk.section_path.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    pass
+
+            if page_num == 1 and chunk.doc_id not in page1_chunks:
+                page1_chunks[chunk.doc_id] = cid
+
+            pf = getattr(chunk, "page_family", "")
+            if pf:
+                family_chunks.setdefault(pf, []).append((cid, chunk.doc_id))
+
+            if page_num > 0:
+                last_page_chunks.setdefault(chunk.doc_id, []).append((cid, page_num))
+
+        is_law_ref = bool(cls._LAW_REF_RE.search(q))
+        is_outcome = bool(cls._OUTCOME_QUERY_RE.search(q))
+        is_enactment = bool(cls._ENACTMENT_QUERY_RE.search(q))
+        is_admin = bool(cls._ADMIN_QUERY_RE.search(q))
+        is_schedule = bool(cls._SCHEDULE_QUERY_RE.search(q))
+        is_compare = len(doc_ids) >= 2
+
+        if is_law_ref or is_compare:
+            for did, cid in page1_chunks.items():
+                if cid not in existing:
+                    additions.append(cid)
+                    existing.add(cid)
+
+        if is_outcome:
+            for pf_key in ("operative_order_like", "costs_like"):
+                for cid, _ in family_chunks.get(pf_key, []):
+                    if cid not in existing:
+                        additions.append(cid)
+                        existing.add(cid)
+            for did in doc_ids:
+                candidates = last_page_chunks.get(did, [])
+                if candidates:
+                    candidates.sort(key=lambda x: x[1], reverse=True)
+                    for cid, _ in candidates[:2]:
+                        if cid not in existing:
+                            additions.append(cid)
+                            existing.add(cid)
+
+        if is_enactment:
+            for pf_key in ("enactment_like", "commencement_like"):
+                for cid, _ in family_chunks.get(pf_key, []):
+                    if cid not in existing:
+                        additions.append(cid)
+                        existing.add(cid)
+
+        if is_admin:
+            for cid, _ in family_chunks.get("administration_like", []):
+                if cid not in existing:
+                    additions.append(cid)
+                    existing.add(cid)
+
+        if is_schedule:
+            for cid, _ in family_chunks.get("schedule_like", []):
+                if cid not in existing:
+                    additions.append(cid)
+                    existing.add(cid)
+
+        if answer_type in ("name", "names") or is_compare:
+            for pf_key in ("cover_like",):
+                for cid, _ in family_chunks.get(pf_key, []):
+                    if cid not in existing:
+                        additions.append(cid)
+                        existing.add(cid)
+
+        if not additions:
+            return current_used_ids
+
+        return current_used_ids + additions
 
     @classmethod
     def _rerank_support_pages_within_selected_docs(

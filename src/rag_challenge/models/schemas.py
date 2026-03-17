@@ -100,6 +100,9 @@ class RetrievedChunk(BaseModel):
     text: str
     score: float
     doc_summary: str = ""
+    page_family: str = ""
+    doc_family: str = ""
+    chunk_type: str = ""
 
 
 class RankedChunk(BaseModel):
@@ -116,6 +119,9 @@ class RankedChunk(BaseModel):
     retrieval_score: float
     rerank_score: float
     doc_summary: str = ""
+    page_family: str = ""
+    doc_family: str = ""
+    chunk_type: str = ""
 
 
 # -- API Request / Response --

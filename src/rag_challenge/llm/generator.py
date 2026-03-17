@@ -424,6 +424,9 @@ class RAGGenerator:
         if not q or not chunks:
             return ""
 
+        if self._is_unsupported_criminal_trap(question):
+            return "The provided legal documents do not contain information on this topic."
+
         if self._is_common_elements_question(question):
             return self._build_common_elements_canonical_answer(
                 question=question,
@@ -593,6 +596,17 @@ class RAGGenerator:
                 "how did the court of appeal rule, and what costs were awarded",
             )
         )
+
+    _CRIMINAL_TRAP_TERMS = frozenset((
+        "jury", "parole", "miranda", "plea bargain", "plea deal",
+        "bail hearing", "indictment", "grand jury", "arraignment",
+        "felony charge", "criminal sentencing",
+    ))
+
+    @staticmethod
+    def _is_unsupported_criminal_trap(question: str) -> bool:
+        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
+        return any(term in q for term in RAGGenerator._CRIMINAL_TRAP_TERMS)
 
     @staticmethod
     def _is_consolidated_version_published_question(question: str) -> bool:

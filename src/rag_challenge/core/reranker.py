@@ -266,6 +266,9 @@ class RerankerClient:
                 retrieval_score=chunk.score,
                 rerank_score=float(score),
                 doc_summary=chunk.doc_summary,
+                page_family=getattr(chunk, "page_family", ""),
+                doc_family=getattr(chunk, "doc_family", ""),
+                chunk_type=getattr(chunk, "chunk_type", ""),
             )
             for chunk, score in zip(chunks, scores, strict=True)
         ]
@@ -286,6 +289,9 @@ class RerankerClient:
                 retrieval_score=chunk.score,
                 rerank_score=chunk.score,
                 doc_summary=chunk.doc_summary,
+                page_family=getattr(chunk, "page_family", ""),
+                doc_family=getattr(chunk, "doc_family", ""),
+                chunk_type=getattr(chunk, "chunk_type", ""),
             )
             for chunk in sorted_chunks[: max(0, top_n)]
         ]
