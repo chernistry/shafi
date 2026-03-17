@@ -9,6 +9,7 @@ import os
 import re
 import time
 import unicodedata
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -36,6 +37,28 @@ logger = logging.getLogger(__name__)
 
 _CASE_ID_RE = re.compile(r"\b(?:CFI|CA|ARB|SCT|TCD|ENF)\s+\d{3}/\d{4}\b", re.IGNORECASE)
 _CURRENCY_RE = re.compile(r"(?:AED|USD|GBP|EUR)\s*[\d,]+(?:\.\d+)?", re.IGNORECASE)
+_ARTICLE_REF_RE = re.compile(
+    r"\b(?:Article|Section|Schedule|Part|Rule|Regulation|Clause)\s+[A-Za-z0-9]+(?:\([A-Za-z0-9]+\))*",
+    re.IGNORECASE,
+)
+_LAW_TITLE_RE = re.compile(
+    r"\b([A-Z][A-Za-z&,'()/-]+?\s+Law(?:\s+\d{4}|,\s*DIFC\s+Law\s+No\.?\s*\d+\s+of\s+\d{4}|"
+    r"\s+No\.?\s*\d+\s+of\s+\d{4})?)\b"
+)
+_COURT_RE = re.compile(
+    r"\b(?:DIFC Courts?|Court of Appeal|Small Claims Tribunal|Tribunal|Registrar|Chief Justice)\b",
+    re.IGNORECASE,
+)
+_PARTY_ROLE_RE = re.compile(
+    r"\b(?:claimant|claimants|respondent|respondents|appellant|appellants|applicant|applicants|"
+    r"defendant|defendants|plaintiff|plaintiffs|petitioner|petitioners)\b[:\s-]*([A-Z][A-Za-z0-9&.,'()/-]{2,80})",
+    re.IGNORECASE,
+)
+_CROSS_REF_RE = re.compile(
+    r"\b(?:Article|Section|Schedule|Part|Rule|Regulation|Clause)\s+[A-Za-z0-9]+(?:\([A-Za-z0-9]+\))*"
+    r"|\bamended by\b|\bsee also\b|\bsubject to\b|\bpursuant to\b",
+    re.IGNORECASE,
+)
 _DASH_RE = re.compile(r"[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]")
 _ZERO_WIDTH_RE = re.compile(r"[\u200B\u200C\u200D\uFEFF]")
 _QUOTE_RE = re.compile(r"[\u2018\u2019\u201A\u201B]")
@@ -123,6 +146,88 @@ def _extract_amount_roles(page_text: str) -> list[str]:
     return roles
 
 
+def _unique_normalized(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in values:
+        normalized = _normalize_identifiers(raw)
+        compact = re.sub(r"\s+", " ", normalized).strip(" ,.;:")
+        if not compact:
+            continue
+        key = compact.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(compact)
+    return out
+
+
+def _extract_party_names(text: str) -> list[str]:
+    return _unique_normalized([match.group(1) for match in _PARTY_ROLE_RE.finditer(text or "")])
+
+
+def _extract_court_names(text: str) -> list[str]:
+    return _unique_normalized([match.group(0) for match in _COURT_RE.finditer(text or "")])
+
+
+def _extract_law_titles(*texts: str) -> list[str]:
+    values: list[str] = []
+    for text in texts:
+        values.extend(match.group(1) for match in _LAW_TITLE_RE.finditer(text or ""))
+    return _unique_normalized(values)
+
+
+def _extract_article_refs(text: str) -> list[str]:
+    return _unique_normalized([match.group(0) for match in _ARTICLE_REF_RE.finditer(text or "")])
+
+
+def _extract_case_numbers(*texts: str) -> list[str]:
+    values: list[str] = []
+    for text in texts:
+        values.extend(match.group(0) for match in _CASE_ID_RE.finditer(text or ""))
+    return _unique_normalized(values)
+
+
+def _extract_cross_refs(text: str) -> list[str]:
+    return _unique_normalized([match.group(0) for match in _CROSS_REF_RE.finditer(text or "")])
+
+
+def _build_shadow_search_text(
+    *,
+    doc_title: str,
+    doc_family: str,
+    page_family: str,
+    section_path: str,
+    normalized_refs: list[str],
+    party_names: list[str],
+    court_names: list[str],
+    law_titles: list[str],
+    article_refs: list[str],
+    case_numbers: list[str],
+    cross_refs: list[str],
+    anchors: list[str],
+    contextual_header: str,
+    chunk_text: str,
+) -> str:
+    parts = [
+        doc_title,
+        doc_family,
+        page_family,
+        section_path,
+        " | ".join(normalized_refs),
+        " | ".join(party_names),
+        " | ".join(court_names),
+        " | ".join(law_titles),
+        " | ".join(article_refs),
+        " | ".join(case_numbers),
+        " | ".join(cross_refs),
+        " | ".join(anchors),
+        contextual_header,
+        chunk_text,
+    ]
+    return "\n".join(part.strip() for part in parts if str(part or "").strip())
+
+
 _ANCHOR_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("schedule_anchor", re.compile(r"\bSCHEDULE\b")),
     ("enactment_anchor", re.compile(r"enactment\s+notice|comes?\s+into\s+force", re.IGNORECASE)),
@@ -157,15 +262,36 @@ def _enrich_chunks(
     for chunk in chunks:
         page_num = 0
         if chunk.section_path.startswith("page:"):
-            try:
+            with suppress(ValueError, IndexError):
                 page_num = int(chunk.section_path.split(":", 1)[1])
-            except (ValueError, IndexError):
-                pass
 
         pg_text = page_texts.get(page_num, "")
         pg_fam = _classify_page_family(pg_text, page_num, total_pages)
         norm_refs = [_normalize_identifiers(c) for c in chunk.citations] if chunk.citations else []
         amt_roles = _extract_amount_roles(pg_text) if pg_text else []
+        party_names = _extract_party_names(chunk.chunk_text)
+        court_names = _extract_court_names(f"{doc.title}\n{pg_text}\n{chunk.chunk_text}")
+        law_titles = _extract_law_titles(doc.title, pg_text, chunk.chunk_text)
+        article_refs = _extract_article_refs(f"{chunk.chunk_text}\n{pg_text}")
+        case_numbers = _extract_case_numbers(doc.title, pg_text, chunk.chunk_text)
+        cross_refs = _extract_cross_refs(f"{chunk.chunk_text}\n{pg_text}")
+        contextual_header = pg_text[:240]
+        shadow_search_text = _build_shadow_search_text(
+            doc_title=doc.title,
+            doc_family=doc_fam,
+            page_family=pg_fam,
+            section_path=chunk.section_path,
+            normalized_refs=norm_refs,
+            party_names=party_names,
+            court_names=court_names,
+            law_titles=law_titles,
+            article_refs=article_refs,
+            case_numbers=case_numbers,
+            cross_refs=cross_refs,
+            anchors=list(chunk.anchors),
+            contextual_header=contextual_header,
+            chunk_text=chunk.chunk_text,
+        )
 
         enriched.append(chunk.model_copy(update={
             "doc_family": doc_fam,
@@ -173,6 +299,13 @@ def _enrich_chunks(
             "normalized_title": norm_title,
             "normalized_refs": norm_refs,
             "amount_roles": amt_roles,
+            "shadow_search_text": shadow_search_text,
+            "party_names": party_names,
+            "court_names": court_names,
+            "law_titles": law_titles,
+            "article_refs": article_refs,
+            "case_numbers": case_numbers,
+            "cross_refs": cross_refs,
         }))
     return enriched
 
@@ -221,6 +354,28 @@ def _emit_anchor_chunks(
                     doc_family=doc_family,
                     page_family=_classify_page_family(text, page_num, total_pages),
                     normalized_title=_normalize_identifiers(doc.title),
+                    shadow_search_text=_build_shadow_search_text(
+                        doc_title=doc.title,
+                        doc_family=doc_family,
+                        page_family=_classify_page_family(text, page_num, total_pages),
+                        section_path=section.section_path,
+                        normalized_refs=[],
+                        party_names=_extract_party_names(text),
+                        court_names=_extract_court_names(f"{doc.title}\n{text}"),
+                        law_titles=_extract_law_titles(doc.title, text),
+                        article_refs=_extract_article_refs(text),
+                        case_numbers=_extract_case_numbers(doc.title, text),
+                        cross_refs=_extract_cross_refs(text),
+                        anchors=[anchor_type],
+                        contextual_header=text[:240],
+                        chunk_text=snippet,
+                    ),
+                    party_names=_extract_party_names(text),
+                    court_names=_extract_court_names(f"{doc.title}\n{text}"),
+                    law_titles=_extract_law_titles(doc.title, text),
+                    article_refs=_extract_article_refs(text),
+                    case_numbers=_extract_case_numbers(doc.title, text),
+                    cross_refs=_extract_cross_refs(text),
                 ))
 
         is_last_pages = page_num >= total_pages - 1 and total_pages > 2
@@ -246,6 +401,28 @@ def _emit_anchor_chunks(
                     doc_family=doc_family,
                     page_family=_classify_page_family(text, page_num, total_pages),
                     normalized_title=_normalize_identifiers(doc.title),
+                    shadow_search_text=_build_shadow_search_text(
+                        doc_title=doc.title,
+                        doc_family=doc_family,
+                        page_family=_classify_page_family(text, page_num, total_pages),
+                        section_path=section.section_path,
+                        normalized_refs=[],
+                        party_names=_extract_party_names(text),
+                        court_names=_extract_court_names(f"{doc.title}\n{text}"),
+                        law_titles=_extract_law_titles(doc.title, text),
+                        article_refs=_extract_article_refs(text),
+                        case_numbers=_extract_case_numbers(doc.title, text),
+                        cross_refs=_extract_cross_refs(text),
+                        anchors=["conclusion_anchor"],
+                        contextual_header=text[:240],
+                        chunk_text=snippet,
+                    ),
+                    party_names=_extract_party_names(text),
+                    court_names=_extract_court_names(f"{doc.title}\n{text}"),
+                    law_titles=_extract_law_titles(doc.title, text),
+                    article_refs=_extract_article_refs(text),
+                    case_numbers=_extract_case_numbers(doc.title, text),
+                    cross_refs=_extract_cross_refs(text),
                 ))
 
     return anchors
@@ -371,6 +548,9 @@ class IngestionPipeline:
         )
         await self._store.ensure_collection()
         await self._store.ensure_payload_indexes()
+        if bool(getattr(self._settings.ingestion, "build_shadow_collection", True)):
+            await self._store.ensure_shadow_collection()
+            await self._store.ensure_shadow_payload_indexes()
         await self._store.ensure_page_collection()
         await self._store.ensure_page_payload_indexes()
 
@@ -482,6 +662,31 @@ class IngestionPipeline:
                                 sparse_vectors=sparse_vectors,
                             ) if sparse_vectors is not None else await self._store.upsert_chunks(augmented, vectors)
                             stats.chunks_upserted += upserted
+
+                            if bool(getattr(self._settings.ingestion, "build_shadow_collection", True)):
+                                shadow_texts = [
+                                    chunk.shadow_search_text or chunk.chunk_text_for_embedding
+                                    for chunk in augmented
+                                ]
+                                shadow_vectors = await self._embedder.embed_documents(shadow_texts)
+                                shadow_sparse_vectors = None
+                                if self._sparse_encoder is not None:
+                                    try:
+                                        shadow_sparse_vectors = self._sparse_encoder.encode_documents(shadow_texts)
+                                    except Exception:
+                                        logger.warning(
+                                            "BM25 sparse encoding failed for shadow chunks; falling back to dense-only for doc_id=%s",
+                                            doc.doc_id,
+                                            exc_info=True,
+                                        )
+                                if shadow_sparse_vectors is not None:
+                                    await self._store.upsert_shadow_chunks(
+                                        augmented,
+                                        shadow_vectors,
+                                        sparse_vectors=shadow_sparse_vectors,
+                                    )
+                                else:
+                                    await self._store.upsert_shadow_chunks(augmented, shadow_vectors)
 
                             await self._upsert_pages_for_doc(doc, summary)
                             await self._cleanup_stale_versions([doc.doc_id])

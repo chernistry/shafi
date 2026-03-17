@@ -67,6 +67,7 @@ class QdrantSettings(BaseSettings):
     url: str = "http://localhost:6333"
     api_key: str = ""
     collection: str = "legal_chunks"
+    shadow_collection: str = "legal_chunks_shadow"
     page_collection: str = "legal_pages"
     pool_size: int = 20
     timeout_s: float = 30.0
@@ -259,6 +260,12 @@ class PipelineSettings(BaseSettings):
     multi_hop_max_subqueries: int = 3
     page_first_enabled: bool = False
     page_first_top_k: int = 15
+    enable_shadow_search_text: bool = False
+    enable_parallel_anchor_retrieval: bool = False
+    enable_entity_boosts: bool = False
+    enable_cross_ref_boosts: bool = False
+    shadow_retrieval_top_k: int = 24
+    anchor_retrieval_top_k: int = 16
 
     @field_validator("premise_guard_terms", mode="before")
     @classmethod
@@ -285,6 +292,7 @@ class IngestionSettings(BaseSettings):
     sac_doc_excerpt_chars: int = 3000
     parser_pdf_text_min_chars: int = 400
     parser_pdf_text_min_words: int = 80
+    build_shadow_collection: bool = True
     manifest_hash_chunk_size_bytes: int = 1048576
     manifest_dir: str = ""  # optional absolute/relative override for manifest storage
     manifest_filename: str = ".rag_challenge_ingestion_manifest.json"

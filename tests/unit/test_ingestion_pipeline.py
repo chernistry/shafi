@@ -12,6 +12,7 @@ def mock_settings():
     settings = SimpleNamespace(
         ingestion=SimpleNamespace(
             ingest_version="v1",
+            build_shadow_collection=False,
             manifest_dir="",
             manifest_filename=".rag_challenge_ingestion_manifest.json",
             manifest_hash_chunk_size_bytes=1024 * 1024,
@@ -88,7 +89,10 @@ def mock_deps(doc_dir: Path):
 
     store.ensure_collection = AsyncMock()
     store.ensure_payload_indexes = AsyncMock()
+    store.ensure_shadow_collection = AsyncMock()
+    store.ensure_shadow_payload_indexes = AsyncMock()
     store.upsert_chunks = AsyncMock(side_effect=lambda chunks, vecs, sparse_vectors=None: len(chunks))
+    store.upsert_shadow_chunks = AsyncMock(side_effect=lambda chunks, vecs, sparse_vectors=None: len(chunks))
     store.delete_stale_doc_versions = AsyncMock()
     store.close = AsyncMock()
 
@@ -120,6 +124,22 @@ async def test_pipeline_full_run(mock_settings, mock_deps, doc_dir: Path):
     assert embedder.embed_documents.await_count == 2
     assert store.upsert_chunks.await_count == 2
     assert store.delete_stale_doc_versions.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_pipeline_builds_shadow_collection_when_enabled(mock_settings, mock_deps, doc_dir: Path):
+    from rag_challenge.ingestion.pipeline import IngestionPipeline
+
+    mock_settings.ingestion.build_shadow_collection = True
+    parser, chunker, sac, embedder, store = mock_deps
+    pipeline = IngestionPipeline(parser=parser, chunker=chunker, sac=sac, embedder=embedder, store=store)
+
+    stats = await pipeline.run(doc_dir)
+
+    assert stats.chunks_upserted == 6
+    store.ensure_shadow_collection.assert_awaited_once()
+    store.ensure_shadow_payload_indexes.assert_awaited_once()
+    assert store.upsert_shadow_chunks.await_count == 2
 
 
 @pytest.mark.asyncio

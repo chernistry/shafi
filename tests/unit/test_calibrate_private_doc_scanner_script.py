@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import fitz
-
 from scripts import calibrate_private_doc_scanner as mod
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_pdf(path: Path, pages: list[str]) -> None:

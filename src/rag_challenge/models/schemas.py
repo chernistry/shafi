@@ -54,6 +54,13 @@ class ChunkMetadata(BaseModel):
     normalized_title: str = ""
     normalized_refs: list[str] = Field(default_factory=list)
     amount_roles: list[str] = Field(default_factory=list)
+    shadow_search_text: str = ""
+    party_names: list[str] = Field(default_factory=list)
+    court_names: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    cross_refs: list[str] = Field(default_factory=list)
 
 
 class PageMetadata(BaseModel):
@@ -104,6 +111,15 @@ class RetrievedChunk(BaseModel):
     doc_family: str = ""
     chunk_type: str = ""
     amount_roles: list[str] = Field(default_factory=list)
+    normalized_refs: list[str] = Field(default_factory=list)
+    shadow_search_text: str = ""
+    party_names: list[str] = Field(default_factory=list)
+    court_names: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    cross_refs: list[str] = Field(default_factory=list)
+    retrieval_sources: list[str] = Field(default_factory=list)
 
 
 class RankedChunk(BaseModel):
@@ -124,6 +140,7 @@ class RankedChunk(BaseModel):
     doc_family: str = ""
     chunk_type: str = ""
     amount_roles: list[str] = Field(default_factory=list)
+    normalized_refs: list[str] = Field(default_factory=list)
 
 
 # -- API Request / Response --
@@ -277,6 +294,13 @@ class Chunk(BaseModel):
     normalized_title: str = ""
     normalized_refs: list[str] = Field(default_factory=list)
     amount_roles: list[str] = Field(default_factory=list)
+    shadow_search_text: str = ""
+    party_names: list[str] = Field(default_factory=list)
+    court_names: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    cross_refs: list[str] = Field(default_factory=list)
 
 
 # -- LangGraph State --

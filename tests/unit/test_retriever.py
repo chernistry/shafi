@@ -21,9 +21,19 @@ def mock_settings():
             fusion_method="RRF",
             circuit_failure_threshold=3,
             circuit_reset_timeout_s=60.0,
+            shadow_collection="legal_chunks_shadow",
         ),
         reranker=SimpleNamespace(rerank_candidates=80),
-        pipeline=SimpleNamespace(retry_dense_bias=40, retry_sparse_bias=90),
+        pipeline=SimpleNamespace(
+            retry_dense_bias=40,
+            retry_sparse_bias=90,
+            enable_shadow_search_text=False,
+            enable_parallel_anchor_retrieval=False,
+            enable_entity_boosts=False,
+            enable_cross_ref_boosts=False,
+            shadow_retrieval_top_k=24,
+            anchor_retrieval_top_k=16,
+        ),
     )
     sparse_encoder = MagicMock()
     sparse_encoder.encode_query.return_value = models.SparseVector(indices=[1], values=[0.7])
@@ -45,7 +55,9 @@ def mock_embedder():
 def mock_store():
     store = MagicMock()
     store.collection_name = "legal_chunks"
+    store.shadow_collection_name = "legal_chunks_shadow"
     store.client = AsyncMock()
+    store.client.collection_exists = AsyncMock(return_value=True)
 
     points: list[object] = []
     for i in range(5):
@@ -83,6 +95,7 @@ async def test_retrieve_returns_chunks_and_tracks_ids(mock_settings, mock_embedd
     assert debug["fail_open_triggered"] is False
     assert debug["initial_chunk_count"] == 5
     assert debug["final_chunk_count"] == 5
+    assert debug["source_hits"] == {"baseline": 5, "shadow": 0, "anchor": 0}
     mock_embedder.embed_query.assert_awaited_once()
     mock_store.client.query_points.assert_awaited_once()
 
@@ -413,3 +426,76 @@ async def test_retrieve_records_exact_ref_fail_open_debug(mock_settings, mock_em
     assert debug["final_chunk_count"] == 5
     assert debug["final_doc_ref_filter_applied"] is False
     assert debug["final_doc_type_filter_applied"] == ""
+
+
+@pytest.mark.asyncio
+async def test_retrieve_unions_shadow_results_when_enabled(mock_settings, mock_embedder, mock_store):
+    from rag_challenge.core.retriever import HybridRetriever
+
+    mock_settings.pipeline.enable_shadow_search_text = True
+    baseline_points = mock_store.client.query_points.return_value.points
+    shadow_points = [
+        SimpleNamespace(
+            id="shadow-1",
+            score=1.4,
+            payload={
+                "chunk_id": "shadow-c1",
+                "doc_id": "d2",
+                "doc_title": "Operating Law 2018",
+                "doc_type": "statute",
+                "section_path": "page:2",
+                "chunk_text": "Article 16 filing obligation",
+                "doc_summary": "Summary",
+                "article_refs": ["Article 16"],
+                "shadow_search_text": "Operating Law 2018 Article 16 filing obligation",
+            },
+        )
+    ]
+    mock_store.client.query_points = AsyncMock(
+        side_effect=[SimpleNamespace(points=baseline_points), SimpleNamespace(points=shadow_points)]
+    )
+
+    retriever = HybridRetriever(store=mock_store, embedder=mock_embedder)
+    chunks = await retriever.retrieve("According to Article 16 of the Operating Law 2018, what must be filed?")
+    debug = retriever.get_last_retrieval_debug()
+
+    assert any(chunk.chunk_id == "shadow-c1" for chunk in chunks)
+    assert debug["shadow_collection_used"] is True
+    assert debug["source_hits"]["shadow"] == 1
+    assert debug["source_survivors"]["shadow"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_retrieve_runs_bounded_anchor_retrieval_when_enabled(mock_settings, mock_embedder, mock_store):
+    from rag_challenge.core.retriever import HybridRetriever
+
+    mock_settings.pipeline.enable_parallel_anchor_retrieval = True
+    baseline_points = mock_store.client.query_points.return_value.points
+    anchor_points = [
+        SimpleNamespace(
+            id="anchor-1",
+            score=1.3,
+            payload={
+                "chunk_id": "anchor-c1",
+                "doc_id": "d1",
+                "doc_title": "Test Doc",
+                "doc_type": "statute",
+                "section_path": "page:1",
+                "chunk_text": "COMMENCEMENT Article 16",
+                "doc_summary": "Summary",
+                "chunk_type": "commencement_anchor",
+                "article_refs": ["Article 16"],
+            },
+        )
+    ]
+    mock_store.client.query_points = AsyncMock(
+        side_effect=[SimpleNamespace(points=baseline_points), SimpleNamespace(points=anchor_points)]
+    )
+
+    retriever = HybridRetriever(store=mock_store, embedder=mock_embedder)
+    chunks = await retriever.retrieve("What is the commencement page for Article 16?")
+    debug = retriever.get_last_retrieval_debug()
+
+    assert any(chunk.chunk_id == "anchor-c1" for chunk in chunks)
+    assert debug["anchor_retrieval_used"] is True
+    assert debug["source_hits"]["anchor"] == 1

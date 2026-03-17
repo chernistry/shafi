@@ -343,8 +343,10 @@ def _resolve_query_concurrency(override: int | None) -> int:
 def _phase_collection_override(collection_name: str):
     previous = os.environ.get("QDRANT_COLLECTION")
     previous_page = os.environ.get("QDRANT_PAGE_COLLECTION")
+    previous_shadow = os.environ.get("QDRANT_SHADOW_COLLECTION")
     os.environ["QDRANT_COLLECTION"] = collection_name
     os.environ["QDRANT_PAGE_COLLECTION"] = f"{collection_name}_pages"
+    os.environ["QDRANT_SHADOW_COLLECTION"] = f"{collection_name}_shadow"
     get_settings.cache_clear()
     try:
         yield
@@ -357,6 +359,10 @@ def _phase_collection_override(collection_name: str):
             os.environ.pop("QDRANT_PAGE_COLLECTION", None)
         else:
             os.environ["QDRANT_PAGE_COLLECTION"] = previous_page
+        if previous_shadow is None:
+            os.environ.pop("QDRANT_SHADOW_COLLECTION", None)
+        else:
+            os.environ["QDRANT_SHADOW_COLLECTION"] = previous_shadow
         get_settings.cache_clear()
 
 
@@ -1538,24 +1544,35 @@ def _check_existing_artifact_preflight(
         return
 
     try:
-        preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
-    except Exception:
+        preflight_obj = json.loads(preflight_path.read_text(encoding="utf-8"))
+    except Exception as err:
         if not force:
             raise RuntimeError(
                 f"Cannot parse preflight_summary at {preflight_path}. "
                 "Use --force-submit-existing to bypass."
-            )
+            ) from err
         logger.warning("Cannot parse preflight_summary; proceeding because --force-submit-existing is set.")
         return
+    if not isinstance(preflight_obj, dict):
+        if not force:
+            raise RuntimeError(
+                f"preflight_summary at {preflight_path} is not a JSON object. "
+                "Use --force-submit-existing to bypass this check."
+            )
+        logger.warning("preflight_summary is not a JSON object; proceeding because --force-submit-existing is set.")
+        return
+    preflight = cast("dict[str, object]", preflight_obj)
 
     issues: list[str] = []
-    support_shape = preflight.get("support_shape_report") or {}
-    blocking = int(support_shape.get("blocking_case_count") or 0)
+    support_shape_obj = preflight.get("support_shape_report")
+    support_shape = cast("dict[str, object]", support_shape_obj) if isinstance(support_shape_obj, dict) else {}
+    blocking = as_int(support_shape.get("blocking_case_count"))
     if blocking > 0:
         issues.append(f"support_shape blocking_case_count={blocking}")
 
-    anomaly = preflight.get("anomaly_report") or {}
-    anomaly_count = int(anomaly.get("anomaly_count") or 0)
+    anomaly_obj = preflight.get("anomaly_report")
+    anomaly = cast("dict[str, object]", anomaly_obj) if isinstance(anomaly_obj, dict) else {}
+    anomaly_count = as_int(anomaly.get("anomaly_count"))
     if anomaly_count > 0:
         issues.append(f"anomaly_count={anomaly_count}")
 

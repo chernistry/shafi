@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import fitz
-
 from scripts import run_scanner_ticket_341_stress as mod
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_pdf(path: Path, pages: list[str]) -> None:

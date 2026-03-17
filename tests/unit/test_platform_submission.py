@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import zipfile
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
@@ -25,9 +26,11 @@ from rag_challenge.submission.platform import (
     _build_results_anomaly_report,
     _build_support_shape_report,
     _build_truth_audit_report,
+    _check_existing_artifact_preflight,
     _create_code_archive,
     _extract_http_error_message,
     _is_resources_not_published_error,
+    _phase_collection_override,
     _project_platform_answer,
     _repair_anomalous_results,
     _resolve_query_concurrency,
@@ -35,7 +38,6 @@ from rag_challenge.submission.platform import (
     _result_anomaly_flags,
     _run_questions,
     _scan_text_for_secrets,
-    _check_existing_artifact_preflight,
     _submit_existing_artifacts,
     _validate_platform_args,
 )
@@ -231,6 +233,21 @@ def test_create_code_archive_rejects_secret_like_content(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="Code archive audit failed"):
         _create_code_archive(root, archive_path, allowlist)
+
+
+def test_phase_collection_override_scopes_shadow_collection() -> None:
+    original_collection = os.environ.get("QDRANT_COLLECTION")
+    original_page = os.environ.get("QDRANT_PAGE_COLLECTION")
+    original_shadow = os.environ.get("QDRANT_SHADOW_COLLECTION")
+
+    with _phase_collection_override("legal_chunks_platform_warmup"):
+        assert os.environ["QDRANT_COLLECTION"] == "legal_chunks_platform_warmup"
+        assert os.environ["QDRANT_PAGE_COLLECTION"] == "legal_chunks_platform_warmup_pages"
+        assert os.environ["QDRANT_SHADOW_COLLECTION"] == "legal_chunks_platform_warmup_shadow"
+
+    assert os.environ.get("QDRANT_COLLECTION") == original_collection
+    assert os.environ.get("QDRANT_PAGE_COLLECTION") == original_page
+    assert os.environ.get("QDRANT_SHADOW_COLLECTION") == original_shadow
 
 
 def test_extract_http_error_message_prefers_nested_error_message() -> None:

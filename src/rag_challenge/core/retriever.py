@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from contextlib import suppress
 from copy import deepcopy
 from typing import TYPE_CHECKING, cast
 
@@ -23,6 +24,19 @@ logger = logging.getLogger(__name__)
 _DIFC_CASE_RE = re.compile(r"^(CFI|CA|SCT|ENF|DEC|TCD|ARB)\s+0*(\d{1,4})/(\d{4})$", re.IGNORECASE)
 _LAW_NO_RE = re.compile(r"^Law\s+No\.?\s*(\d+)\s+of\s+(\d{4})$", re.IGNORECASE)
 _TITLE_WITH_YEAR_RE = re.compile(r"^(?P<title>.+?)\s+(?P<year>19\d{2}|20\d{2})$", re.IGNORECASE)
+_ANCHOR_CHUNK_TYPES = {
+    "schedule_anchor",
+    "enactment_anchor",
+    "commencement_anchor",
+    "administration_anchor",
+    "operative_order_anchor",
+    "costs_anchor",
+    "conclusion_anchor",
+}
+_ANCHOR_QUERY_RE = re.compile(
+    r"\b(article|section|schedule|page|title|cover|header|caption|commencement|enactment|administer(?:ed|ing)?|costs?)\b",
+    re.IGNORECASE,
+)
 
 
 class RetrieverError(RuntimeError):
@@ -60,6 +74,7 @@ class HybridRetriever:
         self._reranker_settings = settings.reranker
         self._last_retrieved_ids: list[str] = []
         self._last_retrieval_debug: dict[str, object] = {}
+        self._collection_exists_cache: dict[str, bool] = {}
         self._qdrant_circuit = CircuitBreaker(
             name="qdrant",
             failure_threshold=int(self._qdrant_settings.circuit_failure_threshold),
@@ -96,6 +111,7 @@ class HybridRetriever:
         retrieval_debug: dict[str, object] = {
             "query": str(query or ""),
             "sparse_query": sparse_query,
+            "shadow_query": "",
             "doc_refs": list(extracted_refs),
             "expanded_doc_refs": list(expanded_refs),
             "has_doc_refs": bool(extracted_refs),
@@ -120,6 +136,14 @@ class HybridRetriever:
             "final_chunk_count": 0,
             "final_doc_ref_filter_applied": bool(expanded_refs),
             "final_doc_type_filter_applied": doc_type_filter.value if doc_type_filter is not None else "",
+            "source_hits": {"baseline": 0, "shadow": 0, "anchor": 0},
+            "source_unique_additions": {"shadow": 0, "anchor": 0},
+            "source_survivors": {"baseline": 0, "shadow": 0, "anchor": 0},
+            "entity_boosted_chunk_count": 0,
+            "cross_ref_boosted_chunk_count": 0,
+            "boosted_chunk_ids": [],
+            "shadow_collection_used": False,
+            "anchor_retrieval_used": False,
         }
 
         if doc_type_filter is None and extracted_refs:
@@ -276,6 +300,33 @@ class HybridRetriever:
             retrieval_debug["final_doc_ref_filter_applied"] = False
             retrieval_debug["final_doc_type_filter_applied"] = ""
 
+        baseline_chunks = list(chunks)
+        retrieval_debug["source_hits"] = {
+            "baseline": len(baseline_chunks),
+            "shadow": 0,
+            "anchor": 0,
+        }
+
+        chunks = await self._apply_optional_retrieval_surfaces(
+            chunks=chunks,
+            query=str(query or ""),
+            sparse_query=sparse_query,
+            query_vector=query_vector,
+            limit=limit,
+            doc_type_filter=doc_type_filter,
+            jurisdiction_filter=jurisdiction_filter,
+            expanded_refs=expanded_refs,
+            exact_legal_refs=exact_legal_refs,
+            retrieval_debug=retrieval_debug,
+        )
+
+        chunks = self._apply_payload_boosts(
+            chunks=chunks,
+            query=str(query or ""),
+            exact_legal_refs=exact_legal_refs,
+            retrieval_debug=retrieval_debug,
+        )
+
         self._last_retrieved_ids = [chunk.chunk_id for chunk in chunks]
         retrieval_debug["final_chunk_count"] = len(chunks)
         self._last_retrieval_debug = retrieval_debug
@@ -293,6 +344,7 @@ class HybridRetriever:
     async def _query_hybrid(
         self,
         *,
+        collection_name: str | None = None,
         prefetch: list[models.Prefetch],
         fusion: models.Fusion,
         limit: int,
@@ -301,7 +353,7 @@ class HybridRetriever:
             raise RetrieverError("Qdrant circuit is open")
         try:
             result = await self._store.client.query_points(
-                collection_name=self._store.collection_name,
+                collection_name=collection_name or self._store.collection_name,
                 prefetch=prefetch,
                 query=models.FusionQuery(fusion=fusion),
                 limit=limit,
@@ -316,6 +368,7 @@ class HybridRetriever:
     async def _query_dense_only(
         self,
         *,
+        collection_name: str | None = None,
         query_vector: list[float],
         limit: int,
         where: models.Filter | None,
@@ -324,7 +377,7 @@ class HybridRetriever:
             raise RetrieverError("Qdrant circuit is open")
         try:
             result = await self._store.client.query_points(
-                collection_name=self._store.collection_name,
+                collection_name=collection_name or self._store.collection_name,
                 query=query_vector,
                 using="dense",
                 query_filter=where,
@@ -340,6 +393,7 @@ class HybridRetriever:
     async def _query_sparse_only(
         self,
         *,
+        collection_name: str | None = None,
         query: str,
         limit: int,
         where: models.Filter | None,
@@ -351,7 +405,7 @@ class HybridRetriever:
         try:
             sparse_vector = self._sparse_encoder.encode_query(query)
             result = await self._store.client.query_points(
-                collection_name=self._store.collection_name,
+                collection_name=collection_name or self._store.collection_name,
                 query=sparse_vector,
                 using="bm25",
                 query_filter=where,
@@ -484,11 +538,23 @@ class HybridRetriever:
         return None
 
     @staticmethod
+    def _coerce_str_list(value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        out: list[str] = []
+        for raw in cast("list[object]", value):
+            text = str(raw).strip()
+            if text:
+                out.append(text)
+        return out
+
+    @staticmethod
     def _build_filter(
         *,
         doc_type_filter: DocType | None,
         jurisdiction_filter: str | None,
         doc_refs: list[str] | tuple[str, ...] | None = None,
+        chunk_types: list[str] | tuple[str, ...] | None = None,
     ) -> models.Filter | None:
         conditions: list[object] = []
         if doc_type_filter is not None:
@@ -506,6 +572,18 @@ class HybridRetriever:
                 )
             )
         refs = [ref.strip() for ref in (list(doc_refs) if doc_refs is not None else []) if str(ref).strip()]
+        chunk_type_values = [
+            chunk_type.strip()
+            for chunk_type in (list(chunk_types) if chunk_types is not None else [])
+            if str(chunk_type).strip()
+        ]
+        if chunk_type_values:
+            conditions.append(
+                models.FieldCondition(
+                    key="chunk_type",
+                    match=models.MatchAny(any=chunk_type_values),
+                )
+            )
         title_refs = HybridRetriever._doc_title_filter_variants(refs)
         if refs:
             ref_conditions: list[models.Condition] = [
@@ -597,6 +675,210 @@ class HybridRetriever:
             out.append(normalized)
         return out
 
+    async def _apply_optional_retrieval_surfaces(
+        self,
+        *,
+        chunks: list[RetrievedChunk],
+        query: str,
+        sparse_query: str,
+        query_vector: list[float] | None,
+        limit: int,
+        doc_type_filter: DocType | None,
+        jurisdiction_filter: str | None,
+        expanded_refs: list[str],
+        exact_legal_refs: list[str],
+        retrieval_debug: dict[str, object],
+    ) -> list[RetrievedChunk]:
+        merged = {chunk.chunk_id: chunk.model_copy(update={"retrieval_sources": ["baseline"]}) for chunk in chunks}
+        source_hits = cast("dict[str, int]", retrieval_debug["source_hits"])
+
+        if bool(getattr(self._pipeline_settings, "enable_shadow_search_text", False)):
+            shadow_collection = self._store.shadow_collection_name
+            if await self._collection_exists(shadow_collection):
+                shadow_query = self._build_shadow_query(query=query, exact_legal_refs=exact_legal_refs)
+                retrieval_debug["shadow_query"] = shadow_query
+                retrieval_debug["shadow_collection_used"] = True
+                shadow_where = self._build_filter(
+                    doc_type_filter=doc_type_filter,
+                    jurisdiction_filter=jurisdiction_filter,
+                    doc_refs=expanded_refs,
+                )
+                shadow_vector = (
+                    query_vector
+                    if query_vector is not None and shadow_query == query
+                    else await self._embedder.embed_query(shadow_query)
+                )
+                shadow_limit = min(limit, int(getattr(self._pipeline_settings, "shadow_retrieval_top_k", 24)))
+                try:
+                    shadow_prefetch = self._build_prefetch(
+                        query=shadow_query,
+                        query_vector=shadow_vector,
+                        prefetch_dense=max(shadow_limit, 8),
+                        prefetch_sparse=max(shadow_limit, 8),
+                        where=shadow_where,
+                    )
+                    shadow_result = await self._query_hybrid(
+                        collection_name=shadow_collection,
+                        prefetch=shadow_prefetch,
+                        fusion=self._resolve_fusion_method(),
+                        limit=shadow_limit,
+                    )
+                    shadow_chunks = [
+                        chunk.model_copy(update={"retrieval_sources": ["shadow"]})
+                        for chunk in self._map_results(shadow_result)
+                    ]
+                except Exception as exc:
+                    logger.warning("Shadow retrieval failed; continuing without shadow surface: %s", exc)
+                    shadow_chunks = []
+                source_hits["shadow"] = len(shadow_chunks)
+                merged = self._merge_chunk_source_maps(merged, shadow_chunks, source_name="shadow")
+                cast("dict[str, int]", retrieval_debug["source_unique_additions"])["shadow"] = sum(
+                    1 for chunk in merged.values() if "shadow" in chunk.retrieval_sources and "baseline" not in chunk.retrieval_sources
+                )
+
+        if bool(getattr(self._pipeline_settings, "enable_parallel_anchor_retrieval", False)) and self._is_anchor_sensitive_query(
+            query
+        ):
+            retrieval_debug["anchor_retrieval_used"] = True
+            anchor_where = self._build_filter(
+                doc_type_filter=doc_type_filter,
+                jurisdiction_filter=jurisdiction_filter,
+                doc_refs=expanded_refs,
+                chunk_types=sorted(_ANCHOR_CHUNK_TYPES),
+            )
+            anchor_limit = min(limit, int(getattr(self._pipeline_settings, "anchor_retrieval_top_k", 16)))
+            try:
+                anchor_result = await self._query_sparse_only(
+                    collection_name=self._store.collection_name,
+                    query=sparse_query,
+                    limit=anchor_limit,
+                    where=anchor_where,
+                )
+                anchor_chunks = [
+                    chunk.model_copy(update={"retrieval_sources": ["anchor"]})
+                    for chunk in self._map_results(anchor_result)
+                ]
+            except Exception as exc:
+                logger.warning("Anchor retrieval failed; continuing without anchor surface: %s", exc)
+                anchor_chunks = []
+            source_hits["anchor"] = len(anchor_chunks)
+            merged = self._merge_chunk_source_maps(merged, anchor_chunks, source_name="anchor")
+            cast("dict[str, int]", retrieval_debug["source_unique_additions"])["anchor"] = sum(
+                1 for chunk in merged.values() if "anchor" in chunk.retrieval_sources and "baseline" not in chunk.retrieval_sources
+            )
+
+        ordered = sorted(merged.values(), key=lambda chunk: chunk.score, reverse=True)[:limit]
+        cast("dict[str, int]", retrieval_debug["source_survivors"])["baseline"] = sum(
+            1 for chunk in ordered if "baseline" in chunk.retrieval_sources
+        )
+        cast("dict[str, int]", retrieval_debug["source_survivors"])["shadow"] = sum(
+            1 for chunk in ordered if "shadow" in chunk.retrieval_sources
+        )
+        cast("dict[str, int]", retrieval_debug["source_survivors"])["anchor"] = sum(
+            1 for chunk in ordered if "anchor" in chunk.retrieval_sources
+        )
+        return ordered
+
+    @staticmethod
+    def _merge_chunk_source_maps(
+        base: dict[str, RetrievedChunk],
+        extra: list[RetrievedChunk],
+        *,
+        source_name: str,
+    ) -> dict[str, RetrievedChunk]:
+        merged = dict(base)
+        for chunk in extra:
+            existing = merged.get(chunk.chunk_id)
+            if existing is None:
+                merged[chunk.chunk_id] = chunk
+                continue
+            sources = list(existing.retrieval_sources)
+            if source_name not in sources:
+                sources.append(source_name)
+            if chunk.score > existing.score:
+                merged[chunk.chunk_id] = chunk.model_copy(update={"retrieval_sources": sources})
+            else:
+                merged[chunk.chunk_id] = existing.model_copy(update={"retrieval_sources": sources})
+        return merged
+
+    def _apply_payload_boosts(
+        self,
+        *,
+        chunks: list[RetrievedChunk],
+        query: str,
+        exact_legal_refs: list[str],
+        retrieval_debug: dict[str, object],
+    ) -> list[RetrievedChunk]:
+        if not chunks:
+            return chunks
+        enable_entity_boosts = bool(getattr(self._pipeline_settings, "enable_entity_boosts", False))
+        enable_cross_ref_boosts = bool(getattr(self._pipeline_settings, "enable_cross_ref_boosts", False))
+        if not enable_entity_boosts and not enable_cross_ref_boosts:
+            return chunks
+
+        query_normalized = re.sub(r"\s+", " ", query).strip().casefold()
+        exact_refs_normalized = {ref.casefold() for ref in exact_legal_refs}
+        boosted_ids: list[str] = []
+        entity_boosted = 0
+        cross_ref_boosted = 0
+        rescored: list[RetrievedChunk] = []
+        for chunk in chunks:
+            boost = 0.0
+            if enable_entity_boosts and self._chunk_matches_entities(chunk=chunk, query_normalized=query_normalized):
+                boost += 0.06
+                entity_boosted += 1
+                boosted_ids.append(chunk.chunk_id)
+            if enable_cross_ref_boosts and self._chunk_matches_cross_refs(chunk=chunk, exact_refs_normalized=exact_refs_normalized):
+                boost += 0.08
+                cross_ref_boosted += 1
+                boosted_ids.append(chunk.chunk_id)
+            rescored.append(chunk if boost <= 0 else chunk.model_copy(update={"score": chunk.score + boost}))
+
+        retrieval_debug["entity_boosted_chunk_count"] = entity_boosted
+        retrieval_debug["cross_ref_boosted_chunk_count"] = cross_ref_boosted
+        retrieval_debug["boosted_chunk_ids"] = sorted(set(boosted_ids))
+        return sorted(rescored, key=lambda chunk: chunk.score, reverse=True)
+
+    @staticmethod
+    def _chunk_matches_entities(*, chunk: RetrievedChunk, query_normalized: str) -> bool:
+        payload_values = [
+            *chunk.party_names,
+            *chunk.court_names,
+            *chunk.law_titles,
+            *chunk.case_numbers,
+        ]
+        return any(value and value.casefold() in query_normalized for value in payload_values)
+
+    @staticmethod
+    def _chunk_matches_cross_refs(*, chunk: RetrievedChunk, exact_refs_normalized: set[str]) -> bool:
+        if not exact_refs_normalized:
+            return False
+        payload_values = {value.casefold() for value in [*chunk.article_refs, *chunk.cross_refs, *chunk.normalized_refs] if value}
+        return bool(payload_values & exact_refs_normalized)
+
+    @staticmethod
+    def _build_shadow_query(*, query: str, exact_legal_refs: list[str]) -> str:
+        compact = re.sub(r"\s+", " ", query).strip()
+        if not exact_legal_refs:
+            return compact
+        refs = " ".join(ref for ref in exact_legal_refs[:4] for _ in range(2))
+        return f"{compact}\n{refs}".strip()
+
+    @staticmethod
+    def _is_anchor_sensitive_query(query: str) -> bool:
+        return bool(_ANCHOR_QUERY_RE.search(str(query or "")) or QueryClassifier.extract_exact_legal_refs(str(query or "")))
+
+    async def _collection_exists(self, collection_name: str) -> bool:
+        cached = self._collection_exists_cache.get(collection_name)
+        if cached is not None:
+            return cached
+        try:
+            exists = await self._store.client.collection_exists(collection_name)
+        except Exception:
+            exists = False
+        self._collection_exists_cache[collection_name] = exists
+        return exists
+
     @classmethod
     def _map_results(cls, result: object) -> list[RetrievedChunk]:
         points = cls._extract_points(result)
@@ -635,6 +917,18 @@ class HybridRetriever:
                 "doc_summary",
                 "citations",
                 "anchors",
+                "chunk_type",
+                "doc_family",
+                "page_family",
+                "normalized_refs",
+                "amount_roles",
+                "shadow_search_text",
+                "party_names",
+                "court_names",
+                "law_titles",
+                "article_refs",
+                "case_numbers",
+                "cross_refs",
             ]
         )
 
@@ -717,10 +1011,8 @@ class HybridRetriever:
             parts = pid.rsplit("_", 1)
             if len(parts) == 2:
                 doc_id, page_str = parts
-                try:
+                with suppress(ValueError):
                     page_map[pid] = (doc_id, int(page_str))
-                except ValueError:
-                    pass
 
         all_chunks: list[RetrievedChunk] = []
         for page_id, (doc_id, page_num) in page_map.items():
@@ -738,7 +1030,7 @@ class HybridRetriever:
                     with_payload=True,
                     with_vectors=False,
                 )
-                points = scroll_result[0] if isinstance(scroll_result, tuple) else scroll_result
+                points = scroll_result[0]
                 for pt in points:
                     chunk = self._map_point(pt)
                     if chunk is not None:
@@ -764,9 +1056,8 @@ class HybridRetriever:
             except (TypeError, ValueError):
                 score = 0.0
             try:
-                page_num_raw = payload.get("page_num", 0)
-                page_num = int(page_num_raw) if page_num_raw is not None else 0
-            except (TypeError, ValueError):
+                page_num = cls._coerce_int(payload.get("page_num", 0)) or 0
+            except TypeError:
                 page_num = 0
             mapped.append(RetrievedPage(
                 page_id=str(payload.get("page_id") or ""),
@@ -814,7 +1105,15 @@ class HybridRetriever:
                 page_family=str(payload.get("page_family") or ""),
                 doc_family=str(payload.get("doc_family") or ""),
                 chunk_type=str(payload.get("chunk_type") or ""),
-                amount_roles=list(payload.get("amount_roles") or []),
+                amount_roles=HybridRetriever._coerce_str_list(payload.get("amount_roles")),
+                normalized_refs=HybridRetriever._coerce_str_list(payload.get("normalized_refs")),
+                shadow_search_text=str(payload.get("shadow_search_text") or ""),
+                party_names=HybridRetriever._coerce_str_list(payload.get("party_names")),
+                court_names=HybridRetriever._coerce_str_list(payload.get("court_names")),
+                law_titles=HybridRetriever._coerce_str_list(payload.get("law_titles")),
+                article_refs=HybridRetriever._coerce_str_list(payload.get("article_refs")),
+                case_numbers=HybridRetriever._coerce_str_list(payload.get("case_numbers")),
+                cross_refs=HybridRetriever._coerce_str_list(payload.get("cross_refs")),
             )
         except Exception:
             logger.warning("Failed to map Qdrant point %s", point_id, exc_info=True)

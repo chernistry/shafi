@@ -15,6 +15,8 @@ def mock_settings():
             url="http://localhost:6333",
             api_key="",
             collection="test_collection",
+            shadow_collection="test_collection_shadow",
+            page_collection="test_pages",
             pool_size=5,
             timeout_s=10.0,
             use_cloud_inference=True,
@@ -87,6 +89,33 @@ async def test_upsert_chunks(mock_settings, mock_qdrant_client):
     count = await store.upsert_chunks(chunks, vectors)
     assert count == 5
     mock_qdrant_client.upsert.assert_called_once()
+    payload = mock_qdrant_client.upsert.await_args.kwargs["points"][0].payload
+    assert payload["doc_family"] == ""
+    assert payload["shadow_search_text"] == ""
+
+
+@pytest.mark.asyncio
+async def test_upsert_shadow_chunks_uses_shadow_collection(mock_settings, mock_qdrant_client):
+    from rag_challenge.core.qdrant import QdrantStore
+
+    store = QdrantStore(client=mock_qdrant_client)
+    chunk = _make_chunk("c-shadow").model_copy(
+        update={
+            "shadow_search_text": "Operating Law 2018\nArticle 16\nfiled document",
+            "law_titles": ["Operating Law 2018"],
+            "article_refs": ["Article 16"],
+            "cross_refs": ["Article 16"],
+        }
+    )
+
+    count = await store.upsert_shadow_chunks([chunk], [[0.1] * 1024])
+
+    assert count == 1
+    kwargs = mock_qdrant_client.upsert.await_args.kwargs
+    assert kwargs["collection_name"] == "test_collection_shadow"
+    payload = kwargs["points"][0].payload
+    assert payload["shadow_search_text"].startswith("Operating Law 2018")
+    assert payload["article_refs"] == ["Article 16"]
 
 
 @pytest.mark.asyncio
