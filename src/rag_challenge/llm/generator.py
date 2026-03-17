@@ -2422,6 +2422,11 @@ class RAGGenerator:
                 if _OUTCOME_NOISE_RE.search(cleaned_clause):
                     continue
                 score = 0
+                chunk_amount_roles = set(getattr(chunk, "amount_roles", []) or [])
+                if asks_costs and "costs_awarded" in chunk_amount_roles:
+                    score += 40
+                if asks_costs and "claim_amount" in chunk_amount_roles and "costs_awarded" not in chunk_amount_roles:
+                    score -= 20
                 if page_num == 1:
                     score += 24
                 elif page_num == 2:

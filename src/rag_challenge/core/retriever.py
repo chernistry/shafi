@@ -814,6 +814,7 @@ class HybridRetriever:
                 page_family=str(payload.get("page_family") or ""),
                 doc_family=str(payload.get("doc_family") or ""),
                 chunk_type=str(payload.get("chunk_type") or ""),
+                amount_roles=list(payload.get("amount_roles") or []),
             )
         except Exception:
             logger.warning("Failed to map Qdrant point %s", point_id, exc_info=True)

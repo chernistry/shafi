@@ -269,6 +269,7 @@ class RerankerClient:
                 page_family=getattr(chunk, "page_family", ""),
                 doc_family=getattr(chunk, "doc_family", ""),
                 chunk_type=getattr(chunk, "chunk_type", ""),
+                amount_roles=list(getattr(chunk, "amount_roles", []) or []),
             )
             for chunk, score in zip(chunks, scores, strict=True)
         ]
@@ -292,6 +293,7 @@ class RerankerClient:
                 page_family=getattr(chunk, "page_family", ""),
                 doc_family=getattr(chunk, "doc_family", ""),
                 chunk_type=getattr(chunk, "chunk_type", ""),
+                amount_roles=list(getattr(chunk, "amount_roles", []) or []),
             )
             for chunk in sorted_chunks[: max(0, top_n)]
         ]

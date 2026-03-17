@@ -2490,6 +2490,7 @@ class RAGPipelineBuilder:
                     page_family=getattr(raw, "page_family", ""),
                     doc_family=getattr(raw, "doc_family", ""),
                     chunk_type=getattr(raw, "chunk_type", ""),
+                    amount_roles=list(getattr(raw, "amount_roles", []) or []),
                 )
             selected.append(chunk)
             seen.add(chunk.chunk_id)
@@ -2546,6 +2547,7 @@ class RAGPipelineBuilder:
                         page_family=getattr(page_one, "page_family", ""),
                         doc_family=getattr(page_one, "doc_family", ""),
                         chunk_type=getattr(page_one, "chunk_type", ""),
+                        amount_roles=list(getattr(page_one, "amount_roles", []) or []),
                     )
                 )
                 seen.add(page_one.chunk_id)
@@ -2700,6 +2702,7 @@ class RAGPipelineBuilder:
             page_family=getattr(chunk, "page_family", ""),
             doc_family=getattr(chunk, "doc_family", ""),
             chunk_type=getattr(chunk, "chunk_type", ""),
+            amount_roles=list(getattr(chunk, "amount_roles", []) or []),
         )
 
     @classmethod
@@ -4243,6 +4246,11 @@ class RAGPipelineBuilder:
             doc_refs=state.get("doc_refs"),
             context_chunks=context_chunks,
         )
+        context_chunks = self._boost_family_context_chunks(
+            query=state["query"],
+            answer_type=answer_type,
+            context_chunks=context_chunks,
+        )
         if answer_type in strict_types and bool(getattr(self._settings.pipeline, "strict_types_extraction_enabled", True)):
             strict_result = self._strict_answerer.answer(
                 answer_type=answer_type,
@@ -4891,6 +4899,7 @@ class RAGPipelineBuilder:
                 page_family=getattr(chunk, "page_family", ""),
                 doc_family=getattr(chunk, "doc_family", ""),
                 chunk_type=getattr(chunk, "chunk_type", ""),
+                amount_roles=list(getattr(chunk, "amount_roles", []) or []),
             )
             for chunk in sorted_chunks[: max(0, int(top_n))]
         ]
@@ -5745,6 +5754,7 @@ class RAGPipelineBuilder:
                     page_family=getattr(chunk, "page_family", ""),
                     doc_family=getattr(chunk, "doc_family", ""),
                     chunk_type=getattr(chunk, "chunk_type", ""),
+                    amount_roles=list(getattr(chunk, "amount_roles", []) or []),
                 )
             )
             overlap = len(query_terms.intersection(cls._support_terms(blob)))
@@ -6403,6 +6413,67 @@ class RAGPipelineBuilder:
     _ADMIN_QUERY_RE = re.compile(r"administered\s+by", re.IGNORECASE)
     _SCHEDULE_QUERY_RE = re.compile(r"\b(?:schedule|annex|appendix)\b", re.IGNORECASE)
     _LAW_REF_RE = re.compile(r"\blaw\s+no\b", re.IGNORECASE)
+    _CLAIM_VALUE_QUERY_RE = re.compile(r"claim\s+value|monetary\s+amount|how\s+much", re.IGNORECASE)
+    _COSTS_QUERY_RE = re.compile(r"costs?\s+(?:awarded|ordered|assessed)|ordered\s+to\s+pay", re.IGNORECASE)
+    _PENALTY_QUERY_RE = re.compile(r"\b(?:penalty|fine|prescribed\s+penalty)\b", re.IGNORECASE)
+
+    _FAMILY_BOOST_MAP: dict[str, frozenset[str]] = {
+        "enactment": frozenset({"enactment_like", "commencement_like", "citation_title_like"}),
+        "administration": frozenset({"administration_like"}),
+        "outcome": frozenset({"operative_order_like", "conclusion_like", "costs_like"}),
+    }
+
+    @classmethod
+    def _boost_family_context_chunks(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        context_chunks: list["RankedChunk"],
+    ) -> list["RankedChunk"]:
+        """Reorder (not filter) context chunks so family-relevant ones come first.
+
+        Uses page_family metadata on RankedChunk to identify which chunks belong
+        to question-relevant page families, then promotes them to the front of
+        the context window where the LLM/strict-answerer pays most attention.
+        """
+        if not context_chunks:
+            return context_chunks
+
+        q = re.sub(r"\s+", " ", (query or "").strip()).lower()
+        target_families: set[str] = set()
+
+        if cls._ENACTMENT_QUERY_RE.search(q):
+            target_families |= cls._FAMILY_BOOST_MAP["enactment"]
+        if cls._ADMIN_QUERY_RE.search(q):
+            target_families |= cls._FAMILY_BOOST_MAP["administration"]
+        if cls._OUTCOME_QUERY_RE.search(q):
+            target_families |= cls._FAMILY_BOOST_MAP["outcome"]
+
+        target_amount_roles: set[str] = set()
+        if cls._CLAIM_VALUE_QUERY_RE.search(q):
+            target_amount_roles.add("claim_amount")
+        if cls._COSTS_QUERY_RE.search(q):
+            target_amount_roles.add("costs_awarded")
+        if cls._PENALTY_QUERY_RE.search(q):
+            target_amount_roles.add("penalty")
+
+        if not target_families and not target_amount_roles:
+            return context_chunks
+
+        boosted: list[RankedChunk] = []
+        rest: list[RankedChunk] = []
+        for chunk in context_chunks:
+            pf = getattr(chunk, "page_family", "")
+            amt = set(getattr(chunk, "amount_roles", []) or [])
+            if (pf and pf in target_families) or (target_amount_roles and amt & target_amount_roles):
+                boosted.append(chunk)
+            else:
+                rest.append(chunk)
+
+        if not boosted:
+            return context_chunks
+        return boosted + rest
 
     @classmethod
     def _enhance_page_recall(

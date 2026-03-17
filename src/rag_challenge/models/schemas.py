@@ -103,6 +103,7 @@ class RetrievedChunk(BaseModel):
     page_family: str = ""
     doc_family: str = ""
     chunk_type: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
 
 
 class RankedChunk(BaseModel):
@@ -122,6 +123,7 @@ class RankedChunk(BaseModel):
     page_family: str = ""
     doc_family: str = ""
     chunk_type: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
 
 
 # -- API Request / Response --

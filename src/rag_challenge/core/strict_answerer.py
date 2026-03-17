@@ -567,8 +567,17 @@ class StrictAnswerer:
 
         # 1) Monetary amounts (claim value / fine / assessed amount).
         if any(key in q for key in ("claim value", "claim amount", "fine", "amount")):
-            for chunk in chunks:
-                amount = self._extract_currency_amount(chunk.text, prefer_claim=("claim" in q))
+            prefer_claim = "claim" in q and "cost" not in q
+            target_role = "claim_amount" if prefer_claim else "costs_awarded"
+            if "fine" in q or "penalty" in q:
+                target_role = "penalty"
+            role_sorted = sorted(
+                chunks,
+                key=lambda c: (1 if target_role in (getattr(c, "amount_roles", None) or []) else 0),
+                reverse=True,
+            )
+            for chunk in role_sorted:
+                amount = self._extract_currency_amount(chunk.text, prefer_claim=prefer_claim)
                 if amount:
                     return StrictAnswerResult(
                         answer=amount,

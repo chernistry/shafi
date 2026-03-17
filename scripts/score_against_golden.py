@@ -222,16 +222,66 @@ def score(raw_results_path: Path, golden_path: Path) -> dict[str, Any]:
     overall_g = sum(all_f) / len(all_f) if all_f else 0.0
     overall_exact = sum(1 for m in all_exact if m) / len(all_exact) if all_exact else 0.0
 
+    conf_weights = {"high": 1.0, "medium": 0.5, "low": 0.25}
+    weighted_f_num = sum(c["grounding_f_beta"] * conf_weights.get(c["confidence"], 0.25) for c in per_case)
+    weighted_f_den = sum(conf_weights.get(c["confidence"], 0.25) for c in per_case)
+    weighted_g = weighted_f_num / weighted_f_den if weighted_f_den > 0 else 0.0
+
+    trusted_cases = [c for c in per_case if c["confidence"] == "high"]
+    trusted_g = sum(c["grounding_f_beta"] for c in trusted_cases) / len(trusted_cases) if trusted_cases else 0.0
+    trusted_exact = [c for c in trusted_cases if c["answer_match"] is not None]
+    trusted_exact_rate = sum(1 for c in trusted_exact if c["answer_match"]) / len(trusted_exact) if trusted_exact else 0.0
+
+    def _infer_family(q: str, atype: str) -> str:
+        ql = (q or "").lower()
+        if any(t in ql for t in ("jury", "parole", "miranda", "plea bargain")):
+            return "unsupported_trap"
+        if any(t in ql for t in ("ruling", "outcome", "order", "cost", "award", "dismiss")):
+            return "outcome_costs"
+        if any(t in ql for t in ("common", "compare", "both", "same")):
+            return "compare"
+        if any(t in ql for t in ("enact", "commence", "force")):
+            return "enactment"
+        if "administ" in ql:
+            return "administration"
+        if atype in ("boolean",):
+            return "boolean"
+        if atype in ("name", "names"):
+            return "names"
+        if atype == "number":
+            return "number"
+        return "free_text_other"
+
+    by_family: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for c in per_case:
+        q_text = gold_by_qid.get(c["question_id"], {}).get("question", "")
+        family = _infer_family(q_text, c["answer_type"])
+        c["family"] = family
+        by_family[family]["f_beta"].append(c["grounding_f_beta"])
+        if c["answer_match"] is not None:
+            by_family[family]["exact_match"].append(1.0 if c["answer_match"] else 0.0)
+
+    family_summary = {}
+    for fam, metrics in sorted(by_family.items()):
+        family_summary[fam] = {k: _agg(v) for k, v in metrics.items()}
+
+    trusted_regressions = [c for c in trusted_cases if c["answer_match"] is False]
+
     summary = {
         "golden_count": len(gold_by_qid),
         "matched_count": matched_count,
         "unmatched_count": len(gold_by_qid) - matched_count,
         "overall_grounding_f_beta": round(overall_g, 4),
+        "weighted_grounding_f_beta": round(weighted_g, 4),
+        "trusted_grounding_f_beta": round(trusted_g, 4),
         "overall_exact_match_rate": round(overall_exact, 4),
+        "trusted_exact_match_rate": round(trusted_exact_rate, 4),
         "exact_match_evaluated": len(all_exact),
         "exact_match_correct": sum(1 for m in all_exact if m),
+        "trusted_regressions": len(trusted_regressions),
         "by_answer_type": type_summary,
         "by_confidence": conf_summary,
+        "by_family": family_summary,
     }
 
     per_case.sort(key=lambda c: c["grounding_f_beta"])
@@ -246,8 +296,12 @@ def _render_markdown(result: dict[str, Any]) -> str:
         f"- **Matched questions**: {s['matched_count']} / {s['golden_count']}",
         f"- **Unmatched**: {s['unmatched_count']}",
         f"- **Overall Grounding F-beta (beta={BETA})**: {s['overall_grounding_f_beta']}",
+        f"- **Weighted Grounding F-beta**: {s.get('weighted_grounding_f_beta', '-')} (high=1.0, medium=0.5, low=0.25)",
+        f"- **Trusted-only Grounding F-beta**: {s.get('trusted_grounding_f_beta', '-')} (high confidence only)",
         f"- **Exact Match Rate (deterministic types)**: {s['overall_exact_match_rate']} "
-        f"({s['exact_match_correct']}/{s['exact_match_evaluated']})\n",
+        f"({s['exact_match_correct']}/{s['exact_match_evaluated']})",
+        f"- **Trusted Exact Match Rate**: {s.get('trusted_exact_match_rate', '-')}",
+        f"- **Trusted Regressions**: {s.get('trusted_regressions', '-')}\n",
         "## By Answer Type\n",
         "| Type | F-beta (mean) | F-beta (n) | Exact Match | Exact (n) |",
         "|------|--------------|------------|-------------|-----------|",
@@ -276,6 +330,23 @@ def _render_markdown(result: dict[str, Any]) -> str:
             f"| {c} | {fb.get('mean', 0):.4f} | {fb.get('count', 0)} | "
             f"{em_str_c} | {em.get('count', '-')} |"
         )
+
+    fam_summary = s.get("by_family", {})
+    if fam_summary:
+        lines += [
+            "\n## By Question Family\n",
+            "| Family | F-beta (mean) | F-beta (n) | Exact Match | Exact (n) |",
+            "|--------|--------------|------------|-------------|-----------|",
+        ]
+        for fam, metrics in sorted(fam_summary.items()):
+            fb = metrics.get("f_beta", {})
+            em = metrics.get("exact_match", {})
+            em_mean_f = em.get("mean")
+            em_str_f = f"{em_mean_f:.4f}" if isinstance(em_mean_f, (int, float)) else "-"
+            lines.append(
+                f"| {fam} | {fb.get('mean', 0):.4f} | {fb.get('count', 0)} | "
+                f"{em_str_f} | {em.get('count', '-')} |"
+            )
 
     worst = [c for c in result["per_case"] if c["grounding_f_beta"] < 0.5]
     if worst:
