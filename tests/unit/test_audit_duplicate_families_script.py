@@ -95,4 +95,7 @@ def test_audit_duplicate_families_reports_pair(tmp_path: Path) -> None:
     payload = json.loads(out_json.read_text(encoding="utf-8"))
     assert payload["pair_count"] == 1
     assert payload["pairs"][0]["recommendation"] == "risky"
+    assert payload["pairs"][0]["grounding_g_score_beta_2_5_current"] < payload["pairs"][0]["grounding_g_score_beta_2_5_without_partner"]
+    assert payload["pairs"][0]["grounding_g_score_beta_2_5_delta"] > 0
+    assert payload["pairs"][0]["improved_qids"] == ["q1"]
     assert "Duplicate Family Audit" in out_md.read_text(encoding="utf-8")

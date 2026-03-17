@@ -56,8 +56,6 @@ def _context_supports_term(context_text: str, term: str) -> bool:
     if not _contains_term(context_text, term):
         return False
 
-    # If the term appears only in negated statements ("no jury", "without parole"),
-    # treat it as unsupported premise to avoid echoing false assumptions.
     segments = [segment.strip() for segment in re.split(r"[\n.!?]+", context_text) if segment.strip()]
     for segment in segments:
         if not _contains_term(segment, term):

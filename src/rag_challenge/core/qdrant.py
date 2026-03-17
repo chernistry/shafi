@@ -22,7 +22,7 @@ from qdrant_client.models import (
 )
 
 from rag_challenge.config import get_settings
-from rag_challenge.models import Chunk, ChunkMetadata
+from rag_challenge.models import Chunk, ChunkMetadata, PageMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,119 @@ class QdrantStore:
                 logger.debug("Payload index on '%s' may already exist", field, exc_info=True)
             else:
                 logger.info("Created payload index on '%s'", field)
+
+    @property
+    def page_collection_name(self) -> str:
+        return self._settings.page_collection
+
+    async def ensure_page_collection(self) -> None:
+        """Create page-level collection with dense + sparse vector configs if missing."""
+        coll = self._settings.page_collection
+        exists = await self._client.collection_exists(coll)
+        if exists:
+            logger.info("Page collection '%s' already exists", coll)
+            return
+
+        dense_vectors = {
+            "dense": VectorParams(
+                size=self._embedding_settings.dimensions,
+                distance=Distance.COSINE,
+            ),
+        }
+
+        try:
+            if self._bm25_enabled:
+                await self._client.create_collection(
+                    collection_name=coll,
+                    vectors_config=dense_vectors,
+                    sparse_vectors_config={
+                        "bm25": SparseVectorParams(modifier=Modifier.IDF),
+                    },
+                )
+            else:
+                await self._client.create_collection(
+                    collection_name=coll,
+                    vectors_config=dense_vectors,
+                )
+        except UnexpectedResponse as exc:
+            if self._is_collection_already_exists(exc):
+                logger.info("Page collection '%s' was created concurrently", coll)
+                return
+            raise
+        logger.info("Created page collection '%s'", coll)
+
+    async def ensure_page_payload_indexes(self) -> None:
+        """Create keyword indexes on page collection payload fields."""
+        coll = self._settings.page_collection
+        for field_name in ("doc_id", "page_id", "page_num", "doc_title", "doc_type", "ingest_version"):
+            try:
+                await self._client.create_payload_index(
+                    collection_name=coll,
+                    field_name=field_name,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+            except Exception:
+                logger.debug("Page payload index on '%s' may already exist", field_name, exc_info=True)
+
+    async def upsert_pages(
+        self,
+        pages: list[PageMetadata],
+        dense_vectors: list[list[float]],
+        *,
+        sparse_vectors: list[SparseVector] | None = None,
+    ) -> int:
+        """Upsert page-level points into the page collection."""
+        if len(pages) != len(dense_vectors):
+            raise ValueError(f"pages ({len(pages)}) and dense_vectors ({len(dense_vectors)}) length mismatch")
+        if sparse_vectors is not None and len(pages) != len(sparse_vectors):
+            raise ValueError(f"pages ({len(pages)}) and sparse_vectors ({len(sparse_vectors)}) length mismatch")
+
+        coll = self._settings.page_collection
+        total = 0
+        batch_size = self._ingestion_settings.upsert_batch_size
+
+        for offset in range(0, len(pages), batch_size):
+            batch_pages = pages[offset : offset + batch_size]
+            batch_dense = dense_vectors[offset : offset + batch_size]
+            batch_sparse = None if sparse_vectors is None else sparse_vectors[offset : offset + batch_size]
+            points: list[PointStruct] = []
+
+            for idx, (page, dense_vec) in enumerate(zip(batch_pages, batch_dense, strict=True)):
+                vector_data: dict[str, list[float] | Document | SparseVector] = {"dense": dense_vec}
+                if batch_sparse is not None:
+                    vector_data["bm25"] = batch_sparse[idx]
+
+                point_uuid = str(uuid_lib.uuid5(uuid_lib.NAMESPACE_URL, page.page_id))
+                points.append(
+                    PointStruct(
+                        id=point_uuid,
+                        vector=cast("VectorStruct", vector_data),
+                        payload=page.model_dump(mode="json"),
+                    )
+                )
+
+            await self._client.upsert(collection_name=coll, points=points)
+            total += len(points)
+            logger.debug("Upserted page batch at %d (%d points)", offset, len(points))
+
+        logger.info("Upserted %d page points into '%s'", total, coll)
+        return total
+
+    async def delete_pages_by_doc_id(self, doc_id: str) -> None:
+        """Delete all page points for a document id from the page collection."""
+        coll = self._settings.page_collection
+        try:
+            exists = await self._client.collection_exists(coll)
+            if not exists:
+                return
+        except Exception:
+            return
+        await self._client.delete(
+            collection_name=coll,
+            points_selector=Filter(
+                must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+            ),
+        )
 
     async def upsert_chunks(
         self,

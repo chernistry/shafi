@@ -50,6 +50,35 @@ class ChunkMetadata(BaseModel):
     doc_summary: str = ""
 
 
+class PageMetadata(BaseModel):
+    """Payload stored in Qdrant for page-level collection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    page_id: str
+    doc_id: str
+    page_num: int
+    doc_title: str
+    doc_type: DocType
+    jurisdiction: str = ""
+    section_path: str = ""
+    ingest_version: str = ""
+    page_text: str = ""
+    doc_summary: str = ""
+
+
+class RetrievedPage(BaseModel):
+    """A page returned from Qdrant page-level hybrid search."""
+
+    page_id: str
+    doc_id: str
+    page_num: int
+    doc_title: str = ""
+    doc_type: str = ""
+    page_text: str = ""
+    score: float = 0.0
+
+
 class RetrievedChunk(BaseModel):
     """A chunk returned from Qdrant hybrid search (pre-rerank)."""
 

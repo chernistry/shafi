@@ -10,6 +10,9 @@ JsonDict = dict[str, Any]
 _CASE_REF_RE = re.compile(r"\b(?:CFI|CA|ARB|SCT|CMC)\s*\d{1,4}/\d{2,4}\b", re.IGNORECASE)
 _ARTICLE_RE = re.compile(r"\b(?:Article|Section)\s+[A-Za-z0-9()./-]+\s+of\s+", re.IGNORECASE)
 _LAW_NUMBER_RE = re.compile(r"\b(?:DIFC\s+)?Law\s+No\.?\s*([0-9]+(?:\s*of\s*[0-9]{4})?)\b", re.IGNORECASE)
+_TITLE_PLUS_LAW_NUMBER_RE = re.compile(
+    r"\b([A-Z][A-Za-z'&/()\- ]+?Law(?:\s+\d{4})?)\s*,?\s+((?:DIFC\s+)?Law\s+No\.?\s*[0-9]+(?:\s*of\s*[0-9]{4})?)\b"
+)
 
 
 def _load_questions(path: Path) -> list[JsonDict]:
@@ -50,11 +53,50 @@ def _unicode_variant(question: str) -> str:
     return updated.translate(digits)
 
 
+def _law_number_only_variant(question: str) -> str | None:
+    match = _TITLE_PLUS_LAW_NUMBER_RE.search(question)
+    if match is None:
+        return None
+    return question[: match.start()] + match.group(2) + question[match.end() :]
+
+
+def _ordinal_label(index: int) -> str:
+    labels = {
+        1: "first",
+        2: "second",
+        3: "third",
+        4: "fourth",
+        5: "fifth",
+    }
+    return labels.get(index, f"{index}th")
+
+
+def _indirect_case_variant(question: str) -> str | None:
+    matches = list(_CASE_REF_RE.finditer(question))
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return _CASE_REF_RE.sub("the relevant DIFC court case", question)
+
+    replacement_index = 0
+
+    def _replacement(_match: re.Match[str]) -> str:
+        nonlocal replacement_index
+        replacement_index += 1
+        return f"the {_ordinal_label(replacement_index)} relevant DIFC court case"
+
+    return _CASE_REF_RE.sub(_replacement, question)
+
+
 def build_variants(*, questions: list[JsonDict], qid_to_doc_ids: dict[str, list[str]], limit: int = 30) -> list[JsonDict]:
-    variants: list[JsonDict] = []
+    candidates_by_type: dict[str, list[JsonDict]] = {
+        "title_only_framing": [],
+        "law_number_only_framing": [],
+        "indirect_case_framing": [],
+        "schedule_annex_framing": [],
+        "unicode_variant": [],
+    }
     for question in questions:
-        if len(variants) >= limit:
-            break
         qid = str(question.get("id") or "")
         if not qid or qid not in qid_to_doc_ids:
             continue
@@ -64,12 +106,12 @@ def build_variants(*, questions: list[JsonDict], qid_to_doc_ids: dict[str, list[
         title_only = _ARTICLE_RE.sub("", text)
         if title_only != text:
             candidates.append(("title_only_framing", title_only))
-        law_match = _LAW_NUMBER_RE.search(text)
-        if law_match is not None:
-            law_number_only = _LAW_NUMBER_RE.sub(f"DIFC Law No. {law_match.group(1)}", _ARTICLE_RE.sub("", text))
+        law_number_only = _law_number_only_variant(_ARTICLE_RE.sub("", text))
+        if law_number_only is not None:
             candidates.append(("law_number_only_framing", law_number_only))
-        if _CASE_REF_RE.search(text):
-            candidates.append(("indirect_case_framing", _CASE_REF_RE.sub("the relevant DIFC court case", text)))
+        indirect_case = _indirect_case_variant(text)
+        if indirect_case is not None:
+            candidates.append(("indirect_case_framing", indirect_case))
         if re.search(r"\b(?:schedule|annex|appendix)\b", text, re.IGNORECASE):
             candidates.append(
                 (
@@ -79,11 +121,9 @@ def build_variants(*, questions: list[JsonDict], qid_to_doc_ids: dict[str, list[
             )
         candidates.append(("unicode_variant", _unicode_variant(text)))
         for variant_type, variant_question in candidates:
-            if len(variants) >= limit:
-                break
             if variant_question == text:
                 continue
-            variants.append(
+            candidates_by_type.setdefault(variant_type, []).append(
                 {
                     "id": f"{qid}__{variant_type}",
                     "question": variant_question,
@@ -93,6 +133,28 @@ def build_variants(*, questions: list[JsonDict], qid_to_doc_ids: dict[str, list[
                     "expected_gold_doc_ids": qid_to_doc_ids[qid],
                 }
             )
+    variants: list[JsonDict] = []
+    seen_ids: set[str] = set()
+    variant_order = [
+        "title_only_framing",
+        "law_number_only_framing",
+        "indirect_case_framing",
+        "schedule_annex_framing",
+        "unicode_variant",
+    ]
+    while len(variants) < limit and any(candidates_by_type.get(variant_type) for variant_type in variant_order):
+        for variant_type in variant_order:
+            queue = candidates_by_type.get(variant_type) or []
+            while queue:
+                candidate = queue.pop(0)
+                candidate_id = str(candidate["id"])
+                if candidate_id in seen_ids:
+                    continue
+                seen_ids.add(candidate_id)
+                variants.append(candidate)
+                break
+            if len(variants) >= limit:
+                break
     return variants
 
 

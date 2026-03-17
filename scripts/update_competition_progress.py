@@ -544,6 +544,16 @@ def _matrix_default_specs(root: Path) -> list[JsonDict]:
             "gate_json": str(research / "within_doc_rerank_surrogate_iter13" / "experiment_gate.json"),
             "notes": "Within-doc rerank/localization branch; best subsets are non-inferior only, not better.",
         },
+        {
+            "label": "v10_ticket501_current",
+            "date": "2026-03-16",
+            "status": "submitted",
+            "branch_class": "current_codebase_warmup_submit",
+            "git_commit": "unknown",
+            "baseline": "ticket64_private_rehearsal_fix3_run_a",
+            "lineage_confidence": "high",
+            "notes": "10th warm-up submission from current codebase. Scored Total=0.698012, G=0.771627 on platform. Board retained historical best 0.74156. Drift ledger shows only 3 answer changes vs frozen control.",
+        },
     ]
 
 
@@ -1145,7 +1155,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ledger-json", type=Path, default=None)
     parser.add_argument("--scoring-json", type=Path, default=None)
     parser.add_argument("--anchor-slice-json", type=Path, default=None)
-    parser.add_argument("--warmup-budget", type=int, default=10)
+    parser.add_argument("--warmup-budget", type=int, default=15)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--matrix-row-specs-json", type=Path, default=None)
     parser.add_argument("--matrix-json-out", type=Path, default=None)

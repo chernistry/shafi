@@ -12,7 +12,7 @@ from rag_challenge.config import get_settings
 from rag_challenge.core.circuit_breaker import CircuitBreaker
 from rag_challenge.core.classifier import QueryClassifier
 from rag_challenge.core.sparse_bm25 import BM25SparseEncoder
-from rag_challenge.models import DocType, RetrievedChunk
+from rag_challenge.models import DocType, RetrievedChunk, RetrievedPage
 
 if TYPE_CHECKING:
     from rag_challenge.core.embedding import EmbeddingClient
@@ -591,9 +591,9 @@ class HybridRetriever:
         out: list[str] = []
         for candidate in variants:
             normalized = candidate.strip()
-            if not normalized or normalized.casefold() in seen:
+            if not normalized or normalized in seen:
                 continue
-            seen.add(normalized.casefold())
+            seen.add(normalized)
             out.append(normalized)
         return out
 
@@ -637,6 +637,147 @@ class HybridRetriever:
                 "anchors",
             ]
         )
+
+    async def retrieve_pages(
+        self,
+        query: str,
+        *,
+        query_vector: list[float] | None = None,
+        top_k: int = 15,
+        doc_refs: list[str] | tuple[str, ...] | None = None,
+    ) -> list[RetrievedPage]:
+        """Retrieve pages from the page-level collection using hybrid search."""
+        page_coll = self._store.page_collection_name
+        try:
+            exists = await self._store.client.collection_exists(page_coll)
+            if not exists:
+                logger.warning("Page collection '%s' does not exist; falling back to empty", page_coll)
+                return []
+        except Exception:
+            logger.warning("Failed checking page collection; falling back to empty", exc_info=True)
+            return []
+
+        if query_vector is None:
+            query_vector = await self._embedder.embed_query(query)
+
+        where: models.Filter | None = None
+
+        if self._bm25_enabled and self._sparse_encoder is not None:
+            sparse_query = self._build_sparse_query(query=query, extracted_refs=list(doc_refs or []))
+            try:
+                sparse_vector = self._sparse_encoder.encode_query(sparse_query)
+                prefetch = [
+                    models.Prefetch(query=query_vector, using="dense", limit=top_k * 2, filter=where),
+                    models.Prefetch(query=sparse_vector, using="bm25", limit=top_k * 2, filter=where),
+                ]
+                fusion = self._resolve_fusion_method()
+                result = await self._store.client.query_points(
+                    collection_name=page_coll,
+                    prefetch=prefetch,
+                    query=models.FusionQuery(fusion=fusion),
+                    limit=top_k,
+                    with_payload=True,
+                )
+            except Exception:
+                logger.warning("Hybrid page retrieval failed; falling back to dense-only", exc_info=True)
+                result = await self._store.client.query_points(
+                    collection_name=page_coll,
+                    query=query_vector,
+                    using="dense",
+                    query_filter=where,
+                    limit=top_k,
+                    with_payload=True,
+                )
+        else:
+            result = await self._store.client.query_points(
+                collection_name=page_coll,
+                query=query_vector,
+                using="dense",
+                query_filter=where,
+                limit=top_k,
+                with_payload=True,
+            )
+
+        pages = self._map_page_results(result)
+        logger.info("Page retrieval returned %d pages (top_k=%d)", len(pages), top_k)
+        return pages
+
+    async def retrieve_chunks_for_pages(
+        self,
+        page_ids: list[str],
+        *,
+        limit_per_page: int = 20,
+    ) -> list[RetrievedChunk]:
+        """Retrieve all chunks belonging to the given pages from the chunk collection."""
+        if not page_ids:
+            return []
+
+        page_map: dict[str, tuple[str, int]] = {}
+        for pid in page_ids:
+            parts = pid.rsplit("_", 1)
+            if len(parts) == 2:
+                doc_id, page_str = parts
+                try:
+                    page_map[pid] = (doc_id, int(page_str))
+                except ValueError:
+                    pass
+
+        all_chunks: list[RetrievedChunk] = []
+        for page_id, (doc_id, page_num) in page_map.items():
+            section_path = f"page:{page_num}"
+            try:
+                scroll_result = await self._store.client.scroll(
+                    collection_name=self._store.collection_name,
+                    scroll_filter=models.Filter(
+                        must=[
+                            models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id)),
+                            models.FieldCondition(key="section_path", match=models.MatchValue(value=section_path)),
+                        ]
+                    ),
+                    limit=limit_per_page,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                points = scroll_result[0] if isinstance(scroll_result, tuple) else scroll_result
+                for pt in points:
+                    chunk = self._map_point(pt)
+                    if chunk is not None:
+                        all_chunks.append(chunk)
+            except Exception:
+                logger.warning("Failed retrieving chunks for page_id=%s", page_id, exc_info=True)
+
+        logger.info("Retrieved %d chunks for %d pages", len(all_chunks), len(page_ids))
+        return all_chunks
+
+    @classmethod
+    def _map_page_results(cls, result: object) -> list[RetrievedPage]:
+        points = cls._extract_points(result)
+        mapped: list[RetrievedPage] = []
+        for point_obj in points:
+            payload_obj = getattr(point_obj, "payload", None)
+            if not isinstance(payload_obj, dict):
+                continue
+            payload = cast("dict[str, object]", payload_obj)
+            score_obj = getattr(point_obj, "score", 0.0)
+            try:
+                score = float(score_obj) if score_obj is not None else 0.0
+            except (TypeError, ValueError):
+                score = 0.0
+            try:
+                page_num_raw = payload.get("page_num", 0)
+                page_num = int(page_num_raw) if page_num_raw is not None else 0
+            except (TypeError, ValueError):
+                page_num = 0
+            mapped.append(RetrievedPage(
+                page_id=str(payload.get("page_id") or ""),
+                doc_id=str(payload.get("doc_id") or ""),
+                page_num=page_num,
+                doc_title=str(payload.get("doc_title") or ""),
+                doc_type=str(payload.get("doc_type") or ""),
+                page_text=str(payload.get("page_text") or ""),
+                score=score,
+            ))
+        return mapped
 
     @staticmethod
     def _map_point(point_obj: object) -> RetrievedChunk | None:

@@ -52,6 +52,7 @@ class TelemetryCollector:
         self._malformed_tail_detected = False
         self._retried = False
         self._model_upgraded: bool = False
+        self._used_page_ids_override: list[str] | None = None
 
     @contextmanager
     def timed(self, stage: StageName):
@@ -77,6 +78,10 @@ class TelemetryCollector:
 
     def set_used_ids(self, ids: list[str] | tuple[str, ...]) -> None:
         self._used_ids = list(ids)
+
+    def set_used_page_ids_override(self, page_ids: list[str]) -> None:
+        """Directly set used_page_ids, bypassing chunk-to-page inference."""
+        self._used_page_ids_override = list(page_ids)
 
     def set_chunk_snippets(self, snippets: dict[str, str]) -> None:
         for raw_chunk_id, raw_snippet in snippets.items():
@@ -171,7 +176,12 @@ class TelemetryCollector:
         retrieved_pages = self._chunk_ids_to_page_ids(self._retrieved_ids)
         context_pages = self._chunk_ids_to_page_ids(self._context_ids)
         cited_pages = self._chunk_ids_to_page_ids(self._cited_ids)
-        used_pages = self._chunk_ids_to_page_ids(self._used_ids) if self._used_ids else list(cited_pages)
+        if self._used_page_ids_override is not None:
+            used_pages = list(self._used_page_ids_override)
+        elif self._used_ids:
+            used_pages = self._chunk_ids_to_page_ids(self._used_ids)
+        else:
+            used_pages = list(cited_pages)
 
         return TelemetryPayload(
             request_id=self._request_id,

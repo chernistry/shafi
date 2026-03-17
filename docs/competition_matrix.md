@@ -1,20 +1,21 @@
 # Competition Matrix
 
-## Current Status
+## Current Status (refreshed 2026-03-16)
 
-- Current public best: `v6_public_exactness_champion` total=`0.741560` rank=`11`
-- Current best offline candidate: `triad_f331_e0798_plus_dotted` paranoid=`0.741560` paranoid_rank=`11`
-- Warm-up submissions used/remaining: `9/10`, remaining=`1`
-- Current default decision: `small_diff_ceiling_reached`
+- Current public best: `v6_public_exactness_champion` total=`0.741560` rank=`24` (as of 2026-03-16 leaderboard)
+- Authoritative control artifact: `ticket64_private_rehearsal_fix3_run_a` (frozen, manifest-backed, doctor-green)
+- Latest submitted artifact: `v10_ticket501_current` total=`0.698012` G=`0.771627` (platform status)
+- Warm-up submissions used/remaining: `10/15`, remaining=`5`
+- Current default decision: `architectural_gap_requires_fundamental_improvement`
 - Current S: `0.888000`
-- Current G: `0.800729`
-- Run manifest coverage: present=`1` missing_blocking=`7` legacy_unknown=`22`
-- Candidate duplicates detected: `0`
-- Required `G` to beat rank `1`: `0.983575` (ΔG `+0.182846`)
-- Required `G` to beat rank `3`: `0.957932` (ΔG `+0.157203`)
-- Required `G` to beat rank `5`: `0.882807` (ΔG `+0.082078`)
+- Current G: `0.800729` (public best) / `0.771627` (latest submit)
+- Control lane: `.sdd/researches/control_lane_designation_2026-03-16.md`
+- Drift ledger: `.sdd/researches/drift_ledger_2026-03-16.md` (ctrl ≈ v10: only 3 answer changes)
+- Required `G` to beat rank `1`: `0.976126` (ΔG `+0.175`)
+- Required `G` to beat rank `5`: `0.938684` (ΔG `+0.138`)
 - #1 reachable through current small-diff path: `no`
 - Current path locally ceilinged: `yes`
+- Stale artifacts (do not trust): `candidate_ceiling_cycle_2026-03-13_estimated`, `production_mimic_current_combined_2026-03-13`
 
 ## Matrix
 
@@ -50,3 +51,4 @@
 | v10_local_embeddinggemma_pagecand_r1 | 2026-03-13 | rejected | embeddinggemma_page_candidate_only | pending | triad_f331_e0798_plus_dotted | high | legacy_unknown | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Ticket 31 embeddinggemma-only page-candidate branch over the current combined leader. Rejected: answer drift stayed zero, but trusted and all-case hidden-G both regressed and the paranoid envelope remained below the current ceiling. NO SUBMIT without explicit user approval. [candidate_cycle=NO_SUBMIT] [gate=NO_SUBMIT] [estimates=unsupported_local_envelope] |
 | v10_local_bgem3_pagebranch_r1 | 2026-03-13 | rejected | bgem3_hybrid_page_branch | pending | triad_f331_e0798_plus_dotted | high | legacy_unknown | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Ticket 32 BGE-M3 bounded page-branch over the current combined leader. Rejected: answer drift stayed zero, but trusted and all-case hidden-G both regressed and the paranoid envelope remained below the current ceiling. NO SUBMIT without explicit user approval. [candidate_cycle=NO_SUBMIT] [gate=NO_SUBMIT] [estimates=unsupported_local_envelope] |
 | v10_local_qwen3_pair_r1 | 2026-03-13 | rejected | qwen3_embedding_paired_reranker_branch | pending | triad_f331_e0798_plus_dotted | high | legacy_unknown | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Ticket 33 paired Qwen3 embedding plus Qwen3 reranker branch over the current combined leader. Rejected: answer drift stayed zero, but trusted and all-case hidden-G both regressed and the paranoid envelope fell below the current ceiling. NO SUBMIT without explicit user approval. [candidate_cycle=NO_SUBMIT] [gate=NO_SUBMIT] [estimates=unsupported_local_envelope] |
+| v10_ticket501_current | 2026-03-16 | submitted | current_codebase_warmup_submit | unknown | ticket64_private_rehearsal_fix3_run_a | high | legacy_unknown | - | - | - | 3 | 5 | - | - | - | - | - | - | - | 0.9429 | 0.6933 | 0.7716 | 0.9950 | 1.0474 | 0.698012 | 24 | - | - | - | - | - | - | - | 10th warm-up submission from current codebase. Platform total=0.698012, G=0.771627. Board retained historical best 0.74156. Drift ledger: only 3 answer changes vs frozen control. [drift_ledger=.sdd/researches/drift_ledger_2026-03-16.md] |

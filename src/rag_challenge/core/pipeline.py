@@ -3540,6 +3540,50 @@ class RAGPipelineBuilder:
             seeds.append(best_enactment.chunk_id)
         return cls._dedupe_chunk_ids(seeds)
 
+    _SKIP_ADMIN_ARTICLE_RE = re.compile(
+        r"(?:under|in|of|per|pursuant to)\s+article\s+\d+",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _prune_boolean_context_for_single_doc_article(
+        cls,
+        *,
+        query: str,
+        answer_type: str,
+        doc_refs: list[str] | tuple[str, ...] | None,
+        context_chunks: list["RankedChunk"],
+    ) -> list["RankedChunk"]:
+        """For boolean + single doc_ref + explicit article queries, restrict context
+        to chunks from the referenced document to prevent cross-doc contamination."""
+        if (answer_type or "").strip().lower() != "boolean":
+            return list(context_chunks)
+        refs = [str(r).strip() for r in (doc_refs or []) if str(r).strip()]
+        if len(refs) != 1:
+            return list(context_chunks)
+        if not cls._SKIP_ADMIN_ARTICLE_RE.search(query or ""):
+            return list(context_chunks)
+
+        ref_lower = refs[0].casefold()
+        ref_tokens = set(ref_lower.split())
+        matching_doc_ids: set[str] = set()
+        for chunk in context_chunks:
+            title_lower = (chunk.doc_title or "").casefold()
+            if ref_lower in title_lower or title_lower in ref_lower:
+                matching_doc_ids.add(chunk.doc_id)
+                continue
+            title_tokens = set(title_lower.split())
+            if ref_tokens and len(ref_tokens & title_tokens) >= max(1, len(ref_tokens) - 1):
+                matching_doc_ids.add(chunk.doc_id)
+
+        if not matching_doc_ids:
+            return list(context_chunks)
+
+        pruned = [c for c in context_chunks if c.doc_id in matching_doc_ids]
+        if len(pruned) >= 2:
+            return pruned
+        return list(context_chunks)
+
     @classmethod
     def _administration_support_family_seed_chunk_ids(
         cls,
@@ -4184,6 +4228,12 @@ class RAGPipelineBuilder:
                         "answer_type": answer_type,
                     },
                 )
+        context_chunks = self._prune_boolean_context_for_single_doc_article(
+            query=state["query"],
+            answer_type=answer_type,
+            doc_refs=state.get("doc_refs"),
+            context_chunks=context_chunks,
+        )
         if answer_type in strict_types and bool(getattr(self._settings.pipeline, "strict_types_extraction_enabled", True)):
             strict_result = self._strict_answerer.answer(
                 answer_type=answer_type,

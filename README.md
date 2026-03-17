@@ -164,6 +164,11 @@ Important:
 - `--submit-existing` is the preferred submit path because it uploads the exact artifact you already inspected
 - if the platform responds `403 Questions and documents are not published yet`, the client is working; the phase corpus is simply not open yet. Use `--archive-only` until publication.
 
+Private-day scanner triage:
+
+- after a private scanner run, inspect `top20_report.md`, `top20_cluster_collapsed_report.md`, and `top_by_family_report.md`, then follow `.sdd/researches/private_day_scanner_triage_sop.md`
+- treat scanner output as advisory only; it ranks review targets, it does not auto-gate submission or auto-change retrieval
+
 ---
 
 ## Stack

@@ -24,7 +24,7 @@ from rag_challenge.llm import LLMProvider
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from rag_challenge.models import Chunk, ParsedDocument
+    from rag_challenge.models import Chunk, PageMetadata, ParsedDocument
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +149,8 @@ class IngestionPipeline:
         )
         await self._store.ensure_collection()
         await self._store.ensure_payload_indexes()
+        await self._store.ensure_page_collection()
+        await self._store.ensure_page_payload_indexes()
 
         manifest = self._load_manifest(manifest_path)
         ingest_version = self._settings.ingestion.ingest_version
@@ -247,6 +249,8 @@ class IngestionPipeline:
                                 sparse_vectors=sparse_vectors,
                             ) if sparse_vectors is not None else await self._store.upsert_chunks(augmented, vectors)
                             stats.chunks_upserted += upserted
+
+                            await self._upsert_pages_for_doc(doc, summary)
                             await self._cleanup_stale_versions([doc.doc_id])
 
                             self._set_manifest_entry(
@@ -370,6 +374,52 @@ class IngestionPipeline:
                 logger.warning("Failed to parse %s; skipping", file_path, exc_info=True)
         return parsed
 
+    async def _upsert_pages_for_doc(self, doc: ParsedDocument, doc_summary: str) -> int:
+        """Build page-level points from parsed document sections and upsert into page collection."""
+        from rag_challenge.models import PageMetadata
+
+        pages: list[PageMetadata] = []
+        for section in doc.sections:
+            if not section.section_path.startswith("page:"):
+                continue
+            page_text = section.text.strip()
+            if not page_text:
+                continue
+            try:
+                page_num = int(section.section_path.split(":", 1)[1])
+            except (ValueError, IndexError):
+                continue
+            page_id = f"{doc.doc_id}_{page_num}"
+            pages.append(PageMetadata(
+                page_id=page_id,
+                doc_id=doc.doc_id,
+                page_num=page_num,
+                doc_title=doc.title,
+                doc_type=doc.doc_type,
+                jurisdiction=getattr(doc, "jurisdiction", ""),
+                section_path=section.section_path,
+                ingest_version=self._settings.ingestion.ingest_version,
+                page_text=page_text,
+                doc_summary=doc_summary,
+            ))
+
+        if not pages:
+            return 0
+
+        page_texts = [p.page_text for p in pages]
+        dense_vectors = await self._embedder.embed_documents(page_texts)
+
+        sparse_vectors = None
+        if self._sparse_encoder is not None:
+            try:
+                sparse_vectors = self._sparse_encoder.encode_documents(page_texts)
+            except Exception:
+                logger.warning("BM25 sparse encoding failed for pages of doc_id=%s", doc.doc_id, exc_info=True)
+
+        upserted = await self._store.upsert_pages(pages, dense_vectors, sparse_vectors=sparse_vectors)
+        logger.info("Upserted %d page points for doc_id=%s", upserted, doc.doc_id)
+        return upserted
+
     def _build_ingestion_plan(
         self,
         doc_dir: Path,
@@ -409,6 +459,7 @@ class IngestionPipeline:
         for rel_path, entry in deleted_entries.items():
             try:
                 await self._store.delete_by_doc_id(entry.doc_id)
+                await self._store.delete_pages_by_doc_id(entry.doc_id)
             except Exception as exc:
                 stats.errors.append(f"{rel_path} ({entry.doc_id}): delete failed: {exc}")
                 logger.warning(

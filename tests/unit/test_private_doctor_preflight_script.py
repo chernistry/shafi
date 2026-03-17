@@ -53,9 +53,31 @@ def test_private_doctor_preflight_happy_path(tmp_path: Path, monkeypatch) -> Non
             "chunk_page_mismatch_docs": 0,
         },
     )
+    scanner_rows = [
+        {
+            "doc_id": "doc-a",
+            "filename": "doc-a.pdf",
+            "suspicion_score": 22,
+            "reason_tags": ["tracked_changes_visual_semantics"],
+            "tracked_changes_visual_semantics": True,
+        },
+        {
+            "doc_id": "doc-b",
+            "filename": "doc-b.pdf",
+            "suspicion_score": 21,
+            "reason_tags": ["same_family_duplicate"],
+            "duplicate_same_family_doc_ids": ["doc-c"],
+        },
+        {
+            "doc_id": "doc-c",
+            "filename": "doc-c.pdf",
+            "suspicion_score": 20,
+            "reason_tags": [],
+            "translation_caveat": True,
+        },
+    ]
     scanner_path.write_text(
-        json.dumps({"doc_id": "doc-a", "filename": "doc-a.pdf", "suspicion_score": 22, "reason_tags": ["tracked_changes_visual_semantics"]})
-        + "\n",
+        "\n".join(json.dumps(row) for row in scanner_rows) + "\n",
         encoding="utf-8",
     )
 
@@ -92,7 +114,21 @@ def test_private_doctor_preflight_happy_path(tmp_path: Path, monkeypatch) -> Non
     assert payload["checks"]["sparse_runtime"] == {"ready": True, "detail": "indices=5"}
     assert payload["checks"]["ocr_runtime"] == {"ready": True, "detail": "pages=2 section_lengths=100,100"}
     assert payload["checks"]["scanner_advisory"]["risk_level"] == "medium"
-    assert "overall_ready: `True`" in out_md.read_text(encoding="utf-8")
+    assert payload["checks"]["scanner_advisory"]["risk_indicator"] == "yellow"
+    assert payload["checks"]["scanner_advisory"]["clustered_families"] == [
+        "duplicate_same_family",
+        "tracked_changes_visual_semantics",
+        "translation_caveat_arabic_prevails",
+    ]
+    warning_lines = payload["checks"]["scanner_advisory"]["warnings"]
+    assert any("tracked_changes_visual_semantics" in line for line in warning_lines)
+    assert any("duplicate_same_family" in line for line in warning_lines)
+    assert any("translation_caveat_arabic_prevails" in line for line in warning_lines)
+    markdown = out_md.read_text(encoding="utf-8")
+    assert "overall_ready: `True`" in markdown
+    assert "## Scanner Top Docs" in markdown
+    assert "## Scanner Warnings" in markdown
+    assert "[SCANNER] 1 docs cluster in tracked_changes_visual_semantics" in markdown
 
 
 def test_private_doctor_preflight_reports_failures(tmp_path: Path, monkeypatch) -> None:
@@ -171,6 +207,33 @@ def test_private_doctor_preflight_reports_failures(tmp_path: Path, monkeypatch) 
     }
     assert "manifest: ready=`False`" in out_md.read_text(encoding="utf-8")
     assert payload["checks"]["scanner_advisory"]["detail"] == "missing"
+
+
+def test_check_scanner_results_counts_one_page_enactment_warning(tmp_path: Path) -> None:
+    scanner_path = tmp_path / "scan_results.jsonl"
+    scanner_path.write_text(
+        json.dumps(
+            {
+                "doc_id": "doc-enactment",
+                "filename": "doc-enactment.pdf",
+                "suspicion_score": 25,
+                "reason_tags": [],
+                "one_page_enactment_notice": True,
+                "doc_family_tags": ["enactment_notice_one_page"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = doctor._check_scanner_results(scanner_path)
+
+    assert summary is not None
+    assert summary["clustered_families"] == ["one_page_enactment_notice"]
+    assert summary["warnings"] == [
+        "[SCANNER] 1 docs cluster in one_page_enactment_notice - review before submission. "
+        "These families are underexercised on the public question set."
+    ]
 
 
 def test_check_ocr_audit_accepts_list_shaped_fields(tmp_path: Path) -> None:

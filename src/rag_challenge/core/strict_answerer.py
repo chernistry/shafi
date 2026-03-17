@@ -51,7 +51,7 @@ _CASE_REF_PREFIX_RE = re.compile(
 _CASE_SPLIT_RE = re.compile(r"\s*(?:-v-|\bv(?:\.|ersus)?\b)\s*", re.IGNORECASE)
 _CORP_DOTS_RE = re.compile(r"\b([A-Z])\.")  # KEPT for backward compat; no longer used in _normalize_name
 _CLAIM_NO_CAPTURE_RE = re.compile(
-    r"\bClaim No\.?\s*([A-Z0-9][A-Z0-9\s./-]{2,50}?)(?=[,.;)\"]|\s{2,}|$)",
+    r"\bClaim No\.?\s*([A-Z0-9][A-Z0-9\s./-]{2,50}?)(?=[,.;)\"]|\s{2,}|\s+Claim\b|\s+IN\s+THE\b|$)",
     re.IGNORECASE,
 )
 _CURRENCY_PREFIX_RE = re.compile(
@@ -1183,7 +1183,12 @@ class StrictAnswerer:
             has_claim = "claim" in window
 
             if prefer_claim and has_cost:
-                return
+                exclusionary = any(
+                    phrase in window
+                    for phrase in ("exclusive of", "excluding", "not including", "apart from")
+                )
+                if not exclusionary:
+                    return
 
             score = 1
             if prefer_claim and has_claim:

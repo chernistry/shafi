@@ -15,6 +15,29 @@ from rag_challenge.submission.platform import PlatformCaseResult, _project_platf
 
 JsonDict = dict[str, Any]
 _REQUIRED_RUNTIME_MODULES = ("fitz", "docling", "qdrant_client", "fastembed", "rapidocr", "openai", "cohere")
+_RISK_INDICATOR_BY_LEVEL = {"low": "green", "medium": "yellow", "high": "red"}
+
+
+def _scanner_reason_tags(row: JsonDict) -> set[str]:
+    return {str(tag).strip() for tag in cast("list[object]", row.get("reason_tags") or []) if str(tag).strip()}
+
+
+def _scanner_doc_family_tags(row: JsonDict) -> set[str]:
+    return {str(tag).strip() for tag in cast("list[object]", row.get("doc_family_tags") or []) if str(tag).strip()}
+
+
+def _matches_scanner_warning_family(row: JsonDict, family: str) -> bool:
+    reason_tags = _scanner_reason_tags(row)
+    doc_family_tags = _scanner_doc_family_tags(row)
+    if family == "tracked_changes_visual_semantics":
+        return bool(row.get("tracked_changes_visual_semantics") or row.get("tracked_changes_detected")) or family in reason_tags
+    if family == "one_page_enactment_notice":
+        return bool(row.get("one_page_enactment_notice")) or "enactment_notice_one_page" in doc_family_tags
+    if family == "duplicate_same_family":
+        return bool(cast("list[object]", row.get("duplicate_same_family_doc_ids") or [])) or "same_family_duplicate" in reason_tags
+    if family == "translation_caveat_arabic_prevails":
+        return bool(row.get("translation_caveat") or row.get("translation_caveat_arabic_prevails")) or "translation_caveat_doc" in doc_family_tags
+    return False
 
 
 def _load_json(path: Path) -> JsonDict:
@@ -288,24 +311,31 @@ def _check_scanner_results(path: Path | None) -> JsonDict | None:
         }
         for row in sorted(rows, key=lambda item: (-int(item.get("suspicion_score") or 0), str(item.get("filename") or "")))[:3]
     ]
-    clustered_families = {
-        family
-        for row in high_risk
-        for family in cast("list[str]", row.get("reason_tags") or [])
-        if family
-        in {
-            "tracked_changes_visual_semantics",
-            "enactment_notice_pairing",
-            "same_family_duplicate",
-            "mixed_script_early_pages",
-        }
+    warning_families = (
+        "tracked_changes_visual_semantics",
+        "one_page_enactment_notice",
+        "duplicate_same_family",
+        "translation_caveat_arabic_prevails",
+    )
+    clustered_family_counts = {
+        family: sum(1 for row in high_risk if _matches_scanner_warning_family(row, family)) for family in warning_families
     }
+    clustered_families = sorted(family for family, count in clustered_family_counts.items() if count > 0)
+    warnings = [
+        (
+            f"[SCANNER] {count} docs cluster in {family} - review before submission. "
+            "These families are underexercised on the public question set."
+        )
+        for family, count in clustered_family_counts.items()
+        if count > 0
+    ]
     risk_level = "low"
     if len(high_risk) >= 5:
         risk_level = "high"
     elif high_risk:
         risk_level = "medium"
-    detail = f"docs={len(rows)} high_risk={len(high_risk)} risk={risk_level}"
+    risk_indicator = _RISK_INDICATOR_BY_LEVEL[risk_level]
+    detail = f"docs={len(rows)} high_risk={len(high_risk)} risk={risk_level} indicator={risk_indicator}"
     if clustered_families:
         detail += f" clustered={','.join(sorted(clustered_families))}"
     return {
@@ -315,8 +345,10 @@ def _check_scanner_results(path: Path | None) -> JsonDict | None:
         "docs_scanned": len(rows),
         "high_risk_doc_count": len(high_risk),
         "risk_level": risk_level,
+        "risk_indicator": risk_indicator,
         "top_docs": top_docs,
         "clustered_families": sorted(clustered_families),
+        "warnings": warnings,
     }
 
 
@@ -348,6 +380,27 @@ def _render_markdown(summary: JsonDict) -> str:
             continue
         row = cast("JsonDict", checks[key])
         lines.append(f"- {key}: ready=`{row['ready']}` detail=`{row['detail']}`")
+        if key == "scanner_advisory" and isinstance(row.get("top_docs"), list):
+            top_docs = cast("list[JsonDict]", row.get("top_docs") or [])
+            if top_docs:
+                lines.append("")
+                lines.append("## Scanner Top Docs")
+                lines.append("")
+                for top_doc in top_docs:
+                    reason_tags = cast("list[str]", top_doc.get("reason_tags") or [])
+                    lines.append(
+                        "- "
+                        f"{top_doc.get('filename')} "
+                        f"(score={top_doc.get('score')}, reasons={','.join(reason_tags) or 'none'})"
+                    )
+        if key == "scanner_advisory" and isinstance(row.get("warnings"), list):
+            warnings = cast("list[str]", row.get("warnings") or [])
+            if warnings:
+                lines.append("")
+                lines.append("## Scanner Warnings")
+                lines.append("")
+                for warning in warnings:
+                    lines.append(f"- {warning}")
     lines.append("")
     lines.append("## Blocking Issues")
     lines.append("")

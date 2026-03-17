@@ -67,6 +67,7 @@ class QdrantSettings(BaseSettings):
     url: str = "http://localhost:6333"
     api_key: str = ""
     collection: str = "legal_chunks"
+    page_collection: str = "legal_pages"
     pool_size: int = 20
     timeout_s: float = 30.0
     prefetch_dense: int = 60
@@ -103,6 +104,7 @@ class LLMSettings(BaseSettings):
     fallback_model: str = "claude-3-5-sonnet-latest"
     summary_model: str = "gpt-4o-mini"  # for SAC doc summaries
     upgrade_model: str = ""  # Selective upgrade for hardest free_text cases
+    synthesis_model: str = "gpt-4.1"  # Stronger model for synthesis/comparison/penalty free_text
 
     simple_max_tokens: int = 300
     complex_max_tokens: int = 500
@@ -255,6 +257,8 @@ class PipelineSettings(BaseSettings):
         validation_alias=AliasChoices("PIPELINE_ENABLE_MULTI_HOP", "PIPELINE_DECOMPOSE_ENABLED"),
     )
     multi_hop_max_subqueries: int = 3
+    page_first_enabled: bool = False
+    page_first_top_k: int = 15
 
     @field_validator("premise_guard_terms", mode="before")
     @classmethod

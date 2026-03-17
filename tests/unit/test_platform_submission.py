@@ -35,6 +35,7 @@ from rag_challenge.submission.platform import (
     _result_anomaly_flags,
     _run_questions,
     _scan_text_for_secrets,
+    _check_existing_artifact_preflight,
     _submit_existing_artifacts,
     _validate_platform_args,
 )
@@ -288,6 +289,7 @@ async def test_submit_existing_artifacts_submits_without_polling(tmp_path: Path)
         poll=False,
         poll_interval_s=1.0,
         poll_timeout_s=30.0,
+        force=True,
     )
 
     assert result == {"uuid": "sub-1", "status": "queued"}
@@ -307,7 +309,60 @@ async def test_submit_existing_artifacts_raises_for_missing_files(tmp_path: Path
             poll=False,
             poll_interval_s=1.0,
             poll_timeout_s=30.0,
+            force=True,
         )
+
+
+def test_check_existing_artifact_preflight_blocks_red_artifact(tmp_path: Path) -> None:
+    import json
+
+    submission_path = tmp_path / "submission.json"
+    submission_path.write_text("{}", encoding="utf-8")
+    preflight_path = tmp_path / "preflight_summary.json"
+    preflight_path.write_text(
+        json.dumps({
+            "support_shape_report": {"blocking_case_count": 2},
+            "anomaly_report": {"anomaly_count": 3},
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="Preflight checks failed"):
+        _check_existing_artifact_preflight(submission_path, force=False)
+
+
+def test_check_existing_artifact_preflight_allows_force(tmp_path: Path) -> None:
+    import json
+
+    submission_path = tmp_path / "submission.json"
+    submission_path.write_text("{}", encoding="utf-8")
+    preflight_path = tmp_path / "preflight_summary.json"
+    preflight_path.write_text(
+        json.dumps({
+            "support_shape_report": {"blocking_case_count": 2},
+            "anomaly_report": {"anomaly_count": 3},
+        }),
+        encoding="utf-8",
+    )
+
+    _check_existing_artifact_preflight(submission_path, force=True)
+
+
+def test_check_existing_artifact_preflight_passes_clean(tmp_path: Path) -> None:
+    import json
+
+    submission_path = tmp_path / "submission.json"
+    submission_path.write_text("{}", encoding="utf-8")
+    preflight_path = tmp_path / "preflight_summary.json"
+    preflight_path.write_text(
+        json.dumps({
+            "support_shape_report": {"blocking_case_count": 0},
+            "anomaly_report": {"anomaly_count": 0},
+        }),
+        encoding="utf-8",
+    )
+
+    _check_existing_artifact_preflight(submission_path, force=False)
 
 
 @pytest.mark.asyncio

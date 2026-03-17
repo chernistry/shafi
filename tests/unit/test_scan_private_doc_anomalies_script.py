@@ -197,6 +197,56 @@ def test_scan_private_doc_anomalies_unicode_smoke() -> None:
     assert signals["arabic_punctuation_count"] == 1
 
 
+def test_scan_private_doc_anomalies_scoring_ignores_single_smart_quote_noise() -> None:
+    module = _load_module()
+
+    score, reasons = module._score_record(
+        {
+            "signals": {"smart_quote_count": 1, "dash_variant_count": 0},
+            "doc_family_tags": [],
+            "per_page": [],
+            "page_count": 1,
+        }
+    )
+
+    assert isinstance(score, int)
+    assert "weird_unicode_or_replacement" not in reasons
+
+
+def test_scan_private_doc_anomalies_scoring_keeps_meaningful_unicode_disruption() -> None:
+    module = _load_module()
+
+    _, reasons = module._score_record(
+        {
+            "signals": {"smart_quote_count": 4, "dash_variant_count": 0},
+            "doc_family_tags": [],
+            "per_page": [],
+            "page_count": 1,
+        }
+    )
+
+    assert "weird_unicode_or_replacement" in reasons
+
+
+def test_scan_private_doc_anomalies_detects_compacted_pipe_dense_table_page() -> None:
+    module = _load_module()
+    compact_table = (
+        "Field | Value | Note Registrar | DIFC Registrar | active "
+        "Law Number | 11/2004 | source Penalty | USD 1000 | schedule "
+        "Reference | Article 4 | title Schedule | Schedule 1 | interpretation"
+    )
+
+    analysis = module.analyze_page_signals(
+        text=compact_table,
+        page_num=2,
+        page_count=2,
+        metadata=_default_metadata(module),
+        fallback_triggered=False,
+    )
+
+    assert analysis.page_record["signals"]["table_heavy_signature"] is True
+
+
 def test_scan_private_doc_anomalies_mixed_script_smoke() -> None:
     module = _load_module()
     lexical = "\u0647\u0630\u0627 \u0646\u0635 \u0639\u0631\u0628\u064a \u0643\u0627\u0645\u0644"
@@ -341,6 +391,11 @@ def test_scan_private_doc_anomalies_exact_duplicate_clusters(tmp_path: Path) -> 
     summary = module.build_summary_markdown(records)
     assert "## Exact Duplicate Clusters" in summary
     assert "Weighted suspicion scoring is heuristic" in summary
+    cluster_summaries = module.build_exact_duplicate_cluster_summaries(records)
+    assert cluster_summaries[0]["member_count"] == 2
+    assert cluster_summaries[0]["member_doc_ids"] == ["dup_a", "dup_b"]
+    assert len(cluster_summaries[0]["member_sha256s"]) == 2
+    assert cluster_summaries[0]["member_filenames"] == ["dup_a.pdf", "dup_b.pdf"]
 
 
 def test_scan_private_doc_anomalies_doc_family_and_tracked_changes_tags(tmp_path: Path) -> None:
@@ -376,10 +431,75 @@ def test_scan_private_doc_anomalies_doc_family_and_tracked_changes_tags(tmp_path
     assert by_id["tracked_amendment"]["tracked_changes_detected"] is True
     assert by_id["tracked_amendment"]["tracked_changes_page_count"] >= 1
     assert by_id["tracked_amendment"]["tracked_changes_confidence"] == "medium"
+    assert by_id["tracked_amendment"]["tracked_changes_visual_semantics"] is True
+    assert by_id["tracked_amendment"]["translation_caveat"] is False
     assert "tracked_changes_amendment_law" in by_id["tracked_amendment"]["doc_family_tags"]
     assert "visual-diff semantics" in by_id["tracked_amendment"]["risk_note"]
     assert by_id["tracked_amendment"]["suspicion_score"] > 0
     assert "tracked_changes_visual_semantics" in by_id["tracked_amendment"]["reason_tags"]
+
+
+def test_scan_private_doc_anomalies_output_writes_duplicate_cluster_summary_file(tmp_path: Path) -> None:
+    duplicate_pages = [
+        "LAW NO. 7 OF 2024\nThis Law may be cited as the Duplicate Law.",
+        "Article 1\nThis is duplicate text.",
+    ]
+    _write_pdf(tmp_path / "dup_a.pdf", duplicate_pages)
+    _write_pdf(tmp_path / "dup_b.pdf", duplicate_pages)
+    output_dir = tmp_path / "out"
+
+    _run_cli(input_dir=tmp_path, output_dir=output_dir)
+
+    cluster_payload = json.loads((output_dir / "exact_duplicate_clusters.json").read_text(encoding="utf-8"))
+    assert len(cluster_payload) == 1
+    assert cluster_payload[0]["cluster_id"] == "cluster_001"
+    assert cluster_payload[0]["member_count"] == 2
+    assert cluster_payload[0]["member_doc_ids"] == ["dup_a", "dup_b"]
+    assert len(cluster_payload[0]["member_sha256s"]) == 2
+    assert cluster_payload[0]["member_filenames"] == ["dup_a.pdf", "dup_b.pdf"]
+    assert "consolidated_law" in cluster_payload[0]["doc_family_tags"]
+
+
+def test_scan_private_doc_anomalies_builds_cluster_collapsed_and_family_reports() -> None:
+    module = _load_module()
+    records = [
+        {
+            "doc_id": "dup_a",
+            "filename": "dup_a.pdf",
+            "suspicion_score": 40,
+            "reason_tags": ["exact_duplicate_cluster", "underqueried_family_gap"],
+            "doc_family_tags": ["consolidated_law"],
+            "exact_duplicate_cluster_id": "cluster_001",
+            "collision_doc_ids": [],
+            "duplicate_same_family_doc_ids": [],
+            "normalized_title": "law no 7 of 2024",
+            "family_query_coverage_bucket": "zero-hit",
+            "coverage_priors": {"family_buckets": {"consolidated_law": "zero-hit"}},
+        },
+        {
+            "doc_id": "dup_b",
+            "filename": "dup_b.pdf",
+            "suspicion_score": 39,
+            "reason_tags": ["exact_duplicate_cluster"],
+            "doc_family_tags": ["consolidated_law"],
+            "exact_duplicate_cluster_id": "cluster_001",
+            "collision_doc_ids": [],
+            "duplicate_same_family_doc_ids": [],
+            "normalized_title": "law no 7 of 2024",
+            "family_query_coverage_bucket": "zero-hit",
+            "coverage_priors": {"family_buckets": {"consolidated_law": "zero-hit"}},
+        },
+    ]
+
+    collapsed = module.build_cluster_collapsed_review(records)
+    family_groups = module.build_family_stratified_review(records, focus_families=("consolidated_law",))
+
+    assert len(collapsed) == 1
+    assert collapsed[0]["member_count"] == 2
+    assert collapsed[0]["member_doc_ids"] == ["dup_a", "dup_b"]
+    assert family_groups[0]["family_tag"] == "consolidated_law"
+    assert family_groups[0]["coverage_bucket"] == "zero-hit"
+    assert family_groups[0]["entries"][0]["member_count"] == 2
 
 
 def test_scan_private_doc_anomalies_toc_and_top20_output(tmp_path: Path) -> None:
@@ -404,3 +524,11 @@ def test_scan_private_doc_anomalies_toc_and_top20_output(tmp_path: Path) -> None
     ]
     assert rows[0]["toc_pointer_type"] in {"internal_like", "linked", "pdf_like", "uncertain"}
     assert (output_dir / "top20_report.md").exists()
+    assert (output_dir / "top20_cluster_collapsed_report.md").exists()
+    assert (output_dir / "top_by_family_report.md").exists()
+    assert "Top 20 Cluster-Collapsed Suspicious Documents" in (
+        output_dir / "top20_cluster_collapsed_report.md"
+    ).read_text(encoding="utf-8")
+    assert "Family-Stratified Suspicious Documents" in (output_dir / "top_by_family_report.md").read_text(
+        encoding="utf-8"
+    )

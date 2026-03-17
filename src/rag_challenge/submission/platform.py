@@ -342,7 +342,9 @@ def _resolve_query_concurrency(override: int | None) -> int:
 @contextmanager
 def _phase_collection_override(collection_name: str):
     previous = os.environ.get("QDRANT_COLLECTION")
+    previous_page = os.environ.get("QDRANT_PAGE_COLLECTION")
     os.environ["QDRANT_COLLECTION"] = collection_name
+    os.environ["QDRANT_PAGE_COLLECTION"] = f"{collection_name}_pages"
     get_settings.cache_clear()
     try:
         yield
@@ -351,6 +353,10 @@ def _phase_collection_override(collection_name: str):
             os.environ.pop("QDRANT_COLLECTION", None)
         else:
             os.environ["QDRANT_COLLECTION"] = previous
+        if previous_page is None:
+            os.environ.pop("QDRANT_PAGE_COLLECTION", None)
+        else:
+            os.environ["QDRANT_PAGE_COLLECTION"] = previous_page
         get_settings.cache_clear()
 
 
@@ -1506,6 +1512,66 @@ async def _poll_submission_status(
         await asyncio.sleep(max(1.0, poll_interval_s))
 
 
+def _check_existing_artifact_preflight(
+    submission_path: Path,
+    *,
+    force: bool,
+) -> None:
+    """Guard for --submit-existing: reject red-preflight artifacts unless --force-submit-existing is set."""
+    preflight_candidates = [
+        submission_path.parent / submission_path.name.replace("submission", "preflight_summary"),
+        submission_path.parent / "preflight_summary.json",
+    ]
+    preflight_path: Path | None = None
+    for p in preflight_candidates:
+        if p.exists():
+            preflight_path = p
+            break
+
+    if preflight_path is None:
+        if not force:
+            raise RuntimeError(
+                f"No preflight_summary found near {submission_path}. "
+                "Use --force-submit-existing to bypass this check."
+            )
+        logger.warning("No preflight_summary found; proceeding because --force-submit-existing is set.")
+        return
+
+    try:
+        preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
+    except Exception:
+        if not force:
+            raise RuntimeError(
+                f"Cannot parse preflight_summary at {preflight_path}. "
+                "Use --force-submit-existing to bypass."
+            )
+        logger.warning("Cannot parse preflight_summary; proceeding because --force-submit-existing is set.")
+        return
+
+    issues: list[str] = []
+    support_shape = preflight.get("support_shape_report") or {}
+    blocking = int(support_shape.get("blocking_case_count") or 0)
+    if blocking > 0:
+        issues.append(f"support_shape blocking_case_count={blocking}")
+
+    anomaly = preflight.get("anomaly_report") or {}
+    anomaly_count = int(anomaly.get("anomaly_count") or 0)
+    if anomaly_count > 0:
+        issues.append(f"anomaly_count={anomaly_count}")
+
+    if issues:
+        summary = "; ".join(issues)
+        if not force:
+            raise RuntimeError(
+                f"Preflight checks failed for existing artifact: {summary}. "
+                "Use --force-submit-existing to bypass."
+            )
+        logger.warning(
+            "Preflight issues detected but proceeding because --force-submit-existing is set: %s",
+            summary,
+        )
+
+
 async def _submit_existing_artifacts(
     client: PlatformEvaluationClient,
     *,
@@ -1514,11 +1580,13 @@ async def _submit_existing_artifacts(
     poll: bool,
     poll_interval_s: float,
     poll_timeout_s: float,
+    force: bool = False,
 ) -> dict[str, object]:
     if not submission_path.exists():
         raise FileNotFoundError(f"Submission JSON not found: {submission_path}")
     if not code_archive_path.exists():
         raise FileNotFoundError(f"Code archive not found: {code_archive_path}")
+    _check_existing_artifact_preflight(submission_path, force=force)
     submit_response = await client.submit_submission(submission_path, code_archive_path)
     if not poll:
         return submit_response
@@ -1660,6 +1728,7 @@ async def _async_main(args: argparse.Namespace) -> int:
                 poll=bool(args.poll),
                 poll_interval_s=float(settings.platform.poll_interval_s),
                 poll_timeout_s=float(settings.platform.poll_timeout_s),
+                force=bool(getattr(args, "force_submit_existing", False)),
             )
             paths.phase_dir.mkdir(parents=True, exist_ok=True)
             paths.status_path.write_text(
@@ -1846,6 +1915,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-ingest", action="store_true", help="Reuse the existing phase-specific Qdrant collection.")
     parser.add_argument("--submit", action="store_true", help="Upload submission.json and code_archive.zip to the platform.")
     parser.add_argument("--submit-existing", action="store_true", help="Upload an existing submission.json and code archive without downloading, ingesting, or querying.")
+    parser.add_argument(
+        "--force-submit-existing",
+        action="store_true",
+        help="Bypass preflight checks for --submit-existing. Required when the artifact has known anomalies or blocking support-shape issues.",
+    )
     parser.add_argument("--submission-path", help="Path to an existing submission.json for --submit-existing.")
     parser.add_argument("--code-archive-path", help="Path to an existing code archive for --submit-existing.")
     parser.add_argument("--query-concurrency", type=int, help="Override question execution concurrency for artifact generation.")

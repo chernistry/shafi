@@ -122,6 +122,16 @@ _REASON_WEIGHTS: dict[str, int] = {
     "page_numbering_anomaly": 2,
 }
 
+_REVIEW_PRIORITY_FAMILIES = (
+    "consolidated_law",
+    "enactment_notice",
+    "enactment_notice_one_page",
+    "translation_caveat_doc",
+    "amended_judgment",
+    "tracked_changes_amendment_law",
+    "duplicate_same_family_candidate",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PdfPageMetadata:
@@ -625,6 +635,7 @@ def analyze_page_signals(
     first_line = non_empty_lines[0] if non_empty_lines else ""
     uppercase_first_line = bool(first_line) and first_line.isupper() and len(first_line) < 120
     article_reference_count = len(_ARTICLE_REF_RE.findall(normalized))
+    pipe_count = raw_text.count("|")
 
     title_page_signature = early_page and (
         bool(_LAW_NUMBER_RE.search(normalized))
@@ -636,10 +647,10 @@ def analyze_page_signals(
     enactment_notice_signature = bool(_ENACTMENT_RE.search(normalized))
     schedule_signature = bool(_SCHEDULE_RE.search(normalized))
     annex_signature = bool(_ANNEX_RE.search(normalized))
+    line_level_table_rows = sum(1 for line in non_empty_lines if _TABLE_ROW_HINT_RE.search(line))
+    compact_pipe_dense_table = pipe_count >= 6 and digit_count >= 2 and len(non_empty_lines) <= 2
     table_heavy_signature = (
-        sum(1 for line in non_empty_lines if _TABLE_ROW_HINT_RE.search(line)) >= max(2, len(non_empty_lines) // 3)
-        if non_empty_lines
-        else False
+        (line_level_table_rows >= max(2, len(non_empty_lines) // 3) or compact_pipe_dense_table) if non_empty_lines else False
     )
     form_checkbox_signature = bool(_FORM_CHECKBOX_RE.search(raw_text))
     order_operatives_signature = late_page and bool(_ORDER_OPERATIVE_RE.search(normalized))
@@ -837,6 +848,7 @@ def analyze_doc_signals(
         1 for page_signal in page_signals if bool(page_signal["tracked_changes_visual_semantics"])
     )
     tracked_changes_detected = tracked_changes_page_count > 0
+    translation_caveat = any(bool(page_signal["translation_caveat_arabic_prevails"]) for page_signal in page_signals)
     tracked_changes_confidence: str | None
     if tracked_changes_page_count >= 3:
         tracked_changes_confidence = "high"
@@ -961,6 +973,8 @@ def analyze_doc_signals(
             "tracked_changes_detected": tracked_changes_detected,
             "tracked_changes_page_count": tracked_changes_page_count,
             "tracked_changes_confidence": tracked_changes_confidence,
+            "tracked_changes_visual_semantics": tracked_changes_detected,
+            "translation_caveat": translation_caveat,
             "risk_note": risk_note,
             "family_query_coverage_bucket": "unscored",
             "public_coverage_gap_score": 0,
@@ -1048,6 +1062,36 @@ def _apply_exact_duplicate_clusters(records: list[JsonDict]) -> None:
             record["exact_duplicate_cluster_members"] = member_hashes
 
 
+def build_exact_duplicate_cluster_summaries(records: list[JsonDict]) -> list[JsonDict]:
+    duplicate_clusters: dict[str, list[JsonDict]] = defaultdict(list)
+    for record in records:
+        cluster_id = record.get("exact_duplicate_cluster_id")
+        if isinstance(cluster_id, str) and cluster_id:
+            duplicate_clusters[cluster_id].append(record)
+
+    summaries: list[JsonDict] = []
+    for cluster_id, members in sorted(duplicate_clusters.items()):
+        family_tags = sorted(
+            {
+                tag
+                for member in members
+                for tag in cast("list[str]", member.get("doc_family_tags") or [])
+            }
+        )
+        summaries.append(
+            {
+                "cluster_id": cluster_id,
+                "member_count": len(members),
+                "member_doc_ids": sorted(str(member["doc_id"]) for member in members),
+                "member_sha256s": sorted(str(member["sha256"]) for member in members),
+                "member_filenames": sorted(str(member["filename"]) for member in members),
+                "doc_family_tags": family_tags,
+                "normalized_title": str(members[0].get("normalized_title") or ""),
+            }
+        )
+    return summaries
+
+
 def _apply_collision_and_link_hints(records: list[JsonDict]) -> None:
     title_groups: dict[str, list[int]] = defaultdict(list)
     law_number_groups: dict[str, list[int]] = defaultdict(list)
@@ -1127,6 +1171,18 @@ def _apply_coverage_priors(records: list[JsonDict], coverage_priors: CoveragePri
         record["public_coverage_gap_score"] = score
 
 
+def _has_meaningful_unicode_disruption(signals: JsonDict) -> bool:
+    if any(int(signals.get(name) or 0) > 0 for name in ("zero_width_count", "replacement_char_count", "nbsp_count")):
+        return True
+    if int(signals.get("eastern_arabic_digit_count") or 0) > 0:
+        return True
+    if int(signals.get("smart_quote_count") or 0) >= 4:
+        return True
+    if int(signals.get("dash_variant_count") or 0) >= 2:
+        return True
+    return False
+
+
 def _score_record(record: JsonDict) -> tuple[int, list[str]]:
     reasons: list[str] = []
     signals = cast("JsonDict", record.get("signals") or {})
@@ -1181,7 +1237,7 @@ def _score_record(record: JsonDict) -> tuple[int, list[str]]:
         reasons.append("cross_law_link_dependency")
     if _flatten_page_signal(record, "contents_signature") and float(signals.get("contents_internal_link_density") or 0.0) == 0.0:
         reasons.append("contents_without_internal_links")
-    if any(int(signals.get(name) or 0) > 0 for name in ("zero_width_count", "replacement_char_count", "nbsp_count", "smart_quote_count", "dash_variant_count")):
+    if _has_meaningful_unicode_disruption(signals):
         reasons.append("weird_unicode_or_replacement")
     if float(signals.get("non_ascii_ratio") or 0.0) >= 0.05:
         reasons.append("non_ascii_heavy")
@@ -1412,11 +1468,7 @@ def build_summary_markdown(records: list[JsonDict]) -> str:
     else:
         lines.append("| - | 0 |")
 
-    duplicate_clusters: dict[str, list[JsonDict]] = defaultdict(list)
-    for record in records:
-        cluster_id = record.get("exact_duplicate_cluster_id")
-        if isinstance(cluster_id, str) and cluster_id:
-            duplicate_clusters[cluster_id].append(record)
+    duplicate_clusters = build_exact_duplicate_cluster_summaries(records)
 
     lines.extend(
         [
@@ -1428,10 +1480,11 @@ def build_summary_markdown(records: list[JsonDict]) -> str:
         ]
     )
     if duplicate_clusters:
-        for cluster_id, members in sorted(duplicate_clusters.items()):
-            filenames = ", ".join(str(member["filename"]) for member in members)
-            normalized_title = str(members[0].get("normalized_title") or "")
-            lines.append(f"| {cluster_id} | {len(members)} | {filenames} | {normalized_title} |")
+        for cluster in duplicate_clusters:
+            filenames = ", ".join(cast("list[str]", cluster["member_filenames"]))
+            lines.append(
+                f"| {cluster['cluster_id']} | {cluster['member_count']} | {filenames} | {cluster['normalized_title']} |"
+            )
     else:
         lines.append("| - | 0 | - | - |")
 
@@ -1481,6 +1534,166 @@ def build_top20_report_markdown(records: list[JsonDict]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _review_cluster_identity(record: JsonDict) -> tuple[str, str]:
+    exact_cluster_id = str(record.get("exact_duplicate_cluster_id") or "").strip()
+    if exact_cluster_id:
+        return "exact_duplicate_cluster", exact_cluster_id
+
+    normalized_title = str(record.get("normalized_title") or "").strip()
+    if normalized_title and (
+        cast("list[str]", record.get("collision_doc_ids") or [])
+        or cast("list[str]", record.get("duplicate_same_family_doc_ids") or [])
+    ):
+        return "title_collision_cluster", normalized_title
+
+    return "single_doc", str(record.get("doc_id") or "")
+
+
+def build_cluster_collapsed_review(records: list[JsonDict], *, limit: int = 20) -> list[JsonDict]:
+    grouped_records: dict[tuple[str, str], list[JsonDict]] = defaultdict(list)
+    for record in records:
+        grouped_records[_review_cluster_identity(record)].append(record)
+
+    entries: list[JsonDict] = []
+    for (cluster_kind, cluster_key), members in grouped_records.items():
+        representative = sorted(
+            members,
+            key=lambda item: (-int(item.get("suspicion_score") or 0), str(item.get("filename") or "")),
+        )[0]
+        union_reason_tags = sorted(
+            {
+                str(reason_tag)
+                for member in members
+                for reason_tag in cast("list[str]", member.get("reason_tags") or [])
+            },
+            key=lambda item: (-_REASON_WEIGHTS.get(item, 0), item),
+        )
+        union_family_tags = sorted(
+            {
+                str(family_tag)
+                for member in members
+                for family_tag in cast("list[str]", member.get("doc_family_tags") or [])
+            }
+        )
+        entries.append(
+            {
+                "cluster_kind": cluster_kind,
+                "cluster_key": cluster_key,
+                "member_count": len(members),
+                "member_doc_ids": sorted(str(member.get("doc_id") or "") for member in members),
+                "member_filenames": sorted(str(member.get("filename") or "") for member in members),
+                "representative_doc_id": str(representative.get("doc_id") or ""),
+                "representative_filename": str(representative.get("filename") or ""),
+                "suspicion_score": int(representative.get("suspicion_score") or 0),
+                "reason_tags": union_reason_tags,
+                "doc_family_tags": union_family_tags,
+                "family_query_coverage_bucket": str(representative.get("family_query_coverage_bucket") or "unscored"),
+            }
+        )
+
+    entries.sort(
+        key=lambda item: (
+            -int(item.get("suspicion_score") or 0),
+            -int(item.get("member_count") or 0),
+            str(item.get("representative_filename") or ""),
+        )
+    )
+    return entries[:limit]
+
+
+def build_cluster_collapsed_report_markdown(records: list[JsonDict]) -> str:
+    entries = build_cluster_collapsed_review(records)
+    lines = [
+        "# Top 20 Cluster-Collapsed Suspicious Documents",
+        "",
+        "| rank | cluster_kind | cluster_key | representative_doc_id | filename | score | member_count | top_reasons |",
+        "| ---: | --- | --- | --- | --- | ---: | ---: | --- |",
+    ]
+    if not entries:
+        lines.append("| 1 | - | - | - | - | 0 | 0 | - |")
+        return "\n".join(lines) + "\n"
+
+    for rank, entry in enumerate(entries, start=1):
+        top_reasons = ", ".join(cast("list[str]", entry.get("reason_tags") or [])[:3]) or "-"
+        lines.append(
+            f"| {rank} | {entry['cluster_kind']} | {entry['cluster_key']} | "
+            f"{entry['representative_doc_id']} | {entry['representative_filename']} | {entry['suspicion_score']} | "
+            f"{entry['member_count']} | {top_reasons} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _family_bucket_for_tag(records: list[JsonDict], family_tag: str) -> str:
+    for record in records:
+        coverage_priors_obj = record.get("coverage_priors")
+        if not isinstance(coverage_priors_obj, dict):
+            continue
+        family_buckets_obj = coverage_priors_obj.get("family_buckets")
+        if not isinstance(family_buckets_obj, dict):
+            continue
+        bucket = family_buckets_obj.get(family_tag)
+        if isinstance(bucket, str) and bucket:
+            return bucket
+    return "unscored"
+
+
+def build_family_stratified_review(
+    records: list[JsonDict],
+    *,
+    focus_families: tuple[str, ...] = _REVIEW_PRIORITY_FAMILIES,
+    per_family_limit: int = 5,
+) -> list[JsonDict]:
+    grouped: list[JsonDict] = []
+    for family_tag in focus_families:
+        family_records = [record for record in records if family_tag in cast("list[str]", record.get("doc_family_tags") or [])]
+        grouped.append(
+            {
+                "family_tag": family_tag,
+                "coverage_bucket": _family_bucket_for_tag(records, family_tag),
+                "doc_count": len(family_records),
+                "entries": build_cluster_collapsed_review(family_records, limit=per_family_limit),
+            }
+        )
+    return grouped
+
+
+def build_family_stratified_report_markdown(records: list[JsonDict]) -> str:
+    family_groups = build_family_stratified_review(records)
+    lines = [
+        "# Family-Stratified Suspicious Documents",
+        "",
+        "Priority families are shown even when they have sparse public coverage.",
+        "",
+    ]
+    for group in family_groups:
+        lines.append(f"## {group['family_tag']}")
+        lines.append("")
+        lines.append(
+            f"- Coverage bucket: {group['coverage_bucket']}"
+        )
+        lines.append(f"- Docs in family: {group['doc_count']}")
+        lines.append("")
+        entries = cast("list[JsonDict]", group.get("entries") or [])
+        if not entries:
+            lines.append("- No documents matched this family.")
+            lines.append("")
+            continue
+        lines.extend(
+            [
+                "| rank | cluster_kind | representative_doc_id | filename | score | member_count | top_reasons |",
+                "| ---: | --- | --- | --- | ---: | ---: | --- |",
+            ]
+        )
+        for rank, entry in enumerate(entries, start=1):
+            top_reasons = ", ".join(cast("list[str]", entry.get("reason_tags") or [])[:3]) or "-"
+            lines.append(
+                f"| {rank} | {entry['cluster_kind']} | {entry['representative_doc_id']} | "
+                f"{entry['representative_filename']} | {entry['suspicion_score']} | {entry['member_count']} | {top_reasons} |"
+            )
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Scan a PDF corpus for private-day anomaly signals.")
     parser.add_argument("input_dir", help="Directory containing PDF files to scan.")
@@ -1522,8 +1735,20 @@ def main(argv: list[str] | None = None) -> int:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     _write_jsonl(output_dir / "scan_results.jsonl", records)
+    (output_dir / "exact_duplicate_clusters.json").write_text(
+        json.dumps(build_exact_duplicate_cluster_summaries(records), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     (output_dir / "summary.md").write_text(build_summary_markdown(records), encoding="utf-8")
     (output_dir / "top20_report.md").write_text(build_top20_report_markdown(records), encoding="utf-8")
+    (output_dir / "top20_cluster_collapsed_report.md").write_text(
+        build_cluster_collapsed_report_markdown(records),
+        encoding="utf-8",
+    )
+    (output_dir / "top_by_family_report.md").write_text(
+        build_family_stratified_report_markdown(records),
+        encoding="utf-8",
+    )
     if args.dump_text:
         _write_text_dumps(output_dir, records, DocumentParser(), input_dir)
     if args.dump_screenshots:

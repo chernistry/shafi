@@ -164,6 +164,19 @@ class FakeStore:
     async def ensure_payload_indexes(self) -> None:
         return None
 
+    async def ensure_page_collection(self) -> None:
+        return None
+
+    async def ensure_page_payload_indexes(self) -> None:
+        return None
+
+    async def upsert_pages(self, pages: list[object], dense_vectors: list[list[float]], *, sparse_vectors: list[object] | None = None) -> int:
+        del dense_vectors, sparse_vectors
+        return len(pages)
+
+    async def delete_pages_by_doc_id(self, doc_id: str) -> None:
+        del doc_id
+
     async def upsert_chunks(
         self,
         chunks: list[Chunk],
