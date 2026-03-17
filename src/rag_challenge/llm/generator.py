@@ -7,8 +7,298 @@ from typing import TYPE_CHECKING
 import tiktoken
 
 from rag_challenge.config import get_settings
+from rag_challenge.llm.generator_case_outcome import (
+    clean_case_outcome_clause as _clean_case_outcome_clause,
+)
+from rag_challenge.llm.generator_case_outcome import (
+    extract_case_outcome_clauses as _extract_case_outcome_clauses,
+)
+from rag_challenge.llm.generator_case_outcome import (
+    join_case_outcome_clauses as _join_case_outcome_clauses,
+)
+from rag_challenge.llm.generator_case_outcome import (
+    select_case_outcome_clauses as _select_case_outcome_clauses,
+)
+from rag_challenge.llm.generator_citations import (
+    extract_citations as _extract_citations,
+)
+from rag_challenge.llm.generator_citations import (
+    extract_cited_chunk_ids as _extract_cited_chunk_ids,
+)
+from rag_challenge.llm.generator_citations import (
+    sanitize_citations as _sanitize_citations,
+)
+from rag_challenge.llm.generator_cleanup import (
+    cleanup_final_answer as _cleanup_final_answer,
+)
+from rag_challenge.llm.generator_cleanup import (
+    cleanup_list_answer_postamble as _cleanup_list_answer_postamble,
+)
+from rag_challenge.llm.generator_cleanup import (
+    cleanup_list_answer_preamble as _cleanup_list_answer_preamble,
+)
+from rag_challenge.llm.generator_cleanup import (
+    cleanup_truncated_answer as _cleanup_truncated_answer,
+)
+from rag_challenge.llm.generator_cleanup import (
+    looks_like_truncated_tail as _looks_like_truncated_tail,
+)
+from rag_challenge.llm.generator_cleanup import (
+    strip_negative_subclaims as _strip_negative_subclaims,
+)
+from rag_challenge.llm.generator_constants import (
+    ACCOUNTING_RECORDS_PRESERVED_RE as _ACCOUNTING_RECORDS_PRESERVED_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    ADMINISTRATION_CLAUSE_RE as _ADMINISTRATION_CLAUSE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    ADMINISTRATION_ENTITY_RE as _ADMINISTRATION_ENTITY_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    AMENDMENT_TITLE_RE as _AMENDMENT_TITLE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    CITE_RE as _CITE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    CITED_TITLE_PLAIN_RE as _CITED_TITLE_PLAIN_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    CITED_TITLE_RE as _CITED_TITLE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    COMMON_ELEMENT_SIGNATURES as _COMMON_ELEMENT_SIGNATURES,
+)
+from rag_challenge.llm.generator_constants import (
+    COST_CUE_RE as _COST_CUE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    ENACTMENT_DATE_RE as _ENACTMENT_DATE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    ENACTMENT_NOTICE_ATTACHED_TITLE_RE as _ENACTMENT_NOTICE_ATTACHED_TITLE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    ENACTMENT_NOTICE_REFERENCE_RE as _ENACTMENT_NOTICE_REFERENCE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    EXPLICIT_OUTCOME_VERB_RE as _EXPLICIT_OUTCOME_VERB_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    INTERPRETATION_SECTION_COMMON_KEYS as _INTERPRETATION_SECTION_COMMON_KEYS,
+)
+from rag_challenge.llm.generator_constants import (
+    LAW_NO_REF_RE as _LAW_NO_REF_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    LEGISLATION_REF_TITLE_RE as _LEGISLATION_REF_TITLE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    NEW_ACCOUNT_EFFECTIVE_DATE_RE as _NEW_ACCOUNT_EFFECTIVE_DATE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    NUMBERED_ITEM_RE as _NUMBERED_ITEM_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    ORDER_SECTION_MARKER_RE as _ORDER_SECTION_MARKER_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    OUTCOME_CUE_RE as _OUTCOME_CUE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    OUTCOME_NOISE_RE as _OUTCOME_NOISE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    PENALTY_AMOUNT_RE as _PENALTY_AMOUNT_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    PENALTY_STOPWORDS as _PENALTY_STOPWORDS,
+)
+from rag_challenge.llm.generator_constants import (
+    PRE_EXISTING_EFFECTIVE_DATE_RE as _PRE_EXISTING_EFFECTIVE_DATE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    RECORDS_RETAINED_AFTER_REPORTING_RE as _RECORDS_RETAINED_AFTER_REPORTING_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    REGISTRAR_SELF_ADMIN_RE as _REGISTRAR_SELF_ADMIN_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    REMUNERATION_RECORDKEEPING_RE as _REMUNERATION_RECORDKEEPING_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    RULER_OF_DUBAI_RE as _RULER_OF_DUBAI_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    SENTENCE_SPLIT_RE as _SENTENCE_SPLIT_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    STOPWORDS as _STOPWORDS,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_CLAUSE_RE as _TITLE_CLAUSE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_CONTEXT_BAD_LEAD_RE as _TITLE_CONTEXT_BAD_LEAD_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_GENERIC_QUESTION_LEAD_RE as _TITLE_GENERIC_QUESTION_LEAD_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_LAW_NO_SUFFIX_RE as _TITLE_LAW_NO_SUFFIX_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_LEADING_CONNECTOR_RE as _TITLE_LEADING_CONNECTOR_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_ONLY_BAD_CANDIDATE_RE as _TITLE_ONLY_BAD_CANDIDATE_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_ONLY_ITEM_BAD_LEAD_RE as _TITLE_ONLY_ITEM_BAD_LEAD_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_ONLY_PLACEHOLDER_RE as _TITLE_ONLY_PLACEHOLDER_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_PREPOSITION_BAD_LEAD_RE as _TITLE_PREPOSITION_BAD_LEAD_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_QUERY_BAD_LEAD_RE as _TITLE_QUERY_BAD_LEAD_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_REF_BAD_LEAD_RE as _TITLE_REF_BAD_LEAD_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_REF_RE as _TITLE_REF_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TITLE_YEAR_RE as _TITLE_YEAR_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    TOKEN_RE as _TOKEN_RE,
+)
+from rag_challenge.llm.generator_constants import (
+    USER_PROMPT_TEMPLATE as _USER_PROMPT_TEMPLATE,
+)
+from rag_challenge.llm.generator_constants import (
+    USER_PROMPT_TEMPLATE_STRICT as _USER_PROMPT_TEMPLATE_STRICT,
+)
+from rag_challenge.llm.generator_prompts import (
+    build_system_prompt as _build_system_prompt,
+)
+from rag_challenge.llm.generator_prompts import (
+    generation_fallback_models as _generation_fallback_models,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_amended_by_enumeration_question as _is_amended_by_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_broad_enumeration_question as _is_broad_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_case_outcome_question as _is_case_outcome_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_common_elements_question as _is_common_elements_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_company_structure_enumeration_question as _is_company_structure_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_consolidated_version_published_question as _is_consolidated_version_published_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_interpretative_provisions_enumeration_question as _is_interpretative_provisions_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_named_liability_question as _is_named_liability_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_named_reference_enumeration_question as _is_named_reference_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_named_retention_period_question as _is_named_retention_period_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_registrar_enumeration_question as _is_registrar_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_remuneration_recordkeeping_question as _is_remuneration_recordkeeping_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_ruler_authority_year_enumeration_question as _is_ruler_authority_year_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_ruler_enactment_enumeration_question as _is_ruler_enactment_enumeration_question_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    is_unsupported_criminal_trap as _is_unsupported_criminal_trap_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    requires_expanded_broad_enumeration_context as _requires_expanded_broad_enumeration_context_helper,
+)
+from rag_challenge.llm.generator_question_types import (
+    should_use_irac as _should_use_irac_helper,
+)
+from rag_challenge.llm.generator_titles import (
+    clean_amendment_title_historical_year as _clean_amendment_title_historical_year,
+)
+from rag_challenge.llm.generator_titles import (
+    clean_structured_doc_label as _clean_structured_doc_label,
+)
+from rag_challenge.llm.generator_titles import (
+    display_doc_title as _display_doc_title_helper,
+)
+from rag_challenge.llm.generator_titles import (
+    extract_commencement_rule as _extract_commencement_rule,
+)
+from rag_challenge.llm.generator_titles import (
+    extract_doc_title_from_summary as _extract_doc_title_from_summary,
+)
+from rag_challenge.llm.generator_titles import (
+    extract_doc_title_from_text as _extract_doc_title_from_text,
+)
+from rag_challenge.llm.generator_titles import (
+    extract_last_updated_support as _extract_last_updated_support,
+)
+from rag_challenge.llm.generator_titles import (
+    extract_single_law_title_from_question as _extract_single_law_title_from_question,
+)
+from rag_challenge.llm.generator_titles import (
+    looks_like_legal_doc_title as _looks_like_legal_doc_title,
+)
+from rag_challenge.llm.generator_titles import (
+    needs_title_recovery as _needs_title_recovery,
+)
+from rag_challenge.llm.generator_titles import (
+    normalize_commencement_rule as _normalize_commencement_rule,
+)
+from rag_challenge.llm.generator_titles import (
+    normalize_common_elements_title_key as _normalize_common_elements_title_key,
+)
+from rag_challenge.llm.generator_titles import (
+    normalize_title_key as _normalize_title_key,
+)
+from rag_challenge.llm.generator_titles import (
+    recover_doc_title_from_chunks as _recover_doc_title_from_chunks,
+)
+from rag_challenge.llm.generator_titles import (
+    should_prefer_extracted_title as _should_prefer_extracted_title,
+)
+from rag_challenge.llm.generator_token_usage import (
+    count_tokens as _count_tokens,
+)
+from rag_challenge.llm.generator_token_usage import (
+    estimate_usage as _estimate_usage,
+)
+from rag_challenge.llm.generator_token_usage import (
+    resolve_usage as _resolve_usage,
+)
+from rag_challenge.llm.generator_token_usage import (
+    truncate_to_tokens as _truncate_to_tokens,
+)
 from rag_challenge.models import Citation, QueryComplexity, RankedChunk
-from rag_challenge.prompts import load_prompt
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Sequence
@@ -17,330 +307,6 @@ if TYPE_CHECKING:
     from rag_challenge.telemetry import TelemetryCollector
 
 logger = logging.getLogger(__name__)
-
-_CITE_RE = re.compile(r"\(cite:\s*([^)]+)\)", re.IGNORECASE)
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-_TOKEN_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9_-]{2,}\b")
-_TITLE_REF_RE = re.compile(
-    r"\b((?:[A-Z][A-Za-z0-9]*(?:\s+(?:of|the|in|on|and|for|to|by|Non|Incorporated|Limited|General|Data|Protection|Application|Civil|Commercial|Strata|Title|Trust|Contract|Liability|Partnership|Profit|Organisations?|Operating|Companies|Insolvency|Foundations?|Employment|Arbitration|Securities|Investment|Personal|Property|Obligations|Netting|Courts|Court|Common|Reporting|Standard|Dematerialised|Investments?|Implied|Terms|Unfair|Amendment|DIFC))*\s+(?:Law|Regulations?)))\b(?:\s+(\d{4}))?\b",
-    re.IGNORECASE,
-)
-_AMENDMENT_TITLE_RE = re.compile(
-    r"\b([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*\s+Laws?\s+Amendment\s+Law(?:\s+\d{4})?)\b",
-    re.IGNORECASE,
-)
-_BROAD_ENUMERATION_RE = re.compile(
-    r"^(?:which\s+(?:laws?|regulations?|documents?|cases?)|list\s+all|identify\s+all|name\s+all)\b",
-    re.IGNORECASE,
-)
-_COMMON_ELEMENTS_RE = re.compile(r"\b(?:common elements|elements in common|in common)\b", re.IGNORECASE)
-_NEGATIVE_SUBCLAIM_RE = re.compile(
-    r"(?:^|\n)"
-    r"[^\n]*?"
-    r"(?:"
-    r"[Tt]here\s+is\s+no\s+information\s+on\s+(?:the\s+)?(?:other\s+)?[A-Za-z]"
-    r"|[Tt]here\s+is\s+no\s+information\s+in\s+the\s+provided\s+sources"
-    r"|[Tt]here\s+is\s+no\s+explicit\s+mention(?:\s+of)?"
-    r"|[Tt]here\s+is\s+also\s+evidence\s+that"
-    r"|[Nn]o\s+information\s+(?:was\s+)?found\s+on\s+(?:the\s+)?[A-Z]"
-    r"|does\s+not\s+(?:explicitly\s+)?mention"
-    r"|does\s+not\s+(?:explicitly\s+)?contain"
-    r"|does\s+not\s+(?:explicitly\s+)?include"
-    r"|does\s+not\s+(?:explicitly\s+)?provide"
-    r"|does\s+not\s+(?:explicitly\s+)?reference"
-    r"|is\s+not\s+(?:explicitly\s+)?mentioned"
-    r"|could\s+not\s+be\s+(?:confirmed|verified)"
-    r"|are\s+confirmed\s+only\s+between"
-    r"|Therefore,\s+the\s+common\s+elements"
-    r")"
-    r"[^\n]*",
-    re.IGNORECASE,
-)
-_TRAILING_NEGATIVE_RE = re.compile(
-    r"(?<=[.!?])\s+"
-    r"(?:"
-    r"[Tt]here\s+is\s+no\s+information\s+on"
-    r"|[Tt]here\s+is\s+no\s+information\s+in\s+the\s+provided\s+sources"
-    r"|[Tt]here\s+is\s+no\s+explicit\s+mention(?:\s+of)?"
-    r"|[Tt]here\s+is\s+also\s+evidence\s+that"
-    r"|does\s+not\s+(?:explicitly\s+)?"
-    r"|only\s+states\s+that"
-    r"|are\s+confirmed\s+only\s+between"
-    r"|Therefore,\s+the\s+common\s+elements"
-    r"|cannot\s+be\s+confirmed"
-    r")"
-    r"[^.!?]*[.!?]?\s*$",
-    re.IGNORECASE | re.DOTALL,
-)
-_STOPWORDS = {
-    "the",
-    "and",
-    "for",
-    "that",
-    "with",
-    "from",
-    "this",
-    "what",
-    "when",
-    "where",
-    "which",
-    "under",
-    "according",
-    "article",
-    "section",
-    "case",
-    "law",
-}
-
-_SYSTEM_PROMPT_SIMPLE = load_prompt("llm/generator_system_simple")
-_SYSTEM_PROMPT_COMPLEX = load_prompt("llm/generator_system_complex")
-_SYSTEM_PROMPT_COMPLEX_IRAC = load_prompt("llm/generator_system_complex_irac")
-_SYSTEM_PROMPT_STRICT = load_prompt("llm/generator_system_strict")
-_USER_PROMPT_TEMPLATE = load_prompt("llm/generator_user")
-_USER_PROMPT_TEMPLATE_STRICT = load_prompt("llm/generator_user_strict")
-_IRAC_HINT_RE = re.compile(
-    r"\b(compare|difference|distinguish|contrast|analy[sz]e|evaluate|common elements|modify|modifies|impact|effect|summari[sz]e)\b",
-    re.IGNORECASE,
-)
-_CITED_TITLE_RE = re.compile(r'This Law may be cited as(?: the)? [“"]([^"”]+)[”"]', re.IGNORECASE)
-_CITED_TITLE_PLAIN_RE = re.compile(
-    r"\bThis Law may be cited as(?: the)? ([A-Z][A-Za-z0-9\s()/-]+?(?:Law|Regulations?)(?:\s+\d{4})?)\b",
-    re.IGNORECASE,
-)
-_COVER_TITLE_LAW_YEAR_RE = re.compile(
-    r"^\s*([A-Z][A-Z\s/&().-]+?(?:LAW|REGULATIONS?|RULES?|CODE|NOTICE))\s+"
-    r"DIFC\s+LAW\s+NO\.?\s*\d+\s+OF\s+(\d{4})\b",
-    re.IGNORECASE | re.MULTILINE,
-)
-_LEGISLATION_REF_TITLE_RE = re.compile(
-    r"\b(?:this|the)\s+Law\s+is\s+(?:the\s+)?("
-    r"[A-Z][A-Za-z][A-Za-z\s]+?Law(?:\s+Amendment\s+Law)?"
-    r"(?:,\s*DIFC\s+Law\s+No\.?\s*\d+\s+of\s+\d{4})?"
-    r")\s+made\s+by\s+the\s+Ruler\b",
-    re.IGNORECASE,
-)
-_ENACTMENT_NOTICE_ATTACHED_TITLE_RE = re.compile(
-    r"\bin\s+the\s+form\s+now\s+attached\s+(?:the\s+)?("
-    r"[A-Z][A-Za-z][A-Za-z\s-]+?Law(?:\s+Amendment\s+Law)?"
-    r"(?:\s+DIFC\s+Law\s+No\.?\s*\d+\s+of\s+\d{4})?"
-    r")\b",
-    re.IGNORECASE,
-)
-_ENACTMENT_NOTICE_TITLE_RE = re.compile(
-    r"\bthe\s+([A-Z][A-Za-z][A-Za-z\s-]+Law(?:\s+DIFC\s+Law\s+No\.?\s*\d+\s+of\s+\d{4})?)\b",
-    re.IGNORECASE,
-)
-_DOC_SUMMARY_TITLE_RE = re.compile(r"\*\*Document Title:\*\*\s*([^\n]+)", re.IGNORECASE)
-_DOC_SUMMARY_TITLED_RE = re.compile(r'\btitled\s+[“"]([^"”]+)[”"]', re.IGNORECASE)
-_DOC_SUMMARY_PREFIX_TITLE_RE = re.compile(
-    r"^(?:statute|regulation|document|case(?:\s+law)?):\s*([^,(]+?(?:Law|Regulations?|Rules?|Code|Notice))\b",
-    re.IGNORECASE,
-)
-_DOC_SUMMARY_IS_THE_RE = re.compile(
-    r"\bThis\s+(?:document|statute|contract\s+document|case\s+law\s+document)\s+(?:is|,)\s*(?:the\s+)?"
-    r"([^,.]+?(?:Law|Regulations?|Rules?|Code|Notice))\b",
-    re.IGNORECASE,
-)
-_STRUCTURED_TITLE_BAD_LEAD_RE = re.compile(
-    r"^(?:(?:we\s+hereby\s+enact(?:\s+on\s+this\s+[^.]+?)?\s+(?:the\s+)?)?(?:in\s+the\s+form\s+now\s+attached\s+)?|enactment\s+notice\s+)+",
-    re.IGNORECASE,
-)
-_TITLE_LAW_NO_SUFFIX_RE = re.compile(r"\s*,?\s*DIFC\s+Law\s+No\.?\s*\d+\s+of\s+\d{4}\b", re.IGNORECASE)
-_TITLE_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
-_TITLE_LEADING_CONNECTOR_RE = re.compile(r"^(?:(?:of|and|the)\s+)+", re.IGNORECASE)
-_TITLE_REF_BAD_LEAD_RE = re.compile(
-    r"^(?:(?:which|what|how|mention|mentions|reference|references|their|these|those|do|does|did)\s+)+",
-    re.IGNORECASE,
-)
-_TITLE_QUERY_BAD_LEAD_RE = re.compile(r"^(?:(?:is|are)\s+)?(?:the\s+)?titles?\s+of\s+", re.IGNORECASE)
-_TITLE_GENERIC_QUESTION_LEAD_RE = re.compile(
-    r"^(?:(?:on\s+what\s+date|in\s+what\s+year|what|which|when|where|who|how|was|were|is|are|did|does|do)\s+)+"
-    r"(?:(?:the|its)\s+)?(?:(?:citation\s+)?titles?\s+of\s+)?",
-    re.IGNORECASE,
-)
-_TITLE_CONTEXT_BAD_LEAD_RE = re.compile(
-    r"^(?:(?:interpretation\s+sections?|sections?|section\s+\d+|schedule\s+\d+)\s+of\s+)+",
-    re.IGNORECASE,
-)
-_TITLE_PREPOSITION_BAD_LEAD_RE = re.compile(
-    r"^(?:(?:under|for|to|about|regarding|concerning|within|as|than)\s+)+(?:the\s+)?",
-    re.IGNORECASE,
-)
-_LAW_NO_REF_RE = re.compile(r"\blaw\s+no\.?\s*(\d+)\s+of\s+(\d{4})\b", re.IGNORECASE)
-_TITLE_CLAUSE_RE = re.compile(r"\b(?:title|may be cited as)\b", re.IGNORECASE)
-_PRE_EXISTING_EFFECTIVE_DATE_RE = re.compile(
-    r"pre-existing accounts?.{0,160}?effective date is\s+([0-9]{1,2}\s+[A-Za-z]+,?\s+\d{4})",
-    re.IGNORECASE | re.DOTALL,
-)
-_NEW_ACCOUNT_EFFECTIVE_DATE_RE = re.compile(
-    r"new accounts?.{0,160}?effective date is\s+([0-9]{1,2}\s+[A-Za-z]+,?\s+\d{4})",
-    re.IGNORECASE | re.DOTALL,
-)
-_RECORDS_RETAINED_AFTER_REPORTING_RE = re.compile(
-    r"retention\s+period\s+of\s+six\s+\(6\)\s+years\s+after\s+the\s+date\s+of\s+reporting\s+the\s+information",
-    re.IGNORECASE,
-)
-_ACCOUNTING_RECORDS_PRESERVED_RE = re.compile(
-    r"preserved\s+by\s+the\s+([A-Za-z][A-Za-z\s-]+?)\s+for\s+at\s+least\s+six\s+\(6\)\s+years\s+from\s+the\s+date\s+upon\s+which\s+they\s+were\s+created",
-    re.IGNORECASE,
-)
-_ENACTMENT_DATE_RE = re.compile(
-    r"\bhereby enact\s+on\s+(?:this\s+)?([0-9]{1,2}(?:st|nd|rd|th)?(?:\s+day\s+of)?\s+[A-Za-z]+\s+\d{4})",
-    re.IGNORECASE,
-)
-_ENACTMENT_NOTICE_REFERENCE_RE = re.compile(
-    r"\b(?:this|the)\s+law\s+is\s+enacted\s+on\s+the\s+date\s+specified\s+in\s+the\s+enactment\s+notice"
-    r"(?:\s+in\s+respect\s+of\s+this\s+law)?\b",
-    re.IGNORECASE,
-)
-_CONSOLIDATED_VERSION_RE = re.compile(
-    r"\bConsolidated\s+Version(?:\s+No\.?\s*\d+)?\s*\(([^)]+)\)",
-    re.IGNORECASE,
-)
-_UPDATED_VALUE_RE = re.compile(
-    r"\b(?:last\s+updated|updated|effective\s+from)\s*(?:[:\-]|\bis\b)?\s*"
-    r"([0-9]{1,2}\s+[A-Za-z]+\s+\d{4}|[A-Za-z]+\s+\d{4})\b",
-    re.IGNORECASE,
-)
-_REMUNERATION_RECORDKEEPING_RE = re.compile(
-    r"the\s+Employee'?s\s+Remuneration\s*\(([^)]+)\)\s*,\s*and\s+the\s+applicable\s+Pay\s+Period",
-    re.IGNORECASE,
-)
-_QUESTION_SINGLE_LAW_TITLE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\bwho administers the (?P<title>.+? law(?:\s+\d{4})?)\??$", re.IGNORECASE),
-    re.compile(
-        r"\bwhen was the consolidated version of the (?P<title>.+?) published\??$",
-        re.IGNORECASE,
-    ),
-)
-_LIST_POSTAMBLE_RE = re.compile(
-    r"^[.)\s-]*(?:No other|Therefore|Thus|Accordingly|In summary|These are|The laws|The documents)\b",
-    re.IGNORECASE,
-)
-_ORDER_SECTION_MARKER_RE = re.compile(
-    r"\bIT\s+IS\s+HEREBY\s+ORDERED(?:\s+AND\s+DIRECTED)?\s+THAT\b",
-    re.IGNORECASE,
-)
-_ORDER_SECTION_STOP_RE = re.compile(
-    r"^(?:Issued by:?|SCHEDULE OF REASONS|SCHEDULE OF THE COURT'?S REASONS|Introduction|Background|Discussion and Determination)\b",
-    re.IGNORECASE,
-)
-_NUMBERED_LINE_RE = re.compile(r"^\s*\d+\.\s*")
-_OUTCOME_CUE_RE = re.compile(
-    r"\b(?:dismissed|refused|granted|allowed|discharged|set aside|restored|proceed to trial|stayed|varied|rejected)\b",
-    re.IGNORECASE,
-)
-_EXPLICIT_OUTCOME_VERB_RE = re.compile(
-    r"\b(?:is|was|are|be|been|being|shall be|must be|to be)\s+"
-    r"(?:dismissed|refused|granted|allowed|discharged|set aside|restored|stayed|varied|rejected)\b",
-    re.IGNORECASE,
-)
-_COST_CUE_RE = re.compile(r"\bcosts?\b|\bno order as to costs\b", re.IGNORECASE)
-_OUTCOME_NOISE_RE = re.compile(
-    r"\b(?:issued by|date of issue|at:\s*\d|schedule of reasons|was considered|by\s+rdc\s+\d+)\b",
-    re.IGNORECASE,
-)
-_COMPLETE_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+(?=(?:[A-Z][a-z]|[-*]|\d+\.))")
-_NUMBERED_ITEM_RE = re.compile(r"(?<!\d)(\d+)\.\s+")
-_TITLE_ONLY_ITEM_BAD_LEAD_RE = re.compile(
-    r"\b(?:this\s+is\s+confirmed|includes|states|contains|provides|application|schedule|article|section|"
-    r"because|under|enacted|administered|commencement|penalty)\b",
-    re.IGNORECASE,
-)
-_TITLE_ONLY_PLACEHOLDER_RE = re.compile(
-    r"^(?:citation\s+title|this\s+is\s+(?:shown|stated|explicitly\s+stated|confirmed)\b|the\s+statement\b)",
-    re.IGNORECASE,
-)
-_BODY_LIKE_TITLE_RE = re.compile(
-    r"\b(?:this\s+law|requirements?\s+of\s+this\s+law|purposes?\s+of\s+this\s+law|"
-    r"title\s+and\s+repeal|directors?\s+to|obligations?\b|application\s+of\s+this\s+law|"
-    r"terms?\s+and\s+purposes?\s+of|penalty\s+for\s+offences?|penalty\s+for\s+an\s+offence)\b",
-    re.IGNORECASE,
-)
-_REGISTRAR_SELF_ADMIN_RE = re.compile(
-    r"\b(?:the\s+registrar\s+shall\s+administer\s+this\s+law"
-    r"|this\s+law\s+shall\s+be\s+administered\s+by\s+the\s+registrar"
-    r"|this\s+law\s+is\s+administered\s+by\s+the\s+registrar"
-    r"|administration\s+of\s+this\s+law\b[^.]{0,160}\bregistrar\b)\b",
-    re.IGNORECASE | re.DOTALL,
-)
-_TITLE_ONLY_BAD_CANDIDATE_RE = re.compile(r"\b(?:application of the arbitration law|arbitration law)\b", re.IGNORECASE)
-_RULER_OF_DUBAI_RE = re.compile(r"\bruler of dubai\b", re.IGNORECASE)
-_PENALTY_AMOUNT_RE = re.compile(r"\b(?:USD|US\$)?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,})(?:\.\d+)?\b", re.IGNORECASE)
-_ENACTMENT_NOTICE_COMMENCEMENT_RE = re.compile(
-    r"\b(?:this\s+law\s+)?shall\s+come\s+into\s+force\s+on\s+"
-    r"(?:the\s+date\s+specified\s+in\s+the\s+enactment\s+notice(?:\s+in\s+respect\s+of\s+this\s+law)?"
-    r"|(?:the\s+)?\d+(?:st|nd|rd|th)?\s+business\s+day\s+after\s+enactment"
-    r"|\d+\s+days?\s+after\s+enactment)\b"
-    r"|\b(?:this\s+law\s+)?comes?\s+into\s+force\s+on\s+the\s+date\s+specified\s+in\s+the\s+enactment\s+notice(?:\s+in\s+respect\s+of\s+this\s+law)?\b",
-    re.IGNORECASE,
-)
-_ADMINISTRATION_CLAUSE_RE = re.compile(
-    r"\b("
-    r"(?:this\s+law(?:\s+and\s+any\s+(?:legislation\s+made\s+for\s+the\s+purposes?\s+of\s+this\s+law|"
-    r"regulations?\s+made\s+under\s+it))?\s+"
-    r"(?:is|are|shall\s+be)\s+administered\s+by\s+(?:the\s+)?[^.]+)"
-    r"|(?:the\s+[^.]+?\s+shall\s+administer\s+this\s+law)"
-    r")\b",
-    re.IGNORECASE,
-)
-_ADMINISTRATION_ENTITY_RE = re.compile(
-    r"\badministered\s+by\s+(?:the\s+)?([A-Za-z][A-Za-z\s-]+)"
-    r"|the\s+([A-Za-z][A-Za-z\s-]+?)\s+shall\s+administer\s+this\s+law\b",
-    re.IGNORECASE,
-)
-_COMMON_ELEMENT_SIGNATURES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
-    (
-        "schedule_1_interpretative_provisions",
-        "Schedule 1 contains interpretative provisions which apply to the Law.",
-        ("schedule 1", "interpretative provisions"),
-    ),
-    (
-        "schedule_1_defined_terms",
-        "Schedule 1 contains a list of defined terms used in the Law.",
-        ("schedule 1", "defined terms"),
-    ),
-    (
-        "rules_of_interpretation",
-        "Schedule 1 contains rules of interpretation.",
-        ("schedule 1", "rules of interpretation"),
-    ),
-    (
-        "amended_or_re_enacted_reference",
-        "A statutory provision includes a reference to the statutory provision as amended or re-enacted from time to time.",
-        ("a statutory provision includes a reference", "amended or re-enacted"),
-    ),
-    (
-        "person_definition_reference",
-        "A reference to a person includes any natural person, body corporate or body unincorporate, including a company, partnership, unincorporated association, government or state.",
-        ("reference to a person includes", "natural person", "body corporate", "body unincorpor"),
-    ),
-)
-_INTERPRETATION_SECTION_COMMON_KEYS: tuple[str, ...] = (
-    "amended_or_re_enacted_reference",
-    "person_definition_reference",
-)
-_PENALTY_STOPWORDS = {
-    "what",
-    "is",
-    "the",
-    "for",
-    "and",
-    "under",
-    "penalty",
-    "penalties",
-    "prescribed",
-    "offense",
-    "offences",
-    "offence",
-    "against",
-    "law",
-    "laws",
-    "regulations",
-    "regulation",
-    "title",
-    "using",
-}
 
 
 class RAGGenerator:
@@ -366,24 +332,18 @@ class RAGGenerator:
         complexity_value = self._normalize_complexity(complexity)
         answer_word_limit = int(max_words or self._pipeline_settings.max_answer_words)
         answer_kind = answer_type.strip().lower()
+        system_prompt = _build_system_prompt(
+            question=question,
+            complexity=complexity_value,
+            answer_kind=answer_kind,
+            answer_word_limit=answer_word_limit,
+            prompt_hint=prompt_hint,
+            answer_type=answer_type,
+            answer_type_instruction=self._answer_type_instruction,
+            should_use_irac=self._should_use_irac,
+        )
+
         strict_types = {"boolean", "number", "date", "name", "names"}
-
-        if answer_kind in strict_types:
-            system_prompt = _SYSTEM_PROMPT_STRICT
-        elif complexity_value == QueryComplexity.COMPLEX:
-            if answer_kind == "free_text":
-                if self._should_use_irac(question):
-                    system_prompt = _SYSTEM_PROMPT_COMPLEX_IRAC.format(max_words=answer_word_limit)
-                else:
-                    system_prompt = _SYSTEM_PROMPT_COMPLEX.format(max_words=answer_word_limit)
-            else:
-                system_prompt = _SYSTEM_PROMPT_COMPLEX.format(max_words=answer_word_limit)
-        else:
-            system_prompt = _SYSTEM_PROMPT_SIMPLE
-        system_prompt = f"{system_prompt}\n\n{self._answer_type_instruction(answer_type)}".strip()
-        if prompt_hint.strip():
-            system_prompt = f"{system_prompt}\n\n{prompt_hint.strip()}"
-
         user_template = _USER_PROMPT_TEMPLATE_STRICT if answer_kind in strict_types else _USER_PROMPT_TEMPLATE
         user_prompt = user_template.format(
             question=question,
@@ -569,54 +529,23 @@ class RAGGenerator:
 
     @staticmethod
     def _is_named_retention_period_question(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
-        if not q:
-            return False
-        return (
-            "retention period" in q
-            or ("preserve" in q and "accounting records" in q)
-            or ("records" in q and "six (6) years" in q)
-            or ("records" in q and "minimum period" in q)
-        )
+        return _is_named_retention_period_question_helper(question)
 
     @staticmethod
     def _is_case_outcome_question(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
-        if not q:
-            return False
-        return any(
-            phrase in q
-            for phrase in (
-                "what was the result of the application heard in case",
-                "what was the outcome of the specific order or application",
-                "looking only at the last page of the document",
-                "according to the 'it is hereby ordered that' section",
-                'according to the "it is hereby ordered that" section',
-                "summarize the court's final ruling in case",
-                "how did the court of appeal rule, and what costs were awarded",
-            )
-        )
-
-    _CRIMINAL_TRAP_TERMS = frozenset((
-        "jury", "parole", "miranda", "plea bargain", "plea deal",
-        "bail hearing", "indictment", "grand jury", "arraignment",
-        "felony charge", "criminal sentencing",
-    ))
+        return _is_case_outcome_question_helper(question)
 
     @staticmethod
     def _is_unsupported_criminal_trap(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
-        return any(term in q for term in RAGGenerator._CRIMINAL_TRAP_TERMS)
+        return _is_unsupported_criminal_trap_helper(question)
 
     @staticmethod
     def _is_consolidated_version_published_question(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
-        return bool(q) and "consolidated version" in q and "published" in q
+        return _is_consolidated_version_published_question_helper(question)
 
     @staticmethod
     def _is_remuneration_recordkeeping_question(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
-        return bool(q) and "keep records" in q and "remuneration" in q and "article 16(1)(c)" in q
+        return _is_remuneration_recordkeeping_question_helper(question)
 
     async def generate_stream(
         self,
@@ -743,20 +672,11 @@ class RAGGenerator:
         return result.text, citations
 
     def _generation_fallback_models(self, chosen_model: str) -> list[str]:
-        ordered = [
-            chosen_model,
-            self._llm_settings.simple_model,
-            self._llm_settings.fallback_model,
-        ]
-        models: list[str] = []
-        seen: set[str] = set()
-        for raw_model in ordered:
-            model = str(raw_model or "").strip()
-            if not model or model in seen:
-                continue
-            seen.add(model)
-            models.append(model)
-        return models
+        return _generation_fallback_models(
+            chosen_model=chosen_model,
+            simple_model=self._llm_settings.simple_model,
+            fallback_model=self._llm_settings.fallback_model,
+        )
 
     def _format_context(
         self,
@@ -1050,55 +970,27 @@ class RAGGenerator:
 
     @staticmethod
     def _is_registrar_enumeration_question(question: str) -> bool:
-        q = (question or "").strip().lower()
-        return bool(q) and RAGGenerator._is_broad_enumeration_question(question) and "administered by the registrar" in q
+        return _is_registrar_enumeration_question_helper(question)
 
     @staticmethod
     def _is_named_reference_enumeration_question(question: str) -> bool:
-        q = (question or "").strip().lower()
-        return (
-            bool(q)
-            and RAGGenerator._is_broad_enumeration_question(question)
-            and len(_TITLE_REF_RE.findall(question or "")) >= 2
-            and any(term in q for term in ("mention", "mentions", "reference", "references"))
-        )
+        return _is_named_reference_enumeration_question_helper(question)
 
     @staticmethod
     def _is_company_structure_enumeration_question(question: str) -> bool:
-        q = (question or "").strip().lower()
-        return bool(q) and RAGGenerator._is_broad_enumeration_question(question) and (
-            "company structures" in q
-            or ("schedule 2" in q and "arbitration law" in q)
-            or "application of the arbitration law" in q
-        )
+        return _is_company_structure_enumeration_question_helper(question)
 
     @staticmethod
     def _is_ruler_enactment_enumeration_question(question: str) -> bool:
-        q = (question or "").strip().lower()
-        return bool(q) and "enactment notice" in q and ("made by the ruler" in q or "ruler of dubai" in q)
+        return _is_ruler_enactment_enumeration_question_helper(question)
 
     @staticmethod
     def _is_ruler_authority_year_enumeration_question(question: str) -> bool:
-        q = (question or "").strip().lower()
-        return (
-            bool(q)
-            and RAGGenerator._is_broad_enumeration_question(question)
-            and "ruler of dubai" in q
-            and ("enacted in" in q or "made in" in q)
-            and bool(re.search(r"\b(19|20)\d{2}\b", q))
-            and "enactment notice" not in q
-        )
+        return _is_ruler_authority_year_enumeration_question_helper(question)
 
     @staticmethod
     def _requires_expanded_broad_enumeration_context(question: str) -> bool:
-        q = (question or "").strip().lower()
-        if not q:
-            return False
-        if "interpretative provisions" in q:
-            return True
-        if "difc law no. 2 of 2022" in q and "amended by" in q:
-            return True
-        return "enactment notice" in q and ("made by the ruler" in q or "ruler of dubai" in q)
+        return _requires_expanded_broad_enumeration_context_helper(question)
 
     def _common_elements_title_key(self, chunk: RankedChunk) -> str:
         candidates = [
@@ -1163,35 +1055,19 @@ class RAGGenerator:
 
     @staticmethod
     def _normalize_title_key(title: str) -> str:
-        raw = re.sub(r"\s+", " ", (title or "").strip())
-        if not raw:
-            return ""
-        lowered = raw.lower()
-        if lowered == "enactment notice":
-            return ""
-        normalized = _TITLE_LAW_NO_SUFFIX_RE.sub("", raw)
-        normalized = re.sub(r"\s+", " ", normalized).strip(" ,;.-")
-        return normalized.casefold()
+        return _normalize_title_key(title)
 
     @staticmethod
     def _normalize_common_elements_title_key(title: str) -> str:
-        raw = re.sub(r"\s+", " ", (title or "").strip())
-        if not raw:
-            return ""
-        normalized = _TITLE_LAW_NO_SUFFIX_RE.sub("", raw)
-        normalized = _TITLE_YEAR_RE.sub("", normalized)
-        normalized = _TITLE_CONTEXT_BAD_LEAD_RE.sub("", normalized)
-        normalized = _TITLE_LEADING_CONNECTOR_RE.sub("", normalized)
-        normalized = re.sub(r"\s+", " ", normalized).strip(" ,;.-")
-        return normalized.casefold()
+        return _normalize_common_elements_title_key(title)
 
     @staticmethod
     def _is_broad_enumeration_question(question: str) -> bool:
-        return bool(_BROAD_ENUMERATION_RE.search((question or "").strip()))
+        return _is_broad_enumeration_question_helper(question)
 
     @staticmethod
     def _is_common_elements_question(question: str) -> bool:
-        return bool(_COMMON_ELEMENTS_RE.search((question or "").strip()))
+        return _is_common_elements_question_helper(question)
 
     @staticmethod
     def _is_named_multi_title_lookup_question(question: str) -> bool:
@@ -1276,29 +1152,15 @@ class RAGGenerator:
 
     @staticmethod
     def _is_interpretative_provisions_enumeration_question(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
-        return bool(q) and RAGGenerator._is_broad_enumeration_question(question) and "interpretative provisions" in q
+        return _is_interpretative_provisions_enumeration_question_helper(question)
 
     @staticmethod
     def _is_amended_by_enumeration_question(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).lower()
-        if not q or "amended by" not in q:
-            return False
-        return bool(
-            RAGGenerator._is_broad_enumeration_question(question)
-            or q.startswith("which specific ")
-            or q.startswith("which difc laws ")
-        )
+        return _is_amended_by_enumeration_question_helper(question)
 
     @staticmethod
     def _should_use_irac(question: str) -> bool:
-        q = (question or "").strip()
-        if not q:
-            return False
-        lowered = q.lower()
-        if "common elements" in lowered or "elements in common" in lowered or " in common" in lowered:
-            return False
-        return bool(_IRAC_HINT_RE.search(q))
+        return _should_use_irac_helper(question)
 
     @staticmethod
     def _strip_enumeration_boilerplate(text: str) -> str:
@@ -1511,142 +1373,27 @@ class RAGGenerator:
         return parts
 
     def _display_doc_title(self, chunk: RankedChunk) -> str:
-        raw = (chunk.doc_title or "").strip()
-        extracted = self._extract_doc_title_from_text(chunk.text or "")
-        if extracted and self._should_prefer_extracted_title(raw, extracted):
-            return extracted
-        return raw or extracted or "Unknown document"
+        return _display_doc_title_helper(chunk)
 
     @staticmethod
     def _needs_title_recovery(title: str) -> bool:
-        raw = (title or "").strip()
-        if not raw:
-            return True
-        lowered = raw.lower()
-        if lowered.startswith("in this document underlining indicates"):
-            return True
-        return bool(re.fullmatch(r"[_\s-]+", raw))
+        return _needs_title_recovery(title)
 
     @classmethod
     def _should_prefer_extracted_title(cls, raw: str, extracted: str) -> bool:
-        raw_clean = (raw or "").strip()
-        extracted_clean = (extracted or "").strip()
-        if not extracted_clean:
-            return False
-        if cls._needs_title_recovery(raw_clean):
-            return True
-
-        raw_has_year = re.search(r"\b(19|20)\d{2}\b", raw_clean) is not None
-        extracted_has_year = re.search(r"\b(19|20)\d{2}\b", extracted_clean) is not None
-        raw_has_law_no = "difc law no." in raw_clean.lower()
-        extracted_has_law_no = "difc law no." in extracted_clean.lower()
-        if (extracted_has_year and not raw_has_year) or (extracted_has_law_no and not raw_has_law_no):
-            return True
-
-        raw_letters = re.sub(r"[^A-Za-z]+", "", raw_clean)
-        if raw_letters and raw_letters.isupper() and raw_clean.casefold() != extracted_clean.casefold():
-            return True
-
-        return len(extracted_clean) > len(raw_clean) + 12
+        return _should_prefer_extracted_title(raw, extracted)
 
     @staticmethod
     def _extract_doc_title_from_text(text: str) -> str:
-        raw = (text or "").strip()
-        if not raw:
-            return ""
-
-        cover_match = _COVER_TITLE_LAW_YEAR_RE.search(raw)
-        if cover_match:
-            title = re.sub(r"\s+", " ", cover_match.group(1)).strip(" ,.;:")
-            is_enactment_notice = title.casefold().startswith("enactment notice")
-            if is_enactment_notice:
-                title = re.sub(r"^enactment\s+notice\s+", "", title, flags=re.IGNORECASE).strip(" ,.;:")
-            if title and re.fullmatch(r"[A-Z][A-Z\s/&().-]+", title):
-                title = title.title()
-            year = cover_match.group(2).strip()
-            if is_enactment_notice:
-                return title
-            return f"{title} {year}".strip()
-
-        cited_match = _CITED_TITLE_RE.search(raw)
-        if cited_match:
-            return re.sub(r"\s+", " ", cited_match.group(1)).strip()
-
-        cited_plain_match = _CITED_TITLE_PLAIN_RE.search(raw)
-        if cited_plain_match:
-            return re.sub(r"\s+", " ", cited_plain_match.group(1)).strip(" ,.;:")
-
-        legislation_ref_match = _LEGISLATION_REF_TITLE_RE.search(raw)
-        if legislation_ref_match:
-            return re.sub(r"\s+", " ", legislation_ref_match.group(1)).strip()
-
-        enactment_notice_match = _ENACTMENT_NOTICE_ATTACHED_TITLE_RE.search(raw)
-        if enactment_notice_match:
-            return re.sub(r"\s+", " ", enactment_notice_match.group(1)).strip()
-
-        enactment_match = _ENACTMENT_NOTICE_TITLE_RE.search(raw)
-        if enactment_match:
-            candidate = re.sub(r"\s+", " ", enactment_match.group(1)).strip()
-            lowered = candidate.lower()
-            if not lowered.startswith(("date specified", "this law", "previous law", "registrar")) and (
-                "notice in respect of this law" not in lowered
-                and "date of commencement of the law" not in lowered
-                and "prior to the date of commencement of the law" not in lowered
-                and "shall administer this law" not in lowered
-                and "administer this law" not in lowered
-                and "administer the provisions of this law" not in lowered
-                and "provisions of this law" not in lowered
-                and "relevant authority" not in lowered
-                and "competent authority" not in lowered
-            ):
-                return candidate
-
-        return ""
+        return _extract_doc_title_from_text(text)
 
     @staticmethod
     def _extract_doc_title_from_summary(summary: str) -> str:
-        raw = (summary or "").strip()
-        if not raw:
-            return ""
-
-        match = _DOC_SUMMARY_TITLE_RE.search(raw)
-        if match:
-            candidate = re.sub(r"\s+", " ", match.group(1)).strip(" ,.;:")
-            candidate = re.sub(r"\s+Enactment Notice\b", "", candidate, flags=re.IGNORECASE)
-            return candidate
-
-        prefix_match = _DOC_SUMMARY_PREFIX_TITLE_RE.search(raw)
-        if prefix_match:
-            return re.sub(r"\s+", " ", prefix_match.group(1)).strip(" ,.;:")
-
-        titled_match = _DOC_SUMMARY_TITLED_RE.search(raw)
-        if titled_match:
-            return re.sub(r"\s+", " ", titled_match.group(1)).strip(" ,.;:")
-
-        is_the_match = _DOC_SUMMARY_IS_THE_RE.search(raw)
-        if not is_the_match:
-            return ""
-        candidate = re.sub(r"\s+", " ", is_the_match.group(1)).strip(" ,.;:")
-        candidate = re.sub(r"\s+Enactment Notice\b", "", candidate, flags=re.IGNORECASE)
-        return candidate
+        return _extract_doc_title_from_summary(summary)
 
     @staticmethod
     def _looks_like_legal_doc_title(title: str) -> bool:
-        normalized = re.sub(r"\s+", " ", (title or "").strip()).strip(" ,.;:")
-        if not normalized:
-            return False
-        lowered = normalized.casefold()
-        if _BODY_LIKE_TITLE_RE.search(lowered):
-            return False
-        words = _TOKEN_RE.findall(normalized)
-        if len(words) > 14 and "law no." not in lowered:
-            return False
-        if re.fullmatch(r"[A-Z][A-Z\s/&().-]+", normalized) and len(words) <= 8:
-            return True
-        return any(
-            marker in lowered
-            for marker in (" law", " regulations", " regulation", " rules", " rule", " code", " notice", " order")
-        )
+        return _looks_like_legal_doc_title(title)
 
     @classmethod
     def _recover_doc_title_from_chunks(
@@ -1655,342 +1402,47 @@ class RAGGenerator:
         *,
         prefer_citation_title: bool = False,
     ) -> str:
-        candidates: list[tuple[str, str]] = []
-        for chunk in chunks:
-            raw_title = re.sub(r"\s+", " ", (chunk.doc_title or "").strip()).strip(" ,.;:")
-            extracted_title = cls._extract_doc_title_from_text(chunk.text or "")
-            summary_title = cls._extract_doc_title_from_summary(chunk.doc_summary or "")
-
-            if prefer_citation_title and extracted_title:
-                candidates.append((extracted_title, "extracted"))
-            if summary_title:
-                candidates.append((summary_title, "summary"))
-            if extracted_title:
-                candidates.append((extracted_title, "extracted"))
-            if raw_title and not cls._needs_title_recovery(raw_title) and cls._normalize_title_key(raw_title):
-                candidates.append((raw_title, "raw"))
-
-        deduped: list[tuple[str, str]] = []
-        seen: set[str] = set()
-        for candidate, source in candidates:
-            normalized = re.sub(r"\s+", " ", candidate).strip(" ,.;:")
-            if not normalized or cls._needs_title_recovery(normalized):
-                continue
-            key = normalized.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped.append((normalized, source))
-
-        if not deduped:
-            return ""
-
-        def _family_key(title: str) -> str:
-            normalized = _TITLE_LAW_NO_SUFFIX_RE.sub("", title)
-            normalized = _TITLE_YEAR_RE.sub("", normalized)
-            normalized = re.sub(r"\s+", " ", normalized).strip(" ,;.-")
-            return normalized.casefold()
-
-        best_info_by_family: dict[str, int] = {}
-        family_has_non_raw: set[str] = set()
-        for title, source in deduped:
-            family_key = _family_key(title)
-            info_value = (2 if "difc law no." in title.casefold() else 0) + (1 if _TITLE_YEAR_RE.search(title) else 0)
-            if info_value > best_info_by_family.get(family_key, -1):
-                best_info_by_family[family_key] = info_value
-            if source != "raw":
-                family_has_non_raw.add(family_key)
-
-        def _score(item: tuple[str, str]) -> tuple[int, int, int, int]:
-            title, source = item
-            source_bonus = {"raw": 120, "summary": 180, "extracted": 160}.get(source, 0)
-            plausible_bonus = 220 if cls._looks_like_legal_doc_title(title) else -220
-            has_year = 1 if _TITLE_YEAR_RE.search(title) else 0
-            has_law_no = 1 if "difc law no." in title.lower() else 0
-            info_value = has_year + (has_law_no * 2)
-            family_key = _family_key(title)
-            info_bonus = info_value * 220
-            if source == "raw" and best_info_by_family.get(family_key, 0) > info_value:
-                source_bonus -= 260
-            elif source == "raw" and family_key in family_has_non_raw:
-                raw_letters = re.sub(r"[^A-Za-z]+", "", title)
-                if raw_letters and raw_letters.isupper():
-                    source_bonus -= 180
-            elif source in {"summary", "extracted"} and info_value and best_info_by_family.get(family_key, 0) == info_value:
-                source_bonus += 80
-            compactness = -min(len(title), 120)
-            return (source_bonus + plausible_bonus + info_bonus, info_value, has_law_no, compactness)
-
-        deduped.sort(key=_score, reverse=True)
-        return deduped[0][0]
+        return _recover_doc_title_from_chunks(chunks, prefer_citation_title=prefer_citation_title)
 
     @staticmethod
     def _extract_commencement_rule(text: str) -> str:
-        raw = re.sub(r"\s+", " ", (text or "").strip())
-        if not raw:
-            return ""
-
-        match = _ENACTMENT_NOTICE_COMMENCEMENT_RE.search(raw)
-        if match:
-            clause = re.sub(r"\s+", " ", match.group(0)).strip(" ,.;:")
-            tail = raw[match.end(): match.end() + 120].lstrip()
-            if tail.startswith("("):
-                closing_idx = tail.find(")")
-                if closing_idx != -1:
-                    clause = f"{clause} {tail[: closing_idx + 1].strip()}"
-            clause = re.sub(r"^This Law\s+", "", clause, flags=re.IGNORECASE)
-            return clause[:1].upper() + clause[1:] if clause else ""
-
-        general_match = re.search(
-            r"\b(?:(?:this\s+law)\s+)?(?P<lemma>shall\s+come|comes?)\s+into\s+force\s+on\s+(?P<tail>[^.]+)",
-            raw,
-            re.IGNORECASE,
-        )
-        if general_match is None:
-            return ""
-
-        lemma = str(general_match.group("lemma") or "").casefold()
-        tail = str(general_match.group("tail") or "").strip(" ,.;:")
-        if not tail:
-            return ""
-        prefix = "Shall come" if lemma.startswith("shall") else "Comes"
-        clause = f"{prefix} into force on {tail}"
-        return clause[:1].upper() + clause[1:] if clause else ""
+        return _extract_commencement_rule(text)
 
     @staticmethod
     def extract_citations(answer: str, chunks: Sequence[RankedChunk]) -> list[Citation]:
-        chunk_map = {chunk.chunk_id: chunk for chunk in chunks}
-        cited_ids = RAGGenerator.extract_cited_chunk_ids(answer)
-        citations: list[Citation] = []
-
-        for chunk_id in cited_ids:
-            chunk = chunk_map.get(chunk_id)
-            if chunk is None:
-                citations.append(Citation(chunk_id=chunk_id, doc_title="unknown"))
-                continue
-            citations.append(
-                Citation(
-                    chunk_id=chunk_id,
-                    doc_title=chunk.doc_title,
-                    section_path=chunk.section_path or None,
-                )
-            )
-        return citations
+        return _extract_citations(answer, chunks)
 
     @staticmethod
     def extract_cited_chunk_ids(answer: str) -> list[str]:
-        ids: list[str] = []
-        for match in _CITE_RE.finditer(answer):
-            for raw_id in re.split(r"[,;]|\s+and\s+", match.group(1)):
-                chunk_id = raw_id.strip()
-                if chunk_id and chunk_id not in ids:
-                    ids.append(chunk_id)
-        return ids
+        return _extract_cited_chunk_ids(answer)
 
     @staticmethod
     def sanitize_citations(answer: str, context_chunk_ids: list[str]) -> str:
-        """Remove any (cite: ID) markers where ID is not in context_chunk_ids.
-        """
-        if not context_chunk_ids:
-            return answer
-
-        valid_ids = set(context_chunk_ids)
-
-        def _replace(m: re.Match[str]) -> str:
-            raw_inner = m.group(1)
-            good = [cid.strip() for cid in re.split(r"[,;]|\s+and\s+", raw_inner) if cid.strip() in valid_ids]
-            if not good:
-                return ""  # drop the whole (cite: ...) marker
-            return f"(cite: {', '.join(good)})"
-
-        sanitized = _CITE_RE.sub(_replace, answer).strip()
-        # Clean up any double spaces left by removed citations
-        sanitized = re.sub(r"  +", " ", sanitized)
-
-        return sanitized
+        return _sanitize_citations(answer, context_chunk_ids)
 
     @staticmethod
     def strip_negative_subclaims(answer: str) -> str:
-        """Remove sentences claiming 'no information on [entity]' from within list answers.
-
-        Preserves the answer if the ENTIRE answer is a single 'There is no information' sentence.
-        Only strips negative sub-claims when there are also positive claims (enumerated items).
-        Handles both line-based lists and inline trailing disclaimers.
-        """
-        stripped = (answer or "").strip()
-        if not stripped:
-            return stripped
-        normalized = stripped.lower().strip()
-        if normalized.startswith("there is no information on this question"):
-            return stripped
-
-        has_newline = "\n" in stripped
-        has_numbered = bool(re.search(r"\d+\.\s", stripped))
-        has_multi_sentence = bool(re.search(r"[.!?]\s+[A-Z]", stripped))
-        if not has_newline and not has_numbered and not has_multi_sentence:
-            return stripped
-
-        sentences = [segment.strip() for segment in _SENTENCE_SPLIT_RE.split(stripped) if segment.strip()]
-        filtered_sentences: list[str] = []
-        removed_negative = False
-        for sentence in sentences:
-            candidate = sentence.strip()
-            if not candidate:
-                continue
-            sentence_with_break = f"{candidate}\n"
-            if _NEGATIVE_SUBCLAIM_RE.search(sentence_with_break) or _TRAILING_NEGATIVE_RE.search(candidate):
-                removed_negative = True
-                continue
-            filtered_sentences.append(candidate)
-
-        cleaned = " ".join(filtered_sentences).strip() if removed_negative else stripped
-        if removed_negative and cleaned:
-            cleaned = re.sub(r"\s+([,.;:])", r"\1", cleaned)
-            cleaned = re.sub(r"\(\s+cite:", "(cite:", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"\s+\)", ")", cleaned)
-
-        cleaned = _NEGATIVE_SUBCLAIM_RE.sub("", cleaned)
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
-        if not cleaned:
-            cleaned = stripped
-
-        cleaned = _TRAILING_NEGATIVE_RE.sub("", cleaned).strip()
-        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
-
-        if not cleaned:
-            return stripped
-        return cleaned
+        return _strip_negative_subclaims(answer)
 
     @staticmethod
     def cleanup_truncated_answer(answer: str) -> str:
-        cleaned = (answer or "").strip()
-        if not cleaned:
-            return cleaned
-
-        # Drop unfinished trailing citation marker, e.g. "... (cite: abc123" or "(cite:"
-        cleaned = re.sub(r"\(cite:\s*[^)]*$", "", cleaned, flags=re.IGNORECASE).rstrip()
-        # Also catch a bare opening paren followed by hex/hash fragment at end of string
-        cleaned = re.sub(r"\(\s*[0-9a-f]{6,}$", "", cleaned, flags=re.IGNORECASE).rstrip()
-
-        # Drop trailing bullet / numbered list item if it is abruptly cut and lacks sentence ending.
-        lines = cleaned.splitlines()
-        if lines:
-            while lines:
-                last_line = lines[-1].strip()
-                if re.fullmatch(r"(?:[-*]|\d+\.)\s*", last_line):
-                    lines = lines[:-1]
-                    continue
-                if re.match(r"^[-*]\s+", last_line) and RAGGenerator._looks_like_truncated_tail(last_line):
-                    lines = lines[:-1]
-                    continue
-                break
-            cleaned = "\n".join(lines).rstrip()
-
-        matches = list(_NUMBERED_ITEM_RE.finditer(cleaned))
-        if len(matches) >= 2:
-            last_start = matches[-1].start()
-            last_item = cleaned[last_start:]
-            last_body = re.sub(r"^\d+\.\s*", "", last_item).strip()
-            if "(cite:" not in last_body.casefold() and RAGGenerator._looks_like_truncated_tail(last_body):
-                cleaned = cleaned[:last_start].rstrip()
-
-        # If answer still ends mid-sentence, trim a trailing fragment only when it
-        # clearly looks truncated. Use a stricter boundary than _SENTENCE_SPLIT_RE
-        # so legal references like "Law No. 2 of 2022" do not get split mid-title.
-        if cleaned and not re.search(r"[.!?)]\s*$", cleaned):
-            boundary_matches = list(_COMPLETE_SENTENCE_BOUNDARY_RE.finditer(cleaned))
-            while boundary_matches:
-                last_boundary = boundary_matches[-1]
-                trailing_fragment = cleaned[last_boundary.end() :].strip()
-                if "(cite:" in trailing_fragment.casefold():
-                    break
-                if trailing_fragment and not (
-                    _TRAILING_NEGATIVE_RE.search(trailing_fragment)
-                    or RAGGenerator._looks_like_truncated_tail(trailing_fragment)
-                ):
-                    break
-                cleaned = cleaned[: last_boundary.start()].rstrip()
-                boundary_matches = list(_COMPLETE_SENTENCE_BOUNDARY_RE.finditer(cleaned))
-
-        # Final whitespace normalization.
-        return re.sub(r"  +", " ", cleaned).strip()
+        return _cleanup_truncated_answer(answer)
 
     @staticmethod
     def cleanup_list_answer_postamble(answer: str) -> str:
-        cleaned = (answer or "").strip()
-        if not cleaned or not re.search(r"(?:^|\n)\s*1\.\s+", cleaned):
-            return cleaned
-
-        cite_matches = list(_CITE_RE.finditer(cleaned))
-        if not cite_matches:
-            return cleaned
-
-        trailing = cleaned[cite_matches[-1].end():].strip()
-        if not trailing:
-            return cleaned
-        if not _LIST_POSTAMBLE_RE.search(trailing):
-            return cleaned
-
-        trimmed = cleaned[: cite_matches[-1].end()].rstrip(" \n.;")
-        if trimmed and not re.search(r"[.!?]\s*$", trimmed):
-            trimmed = f"{trimmed}."
-        return trimmed.strip()
+        return _cleanup_list_answer_postamble(answer)
 
     @staticmethod
     def cleanup_list_answer_preamble(answer: str) -> str:
-        cleaned = (answer or "").strip()
-        if not cleaned:
-            return cleaned
-
-        match = re.search(r"(?:^|[\s])(?P<item>1\.\s+)", cleaned)
-        if match is None:
-            return cleaned
-        item_start = match.start("item")
-        if item_start == 0:
-            return cleaned
-
-        preamble = cleaned[:item_start].strip()
-        if not preamble:
-            return cleaned[item_start:].lstrip()
-        if _CITE_RE.search(preamble):
-            return cleaned
-        if preamble.lower().startswith("there is no information on this question"):
-            return cleaned
-        return cleaned[item_start:].lstrip()
+        return _cleanup_list_answer_preamble(answer)
 
     @staticmethod
     def cleanup_final_answer(answer: str) -> str:
-        cleaned = RAGGenerator.cleanup_truncated_answer(answer)
-        if not cleaned:
-            return cleaned
-
-        cleaned = RAGGenerator.cleanup_list_answer_postamble(cleaned)
-        cleaned = RAGGenerator.cleanup_list_answer_preamble(cleaned)
-        summary_match = re.search(r"\nSummary:\s*$|\nSummary:\s*\n", cleaned, flags=re.IGNORECASE)
-        if summary_match is not None and re.search(r"(?:^|\n)1\.\s+", cleaned):
-            cleaned = cleaned[: summary_match.start()].rstrip()
-        cleaned = re.sub(r"(?:\n|\s)+\d+\.\s*$", "", cleaned).rstrip()
-        lines = cleaned.splitlines()
-        if lines:
-            lines = [line for line in lines if not re.fullmatch(r"\s*(?:[-*]|\d+\.)\s*", line)]
-            cleaned = "\n".join(lines).strip()
-        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
-        return cleaned
+        return _cleanup_final_answer(answer)
 
     @staticmethod
     def _looks_like_truncated_tail(text: str) -> bool:
-        stripped = re.sub(r"\s+", " ", (text or "").strip())
-        if not stripped:
-            return False
-        if re.search(r"\b(?:law\s+)?no\.\s*$", stripped, re.IGNORECASE):
-            return True
-        if re.search(r"[.!?)]\s*$", stripped):
-            return False
-        if "(cite:" in stripped.casefold() and stripped.endswith(")"):
-            return False
-        if stripped.count("(") > stripped.count(")"):
-            return True
-        return bool(re.search(r"\b(?:of|and|the|law\s+no\.?)\s*$", stripped, re.IGNORECASE))
+        return _looks_like_truncated_tail(text)
 
     @classmethod
     def _group_chunks_by_doc(cls, chunks: Sequence[RankedChunk]) -> tuple[list[str], dict[str, list[RankedChunk]]]:
@@ -2522,165 +1974,11 @@ class RAGGenerator:
 
     @staticmethod
     def _extract_case_outcome_clauses(*, text: str, prefer_order_section: bool) -> list[str]:
-        normalized = (text or "").replace("\r", "\n")
-        if not normalized.strip():
-            return []
-
-        raw_lines = [re.sub(r"\s+", " ", line).strip() for line in normalized.splitlines()]
-        lines = [line for line in raw_lines if line]
-
-        ordered_lines: list[str] = []
-        in_order_section = False
-        current_item: list[str] = []
-        for line in lines:
-            if _ORDER_SECTION_MARKER_RE.search(line):
-                in_order_section = True
-                continue
-            if in_order_section and _ORDER_SECTION_STOP_RE.search(line):
-                break
-            if in_order_section:
-                if _NUMBERED_LINE_RE.match(line):
-                    if current_item:
-                        ordered_lines.append(" ".join(current_item).strip(" ;"))
-                        current_item = []
-                    cleaned_line = _NUMBERED_LINE_RE.sub("", line).strip(" ;")
-                    if cleaned_line:
-                        current_item.append(cleaned_line)
-                    continue
-                if current_item:
-                    cleaned_line = line.strip(" ;")
-                    if cleaned_line:
-                        current_item.append(cleaned_line)
-        if current_item:
-            ordered_lines.append(" ".join(current_item).strip(" ;"))
-
-        ordered_candidates = [
-            line
-            for line in ordered_lines
-            if _OUTCOME_CUE_RE.search(line) or _COST_CUE_RE.search(line)
-        ]
-        if prefer_order_section and ordered_candidates:
-            return ordered_candidates
-
-        line_candidates = [
-            _NUMBERED_LINE_RE.sub("", line).strip(" ;")
-            for line in lines
-            if _OUTCOME_CUE_RE.search(line) or _COST_CUE_RE.search(line)
-        ]
-        if ordered_candidates or line_candidates:
-            merged: list[str] = []
-            seen: set[str] = set()
-            for line in [*ordered_candidates, *line_candidates]:
-                key = line.casefold()
-                if key in seen or not line:
-                    continue
-                seen.add(key)
-                merged.append(line)
-            return merged
-
-        sentence_candidates = [
-            sentence.strip(" ;")
-            for sentence in re.split(r"(?<=[.!?;])\s+", re.sub(r"\s+", " ", normalized).strip())
-            if sentence.strip()
-        ]
-        return [
-            _NUMBERED_LINE_RE.sub("", sentence).strip(" ;")
-            for sentence in sentence_candidates
-            if _OUTCOME_CUE_RE.search(sentence) or _COST_CUE_RE.search(sentence)
-        ]
+        return _extract_case_outcome_clauses(text=text, prefer_order_section=prefer_order_section)
 
     @staticmethod
     def _clean_case_outcome_clause(clause: str) -> str:
-        cleaned = re.sub(r"\s+", " ", (clause or "").strip()).strip(" ;")
-        if not cleaned:
-            return ""
-        cleaned = _NUMBERED_LINE_RE.sub("", cleaned).strip(" ;")
-        if cleaned[:1].islower():
-            return ""
-        cleaned = re.sub(
-            r"^AND UPON .*? by which (.+)$",
-            lambda match: match.group(1)[:1].upper() + match.group(1)[1:],
-            cleaned,
-            flags=re.IGNORECASE,
-        ).strip(" ;,")
-        cleaned = re.sub(
-            r"^This Order concerns the costs of (.+?), which was dismissed(?: by Order of H\.?\s*E\.?.*)?$",
-            lambda match: (
-                f"{match.group(1)[:1].upper() + match.group(1)[1:]} was dismissed"
-                if not match.group(1).casefold().startswith("the ")
-                else f"{match.group(1)} was dismissed"
-            ),
-            cleaned,
-            flags=re.IGNORECASE,
-        ).strip(" ;,")
-        cleaned = re.sub(
-            r"^This No Costs Application .*?$",
-            "",
-            cleaned,
-            flags=re.IGNORECASE,
-        ).strip(" ;,")
-        cleaned = re.sub(r"\bby\s+Order\s+of\s+H\.?\s*E\.?.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
-        cleaned = re.sub(
-            r"^On\s+\d{1,2}\s+[A-Za-z]+\s+\d{4},\s+by\s+way\s+of\s+the\s+Order\s+of\s+H\.?\s*E\.?.*?,\s*",
-            "",
-            cleaned,
-            flags=re.IGNORECASE,
-        ).strip(" ;,")
-        cleaned = re.sub(
-            r"^Justice\s+[A-Z][A-Za-z .'-]+,\s+the\s+",
-            "The ",
-            cleaned,
-            flags=re.IGNORECASE,
-        ).strip(" ;,")
-        cleaned = re.sub(r"\s+and\s+By\s+RDC\b.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
-        cleaned = re.sub(r"\bBy\s+RDC\b.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
-        cleaned = re.sub(r"\bIssued by:.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
-        cleaned = re.sub(r"\bDate of (?:Issue|issue):.*$", "", cleaned, flags=re.IGNORECASE).strip(" ;,")
-        cleaned = re.sub(r"^(?:[A-Z][a-z]+ \d{4}\.\s*)+", "", cleaned).strip(" ;,")
-        if cleaned.casefold() in {"costs", "conclusion"}:
-            return ""
-        if re.fullmatch(r"(?:USD|AED)?\s*[0-9][0-9,]*(?:\.\d+)?", cleaned, flags=re.IGNORECASE):
-            return ""
-        if cleaned.casefold() == "the appeal is allowed, to the following extent.":
-            return "The Court of Appeal allowed the appeal in part"
-        if cleaned.casefold() == "the appeal is allowed, to the following extent":
-            return "The Court of Appeal allowed the appeal in part"
-        if cleaned.casefold().startswith("for all of the foregoing reasons, we have allowed the appeal"):
-            return "The Court of Appeal allowed the appeal in part"
-        if (
-            "fair, reasonable and proportionate award of costs" in cleaned.casefold()
-            and "sum of usd" in cleaned.casefold()
-        ):
-            amount_match = re.search(r"\bsum of (USD|AED)\s*([0-9][0-9,]*(?:\.\d+)?)", cleaned, flags=re.IGNORECASE)
-            if amount_match is not None:
-                return f"The Appellant was awarded costs in the sum of {amount_match.group(1).upper()} {amount_match.group(2)}"
-        if cleaned.casefold().startswith("the defendant's application for immediate judgment and/or strike out was dismissed"):
-            return "The Defendant's Application for immediate judgment and/or strike out was dismissed"
-        if cleaned.casefold().startswith("application was dismissed and the applicant was ordered to pay"):
-            return "The Application was dismissed"
-        if cleaned.casefold().startswith("the application was dismissed and the applicant was ordered to pay"):
-            return "The Application was dismissed"
-        if cleaned.casefold().startswith("accordingly, the application must be dismissed, and the claimant shall bear its own costs"):
-            return "The Application is dismissed and the Claimant shall bear its own costs of the Application"
-        if cleaned.casefold().startswith("the application is dismissed. the claim is to proceed to trial"):
-            return "The Application is dismissed"
-        if cleaned.casefold().startswith("the no costs application is dismissed"):
-            return "The No Costs Application is dismissed"
-        if cleaned.casefold().startswith("the no costs application is rejected"):
-            return "The No Costs Application is rejected"
-        if cleaned.casefold().startswith("save and insofar as") and "order is otherwise set aside" in cleaned.casefold():
-            return "The Order is otherwise set aside except insofar as the Judge ordered that the Second Part 50 Order should continue to apply"
-        if cleaned.startswith("That the "):
-            cleaned = "The " + cleaned[9:]
-        elif cleaned.startswith("That "):
-            cleaned = cleaned[5:]
-        if cleaned.casefold().startswith("by rdc "):
-            return ""
-        if "permission to appeal against the order was granted by the judge himself" in cleaned.casefold():
-            return ""
-        if "was considered" in cleaned.casefold():
-            return ""
-        return cleaned.rstrip(".")
+        return _clean_case_outcome_clause(clause)
 
     @staticmethod
     def _select_case_outcome_clauses(
@@ -2688,39 +1986,11 @@ class RAGGenerator:
         *,
         max_items: int,
     ) -> list[tuple[str, str]]:
-        if not candidates or max_items <= 0:
-            return []
-        ranked = sorted(candidates, key=lambda item: -item[0])
-        selected: list[tuple[str, str]] = []
-        seen: set[str] = set()
-        for _score, clause, chunk_id in ranked:
-            key = clause.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            selected.append((clause, chunk_id))
-            if len(selected) >= max_items:
-                break
-        return selected
+        return _select_case_outcome_clauses(candidates, max_items=max_items)
 
     @staticmethod
     def _join_case_outcome_clauses(clauses: Sequence[str]) -> str:
-        cleaned = [re.sub(r"\s+", " ", clause).strip(" ;,.") for clause in clauses if clause.strip()]
-        if not cleaned:
-            return ""
-        if len(cleaned) == 1:
-            return cleaned[0]
-        normalized_tail: list[str] = [cleaned[0]]
-        for clause in cleaned[1:]:
-            if clause.startswith("The "):
-                normalized_tail.append("the " + clause[4:])
-            else:
-                normalized_tail.append(clause)
-        return (
-            ", and ".join([", ".join(normalized_tail[:-1]), normalized_tail[-1]])
-            if len(normalized_tail) > 2
-            else " and ".join(normalized_tail)
-        )
+        return _join_case_outcome_clauses(clauses)
 
     @classmethod
     def _extract_commencement_support(
@@ -2741,21 +2011,7 @@ class RAGGenerator:
     def _extract_last_updated_support(
         doc_chunks: Sequence[RankedChunk],
     ) -> tuple[str, list[str]]:
-        for chunk in doc_chunks:
-            text_sources = [
-                re.sub(r"\s+", " ", (chunk.text or "").strip()),
-                re.sub(r"\s+", " ", str(chunk.doc_summary or "").strip()),
-            ]
-            for normalized in text_sources:
-                if not normalized:
-                    continue
-                consolidated_match = _CONSOLIDATED_VERSION_RE.search(normalized)
-                if consolidated_match is not None:
-                    return consolidated_match.group(1).strip(" ,.;:"), [chunk.chunk_id]
-                updated_match = _UPDATED_VALUE_RE.search(normalized)
-                if updated_match is not None:
-                    return updated_match.group(1).strip(" ,.;:"), [chunk.chunk_id]
-        return "", []
+        return _extract_last_updated_support(doc_chunks)
 
     @classmethod
     def _select_title_support_chunk_id(
@@ -2867,44 +2123,19 @@ class RAGGenerator:
 
     @staticmethod
     def _extract_single_law_title_from_question(question: str) -> str:
-        normalized = re.sub(r"\s+", " ", (question or "").strip()).strip(" ?")
-        if not normalized:
-            return ""
-        for pattern in _QUESTION_SINGLE_LAW_TITLE_PATTERNS:
-            match = pattern.search(normalized)
-            if match is None:
-                continue
-            title = re.sub(r"\s+", " ", match.group("title")).strip(" ,.;:")
-            if title:
-                return title
-        return ""
+        return _extract_single_law_title_from_question(question)
 
     @staticmethod
     def _normalize_commencement_rule(rule: str) -> str:
-        normalized = re.sub(r"\s+", " ", (rule or "").strip()).rstrip(".")
-        normalized = re.sub(r"^this law\s+", "", normalized, flags=re.IGNORECASE)
-        return normalized.casefold()
+        return _normalize_commencement_rule(rule)
 
     @staticmethod
     def _clean_structured_doc_label(label: str) -> str:
-        cleaned = re.sub(r"\s+", " ", (label or "").strip()).strip(" ,.;:")
-        if not cleaned:
-            return ""
-        cleaned = _STRUCTURED_TITLE_BAD_LEAD_RE.sub("", cleaned).strip(" ,.;:")
-        cleaned = re.sub(r"\s+Enactment Notice\b", "", cleaned, flags=re.IGNORECASE).strip(" ,.;:")
-        cleaned = re.sub(r"^The\s+The\b", "The", cleaned, flags=re.IGNORECASE)
-        return cleaned
+        return _clean_structured_doc_label(label)
 
     @staticmethod
     def _clean_amendment_title_historical_year(label: str) -> str:
-        cleaned = re.sub(r"\s+", " ", (label or "").strip()).strip(" ,.;:")
-        if "amendment law" not in cleaned.casefold():
-            return cleaned
-        return re.sub(
-            r"(?i)\b(Law)(?:\s+of)?\s+\d{4}\s+(Amendment Law)\b",
-            r"\1 \2",
-            cleaned,
-        ).strip(" ,.;:")
+        return _clean_amendment_title_historical_year(label)
 
     @classmethod
     def cleanup_named_commencement_answer(
@@ -3538,12 +2769,7 @@ class RAGGenerator:
 
     @staticmethod
     def _is_named_liability_question(question: str) -> bool:
-        q = re.sub(r"\s+", " ", (question or "").strip()).casefold()
-        if not q or RAGGenerator._is_broad_enumeration_question(question):
-            return False
-        if "what kind of liability" in q or "what liability" in q:
-            return True
-        return ("liabil" in q or "liable" in q) and "partner" in q and "under article" in q
+        return _is_named_liability_question_helper(question)
 
     @classmethod
     def _extract_liability_support(
@@ -4858,17 +4084,10 @@ class RAGGenerator:
         return ""
 
     def count_tokens(self, text: str) -> int:
-        return len(self._encoding.encode(text))
+        return _count_tokens(text, self._encoding)
 
     def _truncate_to_tokens(self, text: str, max_tokens: int) -> str:
-        if max_tokens <= 0:
-            return ""
-        token_ids = self._encoding.encode(text)
-        if len(token_ids) <= max_tokens:
-            return text
-        if max_tokens <= 3:
-            return self._encoding.decode(token_ids[:max_tokens])
-        return f"{self._encoding.decode(token_ids[: max_tokens - 1]).rstrip()}..."
+        return _truncate_to_tokens(text, max_tokens, self._encoding)
 
     def _resolve_usage(
         self,
@@ -4880,17 +4099,15 @@ class RAGGenerator:
         completion_tokens: int,
         total_tokens: int,
     ) -> tuple[int, int, int]:
-        prompt = max(0, int(prompt_tokens))
-        completion = max(0, int(completion_tokens))
-        total = max(0, int(total_tokens))
-        if total > 0 and (prompt > 0 or completion > 0):
-            if total < (prompt + completion):
-                total = prompt + completion
-            return (prompt, completion, total)
-        return self._estimate_usage(
+        return _resolve_usage(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             completion_text=completion_text,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            encoding=self._encoding,
+            logger=logger,
         )
 
     def _estimate_usage(
@@ -4900,18 +4117,13 @@ class RAGGenerator:
         user_prompt: str,
         completion_text: str,
     ) -> tuple[int, int, int]:
-        prompt_tokens = self.count_tokens(system_prompt) + self.count_tokens(user_prompt)
-        completion_tokens = self.count_tokens(completion_text) if completion_text.strip() else 0
-        total_tokens = prompt_tokens + completion_tokens
-        logger.info(
-            "llm_usage_provider_missing_fallback",
-            extra={
-                "prompt_tokens_est": prompt_tokens,
-                "completion_tokens_est": completion_tokens,
-                "total_tokens_est": total_tokens,
-            },
+        return _estimate_usage(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            completion_text=completion_text,
+            encoding=self._encoding,
+            logger=logger,
         )
-        return (prompt_tokens, completion_tokens, total_tokens)
 
     def _context_budget(self, *, answer_type: str, complexity: QueryComplexity) -> int:
         global_cap = int(self._llm_settings.max_context_tokens)
