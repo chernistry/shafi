@@ -4452,12 +4452,24 @@ class RAGPipelineBuilder:
                     },
                 )
             collector.set_cited_ids(cited_ids)
-            final_used_ids = self._rerank_support_pages_within_selected_docs(
-                query=state["query"],
-                answer_type=answer_type,
-                context_chunks=context_chunks,
-                used_ids=shaped_used_ids if shaped_used_ids else used_ids,
+            _q_lower_fam = re.sub(r"\s+", " ", str(state["query"] or "").strip()).lower()
+            _family_recall_priority = (
+                self._ENACTMENT_QUERY_RE.search(_q_lower_fam)
+                or self._ADMIN_QUERY_RE.search(_q_lower_fam)
+                or self._OUTCOME_QUERY_RE.search(_q_lower_fam)
+                or _is_broad_enumeration_query(state["query"])
+                or _is_named_commencement_query(state["query"])
+                or _is_named_multi_title_lookup_query(state["query"])
             )
+            if _family_recall_priority:
+                final_used_ids = list(shaped_used_ids if shaped_used_ids else used_ids)
+            else:
+                final_used_ids = self._rerank_support_pages_within_selected_docs(
+                    query=state["query"],
+                    answer_type=answer_type,
+                    context_chunks=context_chunks,
+                    used_ids=shaped_used_ids if shaped_used_ids else used_ids,
+                )
             final_used_ids = self._enhance_page_recall(
                 query=state["query"],
                 answer_type=answer_type,
@@ -4729,12 +4741,24 @@ class RAGPipelineBuilder:
                         "flags": support_shape_flags,
                     },
                 )
-            final_used_ids = self._rerank_support_pages_within_selected_docs(
-                query=state["query"],
-                answer_type=answer_type,
-                context_chunks=context_chunks,
-                used_ids=shaped_used_ids,
+            _q_lower_fam2 = re.sub(r"\s+", " ", str(state["query"] or "").strip()).lower()
+            _family_recall_priority2 = (
+                self._ENACTMENT_QUERY_RE.search(_q_lower_fam2)
+                or self._ADMIN_QUERY_RE.search(_q_lower_fam2)
+                or self._OUTCOME_QUERY_RE.search(_q_lower_fam2)
+                or _is_broad_enumeration_query(state["query"])
+                or _is_named_commencement_query(state["query"])
+                or _is_named_multi_title_lookup_query(state["query"])
             )
+            if _family_recall_priority2:
+                final_used_ids = list(shaped_used_ids if shaped_used_ids else used_ids)
+            else:
+                final_used_ids = self._rerank_support_pages_within_selected_docs(
+                    query=state["query"],
+                    answer_type=answer_type,
+                    context_chunks=context_chunks,
+                    used_ids=shaped_used_ids,
+                )
             final_used_ids = self._enhance_page_recall(
                 query=state["query"],
                 answer_type=answer_type,
