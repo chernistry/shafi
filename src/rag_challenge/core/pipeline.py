@@ -4486,6 +4486,14 @@ class RAGPipelineBuilder:
                 collector.set_used_page_ids_override(citation_pages)
             else:
                 collector.set_used_ids(final_used_ids)
+            trimmed = self._trim_to_article_page(
+                question=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_page_ids=citation_pages if citation_pages else final_used_ids,
+            )
+            if trimmed:
+                collector.set_used_page_ids_override(trimmed)
             citations: list[Citation] = []
             cited_ids = list(cited_ids)
         else:
@@ -4784,6 +4792,14 @@ class RAGPipelineBuilder:
                 collector.set_used_page_ids_override(citation_pages)
             else:
                 collector.set_used_ids(final_used_ids)
+            trimmed = self._trim_to_article_page(
+                question=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_page_ids=citation_pages if citation_pages else final_used_ids,
+            )
+            if trimmed:
+                collector.set_used_page_ids_override(trimmed)
             if answer_type == "free_text" and streamed and answer.strip():
                 writer({"type": "answer_final", "text": answer})
 
@@ -6472,6 +6488,62 @@ class RAGPipelineBuilder:
         "did", "will", "would", "could", "should", "may", "might", "shall",
         "its", "as", "if", "but", "so", "when", "which",
     })
+
+    _ARTICLE_REF_RE = re.compile(
+        r"(?:Article|Section)\s+(\d+(?:\(\d+\))*(?:\([a-z]\))*)", re.IGNORECASE
+    )
+
+    @staticmethod
+    def _trim_to_article_page(
+        *,
+        question: str,
+        answer_type: str,
+        context_chunks: Sequence["RankedChunk"],
+        current_page_ids: list[str],
+    ) -> list[str] | None:
+        """For article-specific questions, trim used_page_ids to only the page
+        containing the referenced article. Returns trimmed list or None if
+        this question isn't article-specific or no match found."""
+        from rag_challenge.submission.common import chunk_id_to_page_id
+
+        q = (question or "").strip()
+        m = RAGPipelineBuilder._ARTICLE_REF_RE.search(q)
+        if not m:
+            return None
+
+        article_num = m.group(1)
+        article_pattern = re.compile(
+            r"(?:Article|Section)\s+" + re.escape(article_num) + r"\b",
+            re.IGNORECASE,
+        )
+
+        best_page: str | None = None
+        best_score = -1
+        for chunk in context_chunks:
+            text = chunk.text or ""
+            if not article_pattern.search(text):
+                continue
+            page_id = chunk_id_to_page_id(chunk.chunk_id)
+            if not page_id:
+                continue
+            score = len(article_pattern.findall(text))
+            sp = chunk.section_path or ""
+            if sp.startswith("page:"):
+                try:
+                    pn = int(sp.split(":", 1)[1])
+                    score += 100 if pn > 1 else 0
+                except (ValueError, IndexError):
+                    pass
+            if score > best_score:
+                best_score = score
+                best_page = page_id
+
+        if not best_page:
+            return None
+
+        if best_page in set(current_page_ids):
+            return [best_page]
+        return None
 
     @staticmethod
     def _extract_citation_pages(
