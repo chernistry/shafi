@@ -34,6 +34,30 @@ _NEGATIVE_TERMS = ("jury", "parole", "miranda", "plea bargain", "plea")
 _COSTS_TERMS = ("costs", "cost awarded", "final ruling", "outcome", "it is hereby ordered")
 
 
+def extract_explicit_page_numbers(query: str) -> list[int]:
+    """Extract explicit human page numbers from a query.
+
+    Args:
+        query: Raw user question text.
+
+    Returns:
+        Ordered unique positive page numbers mentioned in the query.
+    """
+    page_numbers: list[int] = []
+    seen: set[int] = set()
+    for match in re.finditer(r"\b(?:page|pages)\s+((?:\d+(?:\s*(?:,|and)\s*)?)*)", query or "", re.IGNORECASE):
+        for raw_num in re.findall(r"\d+", match.group(1) or ""):
+            try:
+                page_num = int(raw_num)
+            except (TypeError, ValueError):
+                continue
+            if page_num <= 0 or page_num in seen:
+                continue
+            seen.add(page_num)
+            page_numbers.append(page_num)
+    return page_numbers
+
+
 def classify_query_scope(query: str, answer_type: str) -> QueryScopePrediction:
     """Classify a question into a grounding scope prediction.
 

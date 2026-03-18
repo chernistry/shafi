@@ -19,7 +19,10 @@ from typing import TYPE_CHECKING, cast
 
 from qdrant_client import models
 
-from rag_challenge.core.grounding.query_scope_classifier import classify_query_scope
+from rag_challenge.core.grounding.query_scope_classifier import (
+    classify_query_scope,
+    extract_explicit_page_numbers,
+)
 from rag_challenge.models.schemas import (
     QueryScopePrediction,
     RetrievedPage,
@@ -40,6 +43,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _CASE_REF_RE = re.compile(r"\b[A-Z]{2,4}\s+\d{3}/\d{4}\b", re.IGNORECASE)
+_SAFE_SINGLE_DOC_TYPES = frozenset({"boolean", "number", "date", "name", "names"})
+_SAFE_SINGLE_DOC_ROLES = frozenset(
+    {
+        "title_cover",
+        "caption",
+        "issued_by_block",
+        "operative_order",
+        "costs_block",
+        "article_clause",
+        "schedule_table",
+    }
+)
 
 
 def _normalize_answer_value(answer: str, answer_type: str) -> str:
@@ -113,19 +128,18 @@ class GroundingEvidenceSelector:
         """
         scope = classify_query_scope(query, answer_type)
 
+        if not self._should_activate_sidecar(
+            scope=scope,
+            answer_type=answer_type,
+            context_chunks=context_chunks,
+        ):
+            return None
+
         # Force empty grounding on null answers for negative/unanswerable queries
         if scope.should_force_empty_grounding_on_null:
             answer_low = (answer or "").strip().lower()
             if not answer_low or answer_low in {"null", "none", "no information", "n/a"}:
                 return []
-
-        # Only override legacy for scope modes where the sidecar demonstrably helps:
-        # - compare_pair: needs 1 page per doc across multiple docs
-        # - full_case_files: needs all-doc coverage
-        # For single-field, explicit-page, etc., the legacy path is already good.
-        _SIDECAR_ACTIVE_MODES = {ScopeMode.COMPARE_PAIR, ScopeMode.FULL_CASE_FILES}
-        if scope.scope_mode not in _SIDECAR_ACTIVE_MODES:
-            return None  # fall back to legacy
 
         doc_ids = self._select_doc_scope(
             query=query,
@@ -297,13 +311,52 @@ class GroundingEvidenceSelector:
         Returns:
             List of retrieved pages ranked by relevance.
         """
+        page_nums = extract_explicit_page_numbers(query) if scope.scope_mode is ScopeMode.EXPLICIT_PAGE else None
         return await self._retriever.retrieve_pages(
             query,
             top_k=self._settings.grounding_page_top_k,
             doc_ids=list(doc_ids),
+            page_nums=page_nums,
             page_roles=list(scope.target_page_roles) if scope.target_page_roles else None,
             article_refs=list(scope.hard_anchor_strings) if scope.hard_anchor_strings else None,
         )
+
+    @staticmethod
+    def _should_activate_sidecar(
+        *,
+        scope: QueryScopePrediction,
+        answer_type: str,
+        context_chunks: Sequence[RankedChunk],
+    ) -> bool:
+        """Decide whether the grounding sidecar is safe to apply.
+
+        Args:
+            scope: Predicted grounding scope for the query.
+            answer_type: Normalized answer type.
+            context_chunks: Ranked context chunks used by the answer path.
+
+        Returns:
+            True when the sidecar should attempt page selection, otherwise False.
+        """
+        doc_ids = {chunk.doc_id for chunk in context_chunks if chunk.doc_id}
+
+        if scope.scope_mode in {ScopeMode.COMPARE_PAIR, ScopeMode.FULL_CASE_FILES}:
+            return True
+
+        if scope.scope_mode is ScopeMode.EXPLICIT_PAGE:
+            return len(doc_ids) == 1
+
+        if scope.scope_mode is not ScopeMode.SINGLE_FIELD_SINGLE_DOC:
+            return False
+
+        if answer_type not in _SAFE_SINGLE_DOC_TYPES:
+            return False
+
+        if len(doc_ids) != 1:
+            return False
+
+        role_set = {role for role in scope.target_page_roles if role}
+        return bool(role_set) and role_set.issubset(_SAFE_SINGLE_DOC_ROLES)
 
     def _score_candidates(
         self,
@@ -332,6 +385,8 @@ class GroundingEvidenceSelector:
         """
         scores: dict[str, float] = defaultdict(float)
 
+        candidate_page_ids = {page.page_id for page in page_candidates if page.page_id}
+
         # Page retrieval score (primary signal)
         for page in page_candidates:
             scores[page.page_id] += float(page.score)
@@ -341,6 +396,8 @@ class GroundingEvidenceSelector:
         # only override when it has very strong evidence pointing elsewhere.
         cited = context_page_ids or set()
         for pid in cited:
+            if scope.scope_mode is ScopeMode.EXPLICIT_PAGE and candidate_page_ids and pid not in candidate_page_ids:
+                continue
             scores[pid] += 3.0
 
         # Support-fact score (secondary signal — reduced from 2.0 to 0.8 to avoid
