@@ -69,10 +69,7 @@ def compute_ranking_metrics(
     if not examples:
         return RankingMetrics(question_count=0, hit_at_1=0.0, hit_at_2=0.0, mean_reciprocal_rank=0.0)
 
-    score_lookup = {
-        f"{example.question_id}:{example.page_id}": float(score)
-        for example, score in zip(examples, scores, strict=False)
-    }
+    score_lookup = build_score_lookup(examples, scores)
     return _metrics_from_ranked_groups(
         grouped_examples=group_page_examples(examples),
         ranker=_build_model_ranker(score_lookup),
@@ -111,6 +108,53 @@ def count_question_sources(examples: Sequence[PageTrainingExample]) -> dict[str,
         source = group[0].supervision_source if group else "unknown"
         counts[source] = counts.get(source, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def build_score_lookup(
+    examples: Sequence[PageTrainingExample],
+    scores: Sequence[float],
+) -> dict[str, float]:
+    """Build a question/page score lookup for grouped ranking.
+
+    Args:
+        examples: Flat page examples.
+        scores: Predicted scores aligned with `examples`.
+
+    Returns:
+        Mapping keyed by `question_id:page_id`.
+    """
+    return {
+        f"{example.question_id}:{example.page_id}": float(score)
+        for example, score in zip(examples, scores, strict=False)
+    }
+
+
+def rank_group_with_scores(
+    group: Sequence[PageTrainingExample],
+    score_lookup: dict[str, float],
+) -> list[PageTrainingExample]:
+    """Rank one grouped question using trained model scores.
+
+    Args:
+        group: One grouped question worth of page examples.
+        score_lookup: Trained page-score lookup.
+
+    Returns:
+        Ranked page examples, best first.
+    """
+    return sorted(group, key=_build_model_ranker(score_lookup))
+
+
+def rank_group_with_heuristic(group: Sequence[PageTrainingExample]) -> list[PageTrainingExample]:
+    """Rank one grouped question using the heuristic baseline.
+
+    Args:
+        group: One grouped question worth of page examples.
+
+    Returns:
+        Ranked page examples, best first.
+    """
+    return sorted(group, key=_heuristic_rank_key)
 
 
 def top_feature_weights(

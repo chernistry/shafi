@@ -4,9 +4,11 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.linear_model import LogisticRegression
 
 from rag_challenge.ml.page_scorer_training import (
+    build_score_lookup,
     compute_heuristic_ranking_metrics,
     compute_ranking_metrics,
     count_question_sources,
+    rank_group_with_scores,
     top_feature_weights,
 )
 from rag_challenge.ml.training_scaffold import PageTrainingExample
@@ -64,6 +66,18 @@ def test_compute_heuristic_ranking_metrics_prefers_used_pages() -> None:
     assert metrics.hit_at_1 == 1.0
     assert metrics.hit_at_2 == 1.0
     assert metrics.mean_reciprocal_rank == 1.0
+
+
+def test_rank_group_with_scores_orders_best_page_first() -> None:
+    group = [
+        _example(question_id="q1", page_id="neg", label=0),
+        _example(question_id="q1", page_id="pos", label=1),
+    ]
+
+    score_lookup = build_score_lookup(group, [0.1, 0.9])
+    ranked = rank_group_with_scores(group, score_lookup)
+
+    assert ranked[0].page_id == "pos"
 
 
 def test_count_question_sources_is_grouped_by_question() -> None:
