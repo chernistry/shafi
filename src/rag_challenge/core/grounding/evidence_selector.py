@@ -119,6 +119,14 @@ class GroundingEvidenceSelector:
             if not answer_low or answer_low in {"null", "none", "no information", "n/a"}:
                 return []
 
+        # Only override legacy for scope modes where the sidecar demonstrably helps:
+        # - compare_pair: needs 1 page per doc across multiple docs
+        # - full_case_files: needs all-doc coverage
+        # For single-field, explicit-page, etc., the legacy path is already good.
+        _SIDECAR_ACTIVE_MODES = {ScopeMode.COMPARE_PAIR, ScopeMode.FULL_CASE_FILES}
+        if scope.scope_mode not in _SIDECAR_ACTIVE_MODES:
+            return None  # fall back to legacy
+
         doc_ids = self._select_doc_scope(
             query=query,
             scope=scope,
@@ -126,6 +134,21 @@ class GroundingEvidenceSelector:
         )
         if not doc_ids:
             return None  # fall back to legacy
+
+        # Collect pages already cited by the answer path — strong prior.
+        # chunk_id format: "doc_id:page_num:chunk_idx:hash"
+        # page_id format: "doc_id_{page_num+1}" (1-indexed)
+        context_page_ids: set[str] = set()
+        for chunk in context_chunks:
+            if not chunk.doc_id:
+                continue
+            parts = chunk.chunk_id.split(":")
+            if len(parts) >= 2:
+                try:
+                    page_num = int(parts[1])
+                    context_page_ids.add(f"{chunk.doc_id}_{page_num + 1}")
+                except (ValueError, IndexError):
+                    pass
 
         answer_value = _normalize_answer_value(answer, answer_type)
 
@@ -149,6 +172,7 @@ class GroundingEvidenceSelector:
             answer_value=answer_value,
             support_candidates=support_candidates,
             page_candidates=page_candidates,
+            context_page_ids=context_page_ids,
         )
 
         selected = self._select_minimal_pages(scope=scope, scored=scored)
@@ -290,6 +314,7 @@ class GroundingEvidenceSelector:
         answer_value: str,
         support_candidates: Sequence[RetrievedSupportFact],
         page_candidates: Sequence[RetrievedPage],
+        context_page_ids: set[str] | None = None,
     ) -> dict[str, float]:
         """Score page candidates using support facts and page retrieval signals.
 
@@ -300,19 +325,30 @@ class GroundingEvidenceSelector:
             answer_value: Normalized answer value.
             support_candidates: Retrieved support facts.
             page_candidates: Retrieved pages.
+            context_page_ids: Page IDs cited by the answer path (strong prior).
 
         Returns:
             Dict mapping page_id to aggregate score, sorted descending.
         """
         scores: dict[str, float] = defaultdict(float)
 
+        # Page retrieval score (primary signal)
         for page in page_candidates:
             scores[page.page_id] += float(page.score)
 
+        # Strong anchor: pages the answer path already cited deserve a large bonus.
+        # The legacy path chose these pages based on full context; the sidecar should
+        # only override when it has very strong evidence pointing elsewhere.
+        cited = context_page_ids or set()
+        for pid in cited:
+            scores[pid] += 3.0
+
+        # Support-fact score (secondary signal — reduced from 2.0 to 0.8 to avoid
+        # schedule/interpretation pages dominating over the actual article page)
         for fact in support_candidates:
-            scores[fact.page_id] += 2.0 * float(fact.score)
+            scores[fact.page_id] += 0.8 * float(fact.score)
             if answer_value and answer_value.casefold() in (fact.normalized_value or "").casefold():
-                scores[fact.page_id] += 1.5
+                scores[fact.page_id] += 1.0
             if fact.page_role and fact.page_role in scope.target_page_roles:
                 scores[fact.page_id] += 0.5
             if fact.fact_type == "date_of_issue" and "date of issue" in query.lower():
