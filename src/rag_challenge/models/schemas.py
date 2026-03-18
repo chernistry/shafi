@@ -29,6 +29,33 @@ class SSEEventType(StrEnum):
     DONE = "done"
 
 
+class PageRole(StrEnum):
+    """Semantic role of a page within a legal document."""
+
+    TITLE_COVER = "title_cover"
+    CAPTION = "caption"
+    ISSUED_BY_BLOCK = "issued_by_block"
+    ARTICLE_CLAUSE = "article_clause"
+    OPERATIVE_ORDER = "operative_order"
+    COSTS_BLOCK = "costs_block"
+    SCHEDULE_TABLE = "schedule_table"
+    COMMENCEMENT = "commencement"
+    ADMINISTRATION = "administration"
+    REASONS = "reasons"
+    OTHER = "other"
+
+
+class ScopeMode(StrEnum):
+    """Query scope classification for grounding evidence selection."""
+
+    SINGLE_FIELD_SINGLE_DOC = "single_field_single_doc"
+    EXPLICIT_PAGE = "explicit_page"
+    COMPARE_PAIR = "compare_pair"
+    FULL_CASE_FILES = "full_case_files"
+    NEGATIVE_UNANSWERABLE = "negative_unanswerable"
+    BROAD_FREE_TEXT = "broad_free_text"
+
+
 # -- Domain Objects --
 
 
@@ -80,6 +107,14 @@ class PageMetadata(BaseModel):
     doc_summary: str = ""
     page_family: str = ""
     doc_family: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    page_role: str = ""
+    support_search_text: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
+    linked_refs: list[str] = Field(default_factory=list)
 
 
 class RetrievedPage(BaseModel):
@@ -92,6 +127,88 @@ class RetrievedPage(BaseModel):
     doc_type: str = ""
     page_text: str = ""
     score: float = 0.0
+    page_family: str = ""
+    doc_family: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    page_role: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
+    linked_refs: list[str] = Field(default_factory=list)
+
+
+class SupportFact(BaseModel):
+    """A grounding-native fact extracted from a page at ingest time."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fact_id: str
+    doc_id: str
+    page_id: str
+    page_num: int
+    doc_title: str
+    doc_type: DocType
+    doc_family: str = ""
+    page_family: str = ""
+    page_role: str = ""
+    fact_type: str
+    normalized_value: str = ""
+    quote_text: str = ""
+    field_explicitness: float = 1.0
+    scope_ref: str = ""
+    search_text: str = ""
+
+
+class SupportFactMetadata(BaseModel):
+    """Payload stored in Qdrant alongside support-fact vectors."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fact_id: str
+    doc_id: str
+    page_id: str
+    page_num: int
+    doc_title: str
+    doc_type: DocType
+    doc_family: str = ""
+    page_family: str = ""
+    page_role: str = ""
+    fact_type: str
+    normalized_value: str = ""
+    quote_text: str = ""
+    field_explicitness: float = 1.0
+    scope_ref: str = ""
+    search_text: str = ""
+
+
+class RetrievedSupportFact(BaseModel):
+    """A support fact returned from Qdrant support-fact search."""
+
+    fact_id: str
+    doc_id: str
+    page_id: str
+    page_num: int
+    doc_title: str = ""
+    fact_type: str = ""
+    normalized_value: str = ""
+    quote_text: str = ""
+    page_role: str = ""
+    page_family: str = ""
+    score: float = 0.0
+
+
+class QueryScopePrediction(BaseModel):
+    """Output of query scope classifier for grounding evidence selection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    scope_mode: ScopeMode
+    target_page_roles: list[str] = Field(default_factory=list)
+    page_budget: int = 1
+    requires_all_docs_in_case: bool = False
+    hard_anchor_strings: list[str] = Field(default_factory=list)
+    should_force_empty_grounding_on_null: bool = False
 
 
 class RetrievedChunk(BaseModel):

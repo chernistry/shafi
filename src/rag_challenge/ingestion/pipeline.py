@@ -192,6 +192,318 @@ def _extract_cross_refs(text: str) -> list[str]:
     return _unique_normalized([match.group(0) for match in _CROSS_REF_RE.finditer(text or "")])
 
 
+_ISSUED_BY_BLOCK_RE = re.compile(
+    r"Issued by:\s*(?P<issuer>[^\n]+).*?"
+    r"Date of Issue:\s*(?P<doi>[^\n]+)"
+    r"(?:.*?Date of Re-issue:\s*(?P<reissue>[^\n]+))?",
+    re.IGNORECASE | re.DOTALL,
+)
+_LAW_NO_RE = re.compile(r"\b(?:DIFC\s+)?Law\s+No\.?\s+(\d+)\s+of\s+(\d{4})\b", re.IGNORECASE)
+_SCHEDULE_RE = re.compile(r"\bSchedule\s+(\d+[A-Z]?)\b", re.IGNORECASE)
+_SECTION_RE = re.compile(r"\bSection\s+(\d+[A-Z]?)\b", re.IGNORECASE)
+
+
+def _page_role_for_text(page_text: str, page_num: int, total_pages: int) -> str:
+    """Classify the semantic role of a page for grounding evidence selection.
+
+    Args:
+        page_text: Raw page text content.
+        page_num: 1-based page number.
+        total_pages: Total pages in the document.
+
+    Returns:
+        A PageRole string value.
+    """
+    from rag_challenge.models.schemas import PageRole
+
+    t = page_text[:3000].lower() if page_text else ""
+    if page_num == 1 and _CASE_ID_RE.search(t):
+        return PageRole.TITLE_COVER
+    if "issued by:" in t and "date of issue:" in t:
+        return PageRole.ISSUED_BY_BLOCK
+    if "it is hereby ordered" in t:
+        return PageRole.OPERATIVE_ORDER
+    if _CURRENCY_RE.search(t) and ("cost" in t or "pay" in t or "award" in t):
+        return PageRole.COSTS_BLOCK
+    if re.search(r"\barticle\s+\d+", t):
+        return PageRole.ARTICLE_CLAUSE
+    if re.search(r"\bschedule\b", t):
+        return PageRole.SCHEDULE_TABLE
+    if "comes into force" in t or "commencement" in t:
+        return PageRole.COMMENCEMENT
+    if "administered by" in t:
+        return PageRole.ADMINISTRATION
+    if page_num == 1 and re.search(r"\bv\.?\s+\b", page_text[:1500] if page_text else ""):
+        return PageRole.CAPTION
+    return PageRole.OTHER
+
+
+def _extract_page_links(page_text: str) -> list[str]:
+    """Extract intra-document reference anchors from page text.
+
+    Args:
+        page_text: Raw page text content.
+
+    Returns:
+        Unique normalized cross-reference strings (article/section/schedule).
+    """
+    values: list[str] = []
+    values.extend(_extract_article_refs(page_text))
+    values.extend(f"Section {m.group(1)}" for m in _SECTION_RE.finditer(page_text or ""))
+    values.extend(f"Schedule {m.group(1)}" for m in _SCHEDULE_RE.finditer(page_text or ""))
+    return _unique_normalized(values)
+
+
+def _support_fact_search_text(
+    *,
+    doc_title: str,
+    doc_family: str,
+    page_family: str,
+    page_role: str,
+    fact_type: str,
+    normalized_value: str,
+    quote_text: str,
+    scope_ref: str,
+) -> str:
+    """Build a concatenated search string for support-fact embedding.
+
+    Args:
+        doc_title: Document title.
+        doc_family: Document family classification.
+        page_family: Page family classification.
+        page_role: Semantic page role.
+        fact_type: Type of fact (e.g. date_of_issue, party).
+        normalized_value: Normalized fact value.
+        quote_text: Supporting quote text.
+        scope_ref: Scope reference (e.g. article/case number).
+
+    Returns:
+        Pipe-separated search text string.
+    """
+    return " | ".join(
+        part
+        for part in [
+            doc_title,
+            doc_family,
+            page_family,
+            page_role,
+            fact_type,
+            normalized_value,
+            scope_ref,
+            quote_text[:600],
+        ]
+        if part
+    )
+
+
+def _extract_support_facts_for_page(
+    *,
+    doc_id: str,
+    doc_title: str,
+    doc_type: str,
+    page_num: int,
+    total_pages: int,
+    page_text: str,
+    doc_family: str,
+) -> list[dict[str, object]]:
+    """Extract grounding support facts from a single page.
+
+    Args:
+        doc_id: Document ID.
+        doc_title: Document title.
+        doc_type: Document type string.
+        page_num: 1-based page number.
+        total_pages: Total pages in document.
+        page_text: Raw page text.
+        doc_family: Document family classification.
+
+    Returns:
+        List of dicts with support fact fields (ready for SupportFact construction).
+    """
+    page_id = f"{doc_id}_{page_num}"
+    page_family = _classify_page_family(page_text, page_num, total_pages)
+    page_role = _page_role_for_text(page_text, page_num, total_pages)
+    norm_text = _normalize_identifiers(page_text) if page_text else ""
+
+    facts: list[dict[str, object]] = []
+
+    def _append(
+        *,
+        fact_type: str,
+        normalized_value: str,
+        quote_text: str,
+        field_explicitness: float,
+        scope_ref: str = "",
+    ) -> None:
+        raw_key = f"{doc_id}:{page_num}:{fact_type}:{normalized_value}:{scope_ref}"
+        fact_id = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        facts.append({
+            "fact_id": fact_id,
+            "doc_id": doc_id,
+            "page_id": page_id,
+            "page_num": page_num,
+            "doc_title": doc_title,
+            "doc_type": doc_type,
+            "doc_family": doc_family,
+            "page_family": page_family,
+            "page_role": page_role,
+            "fact_type": fact_type,
+            "normalized_value": normalized_value,
+            "quote_text": quote_text.strip()[:1200],
+            "field_explicitness": field_explicitness,
+            "scope_ref": scope_ref,
+            "search_text": _support_fact_search_text(
+                doc_title=doc_title,
+                doc_family=doc_family,
+                page_family=page_family,
+                page_role=page_role,
+                fact_type=fact_type,
+                normalized_value=normalized_value,
+                quote_text=quote_text,
+                scope_ref=scope_ref,
+            ),
+        })
+
+    # case numbers / law numbers
+    for case_no in _extract_case_numbers(doc_title, page_text):
+        _append(
+            fact_type="case_number",
+            normalized_value=case_no,
+            quote_text=case_no,
+            field_explicitness=1.0,
+            scope_ref=case_no,
+        )
+
+    for m in _LAW_NO_RE.finditer(norm_text):
+        law_no = f"Law No. {m.group(1)} of {m.group(2)}"
+        _append(
+            fact_type="law_number",
+            normalized_value=law_no,
+            quote_text=m.group(0),
+            field_explicitness=1.0,
+            scope_ref=law_no,
+        )
+
+    # title / caption parties
+    from rag_challenge.models.schemas import PageRole as _PageRole
+
+    if page_role in {_PageRole.TITLE_COVER, _PageRole.CAPTION}:
+        for party in _extract_party_names(norm_text):
+            _append(
+                fact_type="party",
+                normalized_value=party,
+                quote_text=party,
+                field_explicitness=0.8,
+            )
+
+    # issued-by block
+    issued_match = _ISSUED_BY_BLOCK_RE.search(norm_text)
+    if issued_match:
+        issuer = _normalize_identifiers(issued_match.group("issuer") or "").strip()
+        doi = _normalize_identifiers(issued_match.group("doi") or "").strip()
+        reissue = _normalize_identifiers(issued_match.group("reissue") or "").strip() if issued_match.group("reissue") else ""
+
+        if issuer:
+            _append(
+                fact_type="judge_or_registrar",
+                normalized_value=issuer,
+                quote_text=issuer,
+                field_explicitness=1.0,
+            )
+        if doi:
+            _append(
+                fact_type="date_of_issue",
+                normalized_value=doi,
+                quote_text=f"Date of Issue: {doi}",
+                field_explicitness=1.0,
+            )
+        if reissue:
+            _append(
+                fact_type="date_of_reissue",
+                normalized_value=reissue,
+                quote_text=f"Date of Re-issue: {reissue}",
+                field_explicitness=1.0,
+            )
+
+    # article / section / schedule anchors
+    for article_ref in _extract_article_refs(norm_text):
+        _append(
+            fact_type="article_id",
+            normalized_value=article_ref,
+            quote_text=article_ref,
+            field_explicitness=1.0,
+            scope_ref=article_ref,
+        )
+
+    for m in _SECTION_RE.finditer(norm_text):
+        value = f"Section {m.group(1)}"
+        _append(
+            fact_type="section_id",
+            normalized_value=value,
+            quote_text=m.group(0),
+            field_explicitness=1.0,
+            scope_ref=value,
+        )
+
+    for m in _SCHEDULE_RE.finditer(norm_text):
+        value = f"Schedule {m.group(1)}"
+        _append(
+            fact_type="schedule_id",
+            normalized_value=value,
+            quote_text=m.group(0),
+            field_explicitness=1.0,
+            scope_ref=value,
+        )
+
+    # amounts
+    amount_roles = _extract_amount_roles(page_text)
+    for role in amount_roles:
+        _append(
+            fact_type=role,
+            normalized_value=role,
+            quote_text=norm_text[:600],
+            field_explicitness=0.5,
+        )
+
+    # operative order / outcome
+    if "it is hereby ordered" in (norm_text.lower() if norm_text else ""):
+        _append(
+            fact_type="operative_order",
+            normalized_value="operative_order",
+            quote_text=norm_text[:1200],
+            field_explicitness=0.7,
+        )
+
+    return facts
+
+
+def _build_support_search_text_for_page(
+    *,
+    doc_title: str,
+    doc_family: str,
+    page_family: str,
+    page_role: str,
+    page_text: str,
+    fact_search_texts: list[str],
+) -> str:
+    """Build enriched search text for page embedding with support-fact context.
+
+    Args:
+        doc_title: Document title.
+        doc_family: Document family classification.
+        page_family: Page family classification.
+        page_role: Semantic page role.
+        page_text: Raw page text (truncated).
+        fact_search_texts: Search texts from extracted support facts.
+
+    Returns:
+        Concatenated search text for page embedding.
+    """
+    return " | ".join(
+        [doc_title, doc_family, page_family, page_role, page_text[:1500], *fact_search_texts[:12]]
+    )
+
+
 def _build_shadow_search_text(
     *,
     doc_title: str,
@@ -813,8 +1125,12 @@ class IngestionPipeline:
         return parsed
 
     async def _upsert_pages_for_doc(self, doc: ParsedDocument, doc_summary: str) -> int:
-        """Build page-level points from parsed document sections and upsert into page collection."""
-        from rag_challenge.models import PageMetadata
+        """Build page-level points from parsed document sections and upsert into page collection.
+
+        Also extracts support facts for the grounding sidecar and upserts them into the
+        support-fact collection when enabled.
+        """
+        from rag_challenge.models import PageMetadata, SupportFact
 
         first_pg = ""
         for sec in doc.sections:
@@ -825,6 +1141,8 @@ class IngestionPipeline:
         total_pages = sum(1 for s in doc.sections if s.section_path.startswith("page:"))
 
         pages: list[PageMetadata] = []
+        all_support_fact_dicts: list[dict[str, object]] = []
+
         for section in doc.sections:
             if not section.section_path.startswith("page:"):
                 continue
@@ -837,6 +1155,37 @@ class IngestionPipeline:
                 continue
             page_id = f"{doc.doc_id}_{page_num}"
             pg_fam = _classify_page_family(page_text, page_num, total_pages)
+            page_role = _page_role_for_text(page_text, page_num, total_pages)
+            law_titles = _extract_law_titles(doc.title, page_text)
+            article_refs = _extract_article_refs(page_text)
+            case_numbers = _extract_case_numbers(doc.title, page_text)
+            normalized_refs = _unique_normalized([doc.title, *law_titles, *article_refs, *case_numbers])
+            amount_roles = _extract_amount_roles(page_text)
+            linked_refs = _extract_page_links(page_text)
+
+            # Extract support facts for this page
+            page_facts = _extract_support_facts_for_page(
+                doc_id=doc.doc_id,
+                doc_title=doc.title,
+                doc_type=doc.doc_type.value if hasattr(doc.doc_type, "value") else str(doc.doc_type),
+                page_num=page_num,
+                total_pages=total_pages,
+                page_text=page_text,
+                doc_family=doc_fam,
+            )
+            all_support_fact_dicts.extend(page_facts)
+
+            # Build enriched search text for page embedding
+            fact_search_texts = [str(f.get("search_text", "")) for f in page_facts[:12]]
+            support_search_text = _build_support_search_text_for_page(
+                doc_title=doc.title,
+                doc_family=doc_fam,
+                page_family=pg_fam,
+                page_role=page_role,
+                page_text=page_text,
+                fact_search_texts=fact_search_texts,
+            )
+
             pages.append(PageMetadata(
                 page_id=page_id,
                 doc_id=doc.doc_id,
@@ -850,6 +1199,14 @@ class IngestionPipeline:
                 doc_summary=doc_summary,
                 page_family=pg_fam,
                 doc_family=doc_fam,
+                normalized_refs=normalized_refs,
+                law_titles=law_titles,
+                article_refs=article_refs,
+                case_numbers=case_numbers,
+                page_role=page_role,
+                support_search_text=support_search_text,
+                amount_roles=amount_roles,
+                linked_refs=linked_refs,
             ))
 
         if not pages:
@@ -867,6 +1224,26 @@ class IngestionPipeline:
 
         upserted = await self._store.upsert_pages(pages, dense_vectors, sparse_vectors=sparse_vectors)
         logger.info("Upserted %d page points for doc_id=%s", upserted, doc.doc_id)
+
+        # Upsert support facts into the support-fact collection
+        if all_support_fact_dicts:
+            try:
+                await self._store.ensure_support_fact_collection()
+                await self._store.ensure_support_fact_payload_indexes()
+                support_facts = [SupportFact(**fd) for fd in all_support_fact_dicts]  # type: ignore[arg-type]
+                fact_texts = [f.search_text for f in support_facts]
+                fact_dense = await self._embedder.embed_documents(fact_texts)
+                fact_sparse = None
+                if self._sparse_encoder is not None:
+                    try:
+                        fact_sparse = self._sparse_encoder.encode_documents(fact_texts)
+                    except Exception:
+                        logger.warning("BM25 sparse encoding failed for support facts of doc_id=%s", doc.doc_id, exc_info=True)
+                await self._store.upsert_support_facts(support_facts, fact_dense, sparse_vectors=fact_sparse)
+                logger.info("Upserted %d support facts for doc_id=%s", len(support_facts), doc.doc_id)
+            except Exception:
+                logger.warning("Failed to upsert support facts for doc_id=%s", doc.doc_id, exc_info=True)
+
         return upserted
 
     def _build_ingestion_plan(

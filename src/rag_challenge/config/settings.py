@@ -69,6 +69,7 @@ class QdrantSettings(BaseSettings):
     collection: str = "legal_chunks"
     shadow_collection: str = "legal_chunks_shadow"
     page_collection: str = "legal_pages"
+    support_fact_collection: str = "legal_support_facts"
     pool_size: int = 20
     timeout_s: float = 30.0
     prefetch_dense: int = 60
@@ -266,6 +267,11 @@ class PipelineSettings(BaseSettings):
     enable_cross_ref_boosts: bool = False
     shadow_retrieval_top_k: int = 24
     anchor_retrieval_top_k: int = 16
+    enable_grounding_sidecar: bool = False
+    grounding_support_fact_top_k: int = 32
+    grounding_page_top_k: int = 24
+    grounding_page_budget_default: int = 2
+    grounding_allow_same_doc_hop: bool = True
 
     @field_validator("premise_guard_terms", mode="before")
     @classmethod

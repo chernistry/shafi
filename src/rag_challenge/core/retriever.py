@@ -803,8 +803,28 @@ class HybridRetriever:
         query_vector: list[float] | None = None,
         top_k: int = 15,
         doc_refs: list[str] | tuple[str, ...] | None = None,
+        doc_ids: list[str] | tuple[str, ...] | None = None,
+        page_nums: list[int] | tuple[int, ...] | None = None,
+        article_refs: list[str] | tuple[str, ...] | None = None,
+        page_roles: list[str] | tuple[str, ...] | None = None,
+        page_families: list[str] | tuple[str, ...] | None = None,
     ) -> list[RetrievedPage]:
-        """Retrieve pages from the page-level collection using hybrid search."""
+        """Retrieve pages from the page-level collection using hybrid search.
+
+        Args:
+            query: Search query text.
+            query_vector: Optional precomputed dense vector.
+            top_k: Maximum pages to return.
+            doc_refs: Document reference strings for sparse query boosting.
+            doc_ids: Filter to specific document IDs.
+            page_nums: Filter to specific page numbers.
+            article_refs: Filter to pages containing these article references.
+            page_roles: Filter to pages with these semantic roles.
+            page_families: Filter to pages with these page families.
+
+        Returns:
+            List of retrieved pages sorted by relevance score.
+        """
         page_coll = self._store.page_collection_name
         try:
             exists = await self._store.client.collection_exists(page_coll)
@@ -818,7 +838,13 @@ class HybridRetriever:
         if query_vector is None:
             query_vector = await self._embedder.embed_query(query)
 
-        where: models.Filter | None = None
+        where = self._build_page_filter(
+            doc_ids=doc_ids,
+            page_nums=page_nums,
+            article_refs=article_refs,
+            page_roles=page_roles,
+            page_families=page_families,
+        )
 
         if self._bm25_enabled and self._sparse_encoder is not None:
             sparse_query = self._build_sparse_query(query=query, extracted_refs=list(doc_refs or []))
@@ -857,7 +883,14 @@ class HybridRetriever:
             )
 
         pages = self._map_page_results(result)
-        logger.info("Page retrieval returned %d pages (top_k=%d)", len(pages), top_k)
+        logger.info(
+            "Page retrieval returned %d pages (top_k=%d doc_ids=%d page_nums=%d article_refs=%d)",
+            len(pages),
+            top_k,
+            len([value for value in (doc_ids or []) if str(value).strip()]),
+            len(list(page_nums or [])),
+            len([value for value in (article_refs or []) if str(value).strip()]),
+        )
         return pages
 
     async def retrieve_chunks_for_pages(
@@ -931,8 +964,87 @@ class HybridRetriever:
                 doc_type=str(payload.get("doc_type") or ""),
                 page_text=str(payload.get("page_text") or ""),
                 score=score,
+                page_family=str(payload.get("page_family") or ""),
+                doc_family=str(payload.get("doc_family") or ""),
+                normalized_refs=cls._coerce_str_list(payload.get("normalized_refs")),
+                law_titles=cls._coerce_str_list(payload.get("law_titles")),
+                article_refs=cls._coerce_str_list(payload.get("article_refs")),
+                case_numbers=cls._coerce_str_list(payload.get("case_numbers")),
+                page_role=str(payload.get("page_role") or ""),
+                amount_roles=cls._coerce_str_list(payload.get("amount_roles")),
+                linked_refs=cls._coerce_str_list(payload.get("linked_refs")),
             ))
         return mapped
+
+    @staticmethod
+    def _build_page_filter(
+        *,
+        doc_ids: list[str] | tuple[str, ...] | None = None,
+        page_nums: list[int] | tuple[int, ...] | None = None,
+        article_refs: list[str] | tuple[str, ...] | None = None,
+        page_roles: list[str] | tuple[str, ...] | None = None,
+        page_families: list[str] | tuple[str, ...] | None = None,
+    ) -> models.Filter | None:
+        """Build a Qdrant filter for page-level queries.
+
+        Args:
+            doc_ids: Filter to specific document IDs.
+            page_nums: Filter to specific page numbers.
+            article_refs: Filter to pages with these article references.
+            page_roles: Filter to pages with these semantic roles.
+            page_families: Filter to pages with these page families.
+
+        Returns:
+            Qdrant filter or None if no constraints.
+        """
+        must: list[models.Condition] = []
+
+        filtered_doc_ids = [str(value).strip() for value in (doc_ids or []) if str(value).strip()]
+        if filtered_doc_ids:
+            must.append(
+                models.FieldCondition(
+                    key="doc_id",
+                    match=models.MatchAny(any=filtered_doc_ids),
+                )
+            )
+
+        filtered_page_nums = [page_num for page_num in (page_nums or []) if int(page_num) > 0]
+        if filtered_page_nums:
+            must.append(
+                models.FieldCondition(
+                    key="page_num",
+                    match=models.MatchAny(any=filtered_page_nums),
+                )
+            )
+
+        filtered_article_refs = [str(value).strip() for value in (article_refs or []) if str(value).strip()]
+        if filtered_article_refs:
+            must.append(
+                models.FieldCondition(
+                    key="article_refs",
+                    match=models.MatchAny(any=filtered_article_refs),
+                )
+            )
+
+        filtered_page_roles = [str(value).strip() for value in (page_roles or []) if str(value).strip()]
+        if filtered_page_roles:
+            must.append(
+                models.FieldCondition(
+                    key="page_role",
+                    match=models.MatchAny(any=filtered_page_roles),
+                )
+            )
+
+        filtered_page_families = [str(value).strip() for value in (page_families or []) if str(value).strip()]
+        if filtered_page_families:
+            must.append(
+                models.FieldCondition(
+                    key="page_family",
+                    match=models.MatchAny(any=filtered_page_families),
+                )
+            )
+
+        return models.Filter(must=must) if must else None
 
     @staticmethod
     def _map_point(point_obj: object) -> RetrievedChunk | None:

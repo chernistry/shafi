@@ -1312,11 +1312,14 @@ def test_apply_support_shape_policy_prunes_nonrequested_title_page_noise_when_ti
     assert flags == ["explicit_page_reference_pruned"]
 
 
-def test_set_final_used_pages_clamps_citation_override_to_explicit_anchor() -> None:
+@pytest.mark.asyncio
+async def test_set_final_used_pages_clamps_citation_override_to_explicit_anchor() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
+    mock_retriever = MagicMock()
+    mock_retriever._settings.pipeline.enable_grounding_sidecar = False
     builder = RAGPipelineBuilder(
-        retriever=MagicMock(),
+        retriever=mock_retriever,
         reranker=MagicMock(),
         generator=MagicMock(),
         classifier=MagicMock(),
@@ -1347,7 +1350,7 @@ def test_set_final_used_pages_clamps_citation_override_to_explicit_anchor() -> N
         ),
     ]
 
-    builder._set_final_used_pages(
+    await builder._set_final_used_pages(
         collector=collector,
         query="According to the title page of the DIFC Law on the Application of Civil and Commercial Laws, what is its official law number?",
         answer="Law No. 3 of 2004",
@@ -1361,11 +1364,14 @@ def test_set_final_used_pages_clamps_citation_override_to_explicit_anchor() -> N
     assert telemetry.used_page_ids == ["civil-commercial-law_1"]
 
 
-def test_set_final_used_pages_keeps_title_page_compare_to_one_page_per_doc() -> None:
+@pytest.mark.asyncio
+async def test_set_final_used_pages_keeps_title_page_compare_to_one_page_per_doc() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
+    mock_retriever = MagicMock()
+    mock_retriever._settings.pipeline.enable_grounding_sidecar = False
     builder = RAGPipelineBuilder(
-        retriever=MagicMock(),
+        retriever=mock_retriever,
         reranker=MagicMock(),
         generator=MagicMock(),
         classifier=MagicMock(),
@@ -1418,7 +1424,7 @@ def test_set_final_used_pages_keeps_title_page_compare_to_one_page_per_doc() -> 
         ),
     ]
 
-    builder._set_final_used_pages(
+    await builder._set_final_used_pages(
         collector=collector,
         query="Which claimant appears on the title page of both CA 001/2024 and SCT 002/2024?",
         answer="Alice Example",

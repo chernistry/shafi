@@ -479,7 +479,7 @@ class GenerationLogicMixin:
                     context_chunks=context_chunks,
                     used_ids=shaped_used_ids if shaped_used_ids else used_ids,
                 )
-            self._set_final_used_pages(
+            await self._set_final_used_pages(
                 collector=collector,
                 query=state["query"],
                 answer=answer,
@@ -769,7 +769,7 @@ class GenerationLogicMixin:
                     context_chunks=context_chunks,
                     used_ids=shaped_used_ids,
                 )
-            self._set_final_used_pages(
+            await self._set_final_used_pages(
                 collector=collector,
                 query=state["query"],
                 answer=answer,
@@ -794,7 +794,31 @@ class GenerationLogicMixin:
             "streamed": streamed,
         }
 
-    def _set_final_used_pages(
+    def _get_grounding_selector(self) -> object | None:
+        """Lazily create grounding evidence selector if sidecar is enabled."""
+        if not bool(getattr(self._settings.pipeline, "enable_grounding_sidecar", False)):
+            return None
+        cached = getattr(self, "_grounding_selector_cached", None)
+        if cached is not None:
+            return cached
+        try:
+            from rag_challenge.core.grounding.evidence_selector import GroundingEvidenceSelector
+
+            retriever = self._retriever
+            selector = GroundingEvidenceSelector(
+                retriever=retriever,
+                store=retriever._store,
+                embedder=retriever._embedder,
+                sparse_encoder=retriever._sparse_encoder,
+                pipeline_settings=self._settings.pipeline,
+            )
+            self._grounding_selector_cached = selector  # type: ignore[attr-defined]
+            return selector
+        except Exception:
+            logger.warning("Failed to create grounding selector", exc_info=True)
+            return None
+
+    async def _set_final_used_pages(
         self,
         *,
         collector: TelemetryCollector,
@@ -806,6 +830,10 @@ class GenerationLogicMixin:
     ) -> None:
         """Finalize used-page telemetry with terminal anchor constraints.
 
+        When grounding sidecar is enabled, delegates page selection to the
+        evidence selector. Falls back to the legacy path if the selector
+        returns None or raises.
+
         Args:
             collector: Telemetry collector for the current request.
             query: Raw user question.
@@ -814,6 +842,28 @@ class GenerationLogicMixin:
             context_chunks: Ranked context chunks used for answering.
             current_used_ids: Support chunk IDs selected before late page shaping.
         """
+        # Try grounding sidecar first
+        selector = self._get_grounding_selector()
+        if selector is not None:
+            try:
+                from rag_challenge.core.grounding.evidence_selector import GroundingEvidenceSelector
+
+                assert isinstance(selector, GroundingEvidenceSelector)
+                sidecar_page_ids = await selector.select_page_ids(
+                    query=query,
+                    answer=answer,
+                    answer_type=answer_type,
+                    context_chunks=context_chunks,
+                )
+                if sidecar_page_ids is not None:
+                    collector.set_used_ids(list(current_used_ids))
+                    if sidecar_page_ids:
+                        collector.set_used_page_ids_override(sidecar_page_ids)
+                    return
+            except Exception:
+                logger.warning("Grounding sidecar failed; falling back to legacy", exc_info=True)
+
+        # Legacy path
         anchor_page_ids = self._explicit_anchor_page_ids(
             query=query,
             context_chunks=context_chunks,

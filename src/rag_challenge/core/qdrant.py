@@ -22,7 +22,7 @@ from qdrant_client.models import (
 )
 
 from rag_challenge.config import get_settings
-from rag_challenge.models import Chunk, ChunkMetadata, PageMetadata
+from rag_challenge.models import Chunk, ChunkMetadata, PageMetadata, SupportFact, SupportFactMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,23 @@ class QdrantStore:
     async def ensure_page_payload_indexes(self) -> None:
         """Create keyword indexes on page collection payload fields."""
         coll = self._settings.page_collection
-        for field_name in ("doc_id", "page_id", "page_num", "doc_title", "doc_type", "ingest_version"):
+        keyword_fields = (
+            "doc_id",
+            "page_id",
+            "doc_title",
+            "doc_type",
+            "ingest_version",
+            "article_refs",
+            "normalized_refs",
+            "law_titles",
+            "case_numbers",
+            "page_family",
+            "doc_family",
+            "page_role",
+            "amount_roles",
+            "linked_refs",
+        )
+        for field_name in keyword_fields:
             try:
                 await self._client.create_payload_index(
                     collection_name=coll,
@@ -132,6 +148,14 @@ class QdrantStore:
                 )
             except Exception:
                 logger.debug("Page payload index on '%s' may already exist", field_name, exc_info=True)
+        try:
+            await self._client.create_payload_index(
+                collection_name=coll,
+                field_name="page_num",
+                field_schema=PayloadSchemaType.INTEGER,
+            )
+        except Exception:
+            logger.debug("Page payload index on 'page_num' may already exist", exc_info=True)
 
     async def upsert_pages(
         self,
@@ -180,6 +204,151 @@ class QdrantStore:
     async def delete_pages_by_doc_id(self, doc_id: str) -> None:
         """Delete all page points for a document id from the page collection."""
         coll = self._settings.page_collection
+        try:
+            exists = await self._client.collection_exists(coll)
+            if not exists:
+                return
+        except Exception:
+            return
+        await self._client.delete(
+            collection_name=coll,
+            points_selector=Filter(
+                must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+            ),
+        )
+
+    # -- Support-fact collection --
+
+    @property
+    def support_fact_collection_name(self) -> str:
+        return self._settings.support_fact_collection
+
+    async def ensure_support_fact_collection(self) -> None:
+        """Create support-fact collection with dense + sparse vector configs if missing."""
+        coll = self._settings.support_fact_collection
+        exists = await self._client.collection_exists(coll)
+        if exists:
+            logger.info("Support-fact collection '%s' already exists", coll)
+            return
+
+        dense_vectors = {
+            "dense": VectorParams(
+                size=self._embedding_settings.dimensions,
+                distance=Distance.COSINE,
+            ),
+        }
+
+        try:
+            if self._bm25_enabled:
+                await self._client.create_collection(
+                    collection_name=coll,
+                    vectors_config=dense_vectors,
+                    sparse_vectors_config={
+                        "bm25": SparseVectorParams(modifier=Modifier.IDF),
+                    },
+                )
+            else:
+                await self._client.create_collection(
+                    collection_name=coll,
+                    vectors_config=dense_vectors,
+                )
+        except UnexpectedResponse as exc:
+            if self._is_collection_already_exists(exc):
+                logger.info("Support-fact collection '%s' was created concurrently", coll)
+                return
+            raise
+        logger.info("Created support-fact collection '%s'", coll)
+
+    async def ensure_support_fact_payload_indexes(self) -> None:
+        """Create keyword indexes on support-fact collection payload fields."""
+        coll = self._settings.support_fact_collection
+        keyword_fields = (
+            "fact_id",
+            "doc_id",
+            "page_id",
+            "doc_title",
+            "doc_type",
+            "doc_family",
+            "page_family",
+            "page_role",
+            "fact_type",
+            "normalized_value",
+            "scope_ref",
+        )
+        for field_name in keyword_fields:
+            try:
+                await self._client.create_payload_index(
+                    collection_name=coll,
+                    field_name=field_name,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+            except Exception:
+                logger.debug("Support-fact index on '%s' may already exist", field_name, exc_info=True)
+        try:
+            await self._client.create_payload_index(
+                collection_name=coll,
+                field_name="page_num",
+                field_schema=PayloadSchemaType.INTEGER,
+            )
+        except Exception:
+            logger.debug("Support-fact index on 'page_num' may already exist", exc_info=True)
+
+    async def upsert_support_facts(
+        self,
+        facts: list[SupportFact],
+        dense_vectors: list[list[float]],
+        *,
+        sparse_vectors: list[SparseVector] | None = None,
+    ) -> int:
+        """Upsert support-fact points into the support-fact collection.
+
+        Args:
+            facts: Support facts to upsert.
+            dense_vectors: Dense embedding vectors, one per fact.
+            sparse_vectors: Optional sparse BM25 vectors, one per fact.
+
+        Returns:
+            Number of points upserted.
+        """
+        if len(facts) != len(dense_vectors):
+            raise ValueError(f"facts ({len(facts)}) and dense_vectors ({len(dense_vectors)}) length mismatch")
+        if sparse_vectors is not None and len(facts) != len(sparse_vectors):
+            raise ValueError(f"facts ({len(facts)}) and sparse_vectors ({len(sparse_vectors)}) length mismatch")
+
+        coll = self._settings.support_fact_collection
+        total = 0
+        batch_size = self._ingestion_settings.upsert_batch_size
+
+        for offset in range(0, len(facts), batch_size):
+            batch_facts = facts[offset : offset + batch_size]
+            batch_dense = dense_vectors[offset : offset + batch_size]
+            batch_sparse = None if sparse_vectors is None else sparse_vectors[offset : offset + batch_size]
+            points: list[PointStruct] = []
+
+            for idx, (fact, dense_vec) in enumerate(zip(batch_facts, batch_dense, strict=True)):
+                vector_data: dict[str, list[float] | SparseVector] = {"dense": dense_vec}
+                if batch_sparse is not None:
+                    vector_data["bm25"] = batch_sparse[idx]
+
+                point_uuid = str(uuid_lib.uuid5(uuid_lib.NAMESPACE_URL, fact.fact_id))
+                payload = SupportFactMetadata(**fact.model_dump(mode="json")).model_dump(mode="json")
+                points.append(
+                    PointStruct(
+                        id=point_uuid,
+                        vector=cast("VectorStruct", vector_data),
+                        payload=payload,
+                    )
+                )
+
+            await self._client.upsert(collection_name=coll, points=points)
+            total += len(points)
+
+        logger.info("Upserted %d support facts into '%s'", total, coll)
+        return total
+
+    async def delete_support_facts_by_doc_id(self, doc_id: str) -> None:
+        """Delete all support-fact points for a document id."""
+        coll = self._settings.support_fact_collection
         try:
             exists = await self._client.collection_exists(coll)
             if not exists:
