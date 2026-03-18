@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import joblib
 from sklearn.metrics import accuracy_score, f1_score
@@ -17,6 +18,9 @@ from rag_challenge.ml.training_scaffold import (
     group_page_examples,
     load_grounding_rows,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -51,9 +55,10 @@ def main() -> int:
     x_dev = router_bundle["vectorizer"].transform(router_ds.texts)
     scope_pred = router_bundle["scope_model"].predict(x_dev)
     budget_pred = router_bundle["budget_model"].predict(x_dev)
-    role_pred = router_bundle["roles_model"].predict(x_dev)
+    budget_targets = [str(value) for value in router_ds.page_budget_targets]
     mlb = MultiLabelBinarizer(classes=router_bundle["role_labels"])
     y_roles = mlb.fit_transform(router_ds.role_targets)
+    role_pred = _predict_role_matrix(router_bundle["roles_model"], x_dev)
 
     page_bundle = joblib.load(args.page_scorer_model)
     page_examples = build_page_training_examples(rows, label_mode=args.label_mode)
@@ -68,7 +73,7 @@ def main() -> int:
     summary = {
         "router": {
             "scope_accuracy": float(accuracy_score(router_ds.scope_targets, scope_pred)) if router_ds.texts else 0.0,
-            "budget_accuracy": float(accuracy_score(router_ds.page_budget_targets, budget_pred)) if router_ds.texts else 0.0,
+            "budget_accuracy": float(accuracy_score(budget_targets, budget_pred)) if router_ds.texts else 0.0,
             "roles_micro_f1": float(f1_score(y_roles, role_pred, average="micro", zero_division=0)) if router_ds.texts else 0.0,
             "heuristic_reference_accuracy": 1.0 if router_ds.texts else 0.0,
         },
@@ -122,6 +127,45 @@ def _heuristic_hit_rate(examples: list) -> float:
         if preferred.label == 1:
             hits += 1
     return hits / total if total else 0.0
+
+def _predict_role_matrix(roles_model: object, x_dev) -> list[list[int]]:
+    """Predict a multi-label role matrix from either router artifact shape.
+
+    Args:
+        roles_model: Stored role model artifact.
+        x_dev: Dev feature matrix.
+
+    Returns:
+        Role prediction matrix.
+    """
+    if hasattr(roles_model, "predict"):
+        predictions = roles_model.predict(x_dev)
+        return predictions.tolist() if hasattr(predictions, "tolist") else predictions
+    if isinstance(roles_model, dict):
+        estimators = roles_model.get("estimators")
+        if isinstance(estimators, list):
+            prediction_columns = _predict_columns(estimators, x_dev)
+            return [list(values) for values in zip(*prediction_columns, strict=False)] if prediction_columns else []
+    raise TypeError(f"Unsupported roles model artifact: {type(roles_model)!r}")
+
+
+def _predict_columns(estimators: Sequence[object], x_dev) -> list[list[int]]:
+    """Predict one binary column per estimator.
+
+    Args:
+        estimators: Per-role estimators.
+        x_dev: Dev feature matrix.
+
+    Returns:
+        Per-role prediction columns.
+    """
+    columns: list[list[int]] = []
+    for estimator in estimators:
+        if not hasattr(estimator, "predict"):
+            raise TypeError(f"Unsupported role estimator: {type(estimator)!r}")
+        prediction = estimator.predict(x_dev)
+        columns.append(prediction.tolist() if hasattr(prediction, "tolist") else list(prediction))
+    return columns
 
 
 if __name__ == "__main__":

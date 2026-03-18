@@ -112,7 +112,7 @@ def export_normalized_external_grounding_data(
     output_dir.mkdir(parents=True, exist_ok=True)
     rows_path = output_dir / "normalized_rows.jsonl"
     rows_path.write_text(
-        "".join(row.model_dump_json() + "\n" for row in ordered_rows),
+        "".join(json.dumps(row.model_dump(mode="json"), ensure_ascii=True) + "\n" for row in ordered_rows),
         encoding="utf-8",
     )
 
