@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 JsonDict = dict[str, Any]
 

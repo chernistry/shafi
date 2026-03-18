@@ -5,9 +5,12 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import fitz
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 try:
     from scripts.scan_private_doc_anomalies import build_summary_markdown, build_top20_report_markdown, scan_pdf_corpus
@@ -120,10 +123,10 @@ def _default_variants() -> list[StressVariant]:
 
     def build_arabic_header(source_pages: dict[str, list[str]]) -> list[str]:
         pages = list(source_pages["judgment"][:2])
-        header = "ختم المحكمة\nبيان عربي مختصر\n"
+        header = "\u062e\u062a\u0645 \u0627\u0644\u0645\u062d\u0643\u0645\u0629\n\u0628\u064a\u0627\u0646 \u0639\u0631\u0628\u064a \u0645\u062e\u062a\u0635\u0631\n"
         pages[0] = header + pages[0]
         if len(pages) > 1:
-            pages[1] = "دبي\n" + pages[1]
+            pages[1] = "\u062f\u0628\u064a\n" + pages[1]
         return pages
 
     def build_eastern_arabic_digits(source_pages: dict[str, list[str]]) -> list[str]:
@@ -290,8 +293,10 @@ def _evaluate_variant(record: JsonDict) -> JsonDict:
             observed["smart_quote_count"] == 0 and observed["dash_variant_count"] == 0
         )
         passed = (
-            observed["smart_quote_count"] > 0
-            and observed["dash_variant_count"] > 0
+            (
+                observed["smart_quote_count"] > 0
+                and observed["dash_variant_count"] > 0
+            )
             or bool(observed["parser_normalized_ascii_punctuation"])
         )
         return {

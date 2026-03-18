@@ -1178,9 +1178,7 @@ def _has_meaningful_unicode_disruption(signals: JsonDict) -> bool:
         return True
     if int(signals.get("smart_quote_count") or 0) >= 4:
         return True
-    if int(signals.get("dash_variant_count") or 0) >= 2:
-        return True
-    return False
+    return int(signals.get("dash_variant_count") or 0) >= 2
 
 
 def _score_record(record: JsonDict) -> tuple[int, list[str]]:

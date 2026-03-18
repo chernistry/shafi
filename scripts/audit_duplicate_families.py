@@ -143,9 +143,7 @@ def build_duplicate_family_audit(
             )
             if partner_retrieved > 0:
                 recommendation = "risky"
-            elif g_delta > 0.05:
-                recommendation = "dedup_candidate"
-            elif cast("list[str]", record.get("duplicate_same_family_doc_ids") or []) or exact_duplicate:
+            elif g_delta > 0.05 or cast("list[str]", record.get("duplicate_same_family_doc_ids") or []) or exact_duplicate:
                 recommendation = "dedup_candidate"
             pair_reports.append(
                 {
