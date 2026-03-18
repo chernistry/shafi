@@ -125,6 +125,8 @@ def test_page_training_examples_prefer_reviewed_labels() -> None:
     assert positive.sample_weight == 3.0
     assert positive.supervision_source == "reviewed"
     assert positive.features["from_legacy_used"] is True
+    assert positive.features["doc_selected_by_legacy"] is True
+    assert positive.features["explicit_anchor_count"] == 1
     assert negative.label == 0
 
 

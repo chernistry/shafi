@@ -11,11 +11,14 @@ import joblib
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.preprocessing import MultiLabelBinarizer
 
+from rag_challenge.ml.page_scorer_training import (
+    compute_heuristic_ranking_metrics,
+    compute_ranking_metrics,
+)
 from rag_challenge.ml.training_scaffold import (
     build_page_training_examples,
     build_router_dataset,
     deterministic_subset,
-    group_page_examples,
     load_grounding_rows,
 )
 
@@ -69,6 +72,8 @@ def main() -> int:
         if page_examples
         else []
     )
+    page_metrics = compute_ranking_metrics(page_examples, page_scores)
+    heuristic_page_metrics = compute_heuristic_ranking_metrics(page_examples)
 
     summary = {
         "router": {
@@ -78,9 +83,13 @@ def main() -> int:
             "heuristic_reference_accuracy": 1.0 if router_ds.texts else 0.0,
         },
         "page_scorer": {
-            "trained_hit_at_1": _group_hit_rate(page_examples, page_scores),
-            "heuristic_hit_at_1": _heuristic_hit_rate(page_examples),
-            "question_count": len(group_page_examples(page_examples)),
+            "trained_hit_at_1": page_metrics.hit_at_1,
+            "trained_hit_at_2": page_metrics.hit_at_2,
+            "trained_mrr": page_metrics.mean_reciprocal_rank,
+            "heuristic_hit_at_1": heuristic_page_metrics.hit_at_1,
+            "heuristic_hit_at_2": heuristic_page_metrics.hit_at_2,
+            "heuristic_mrr": heuristic_page_metrics.mean_reciprocal_rank,
+            "question_count": page_metrics.question_count,
         },
     }
 
@@ -89,44 +98,6 @@ def main() -> int:
     print(args.output_path)
     print(json.dumps(summary, indent=2))
     return 0
-
-
-def _group_hit_rate(examples: list, scores) -> float:
-    """Compute grouped hit@1 from predicted page scores."""
-    if not examples:
-        return 0.0
-    grouped = group_page_examples(examples)
-    score_map = {f"{example.question_id}:{example.page_id}": float(score) for example, score in zip(examples, scores, strict=False)}
-    hits = 0
-    total = 0
-    for question_id, group in grouped.items():
-        total += 1
-        best = max(group, key=lambda example: score_map.get(f"{question_id}:{example.page_id}", 0.0))
-        if best.label == 1:
-            hits += 1
-    return hits / total if total else 0.0
-
-
-def _heuristic_hit_rate(examples: list) -> float:
-    """Compute heuristic hit@1 from exported source markers."""
-    if not examples:
-        return 0.0
-    grouped = group_page_examples(examples)
-    hits = 0
-    total = 0
-    for group in grouped.values():
-        total += 1
-        preferred = next(
-            (
-                example
-                for example in group
-                if bool(example.features.get("from_sidecar_used")) or bool(example.features.get("from_legacy_used"))
-            ),
-            group[0],
-        )
-        if preferred.label == 1:
-            hits += 1
-    return hits / total if total else 0.0
 
 def _predict_role_matrix(roles_model: object, x_dev) -> list[list[int]]:
     """Predict a multi-label role matrix from either router artifact shape.

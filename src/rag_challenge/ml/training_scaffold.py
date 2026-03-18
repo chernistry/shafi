@@ -164,12 +164,26 @@ def build_page_training_examples(
         if not positive_pages:
             continue
         doc_rank_map = {candidate.doc_id: index + 1 for index, candidate in enumerate(row.doc_candidates)}
+        legacy_selected_page_ids = set(row.legacy_selected_pages)
+        sidecar_selected_page_ids = set(row.sidecar_selected_pages)
+        legacy_selected_docs = {
+            candidate.doc_id for candidate in row.page_candidates if candidate.page_id in legacy_selected_page_ids
+        }
+        sidecar_selected_docs = {
+            candidate.doc_id for candidate in row.page_candidates if candidate.page_id in sidecar_selected_page_ids
+        }
         for page in row.page_candidates:
             examples.append(
                 PageTrainingExample(
                     question_id=row.question_id,
                     page_id=page.page_id,
-                    features=build_page_feature_dict(row, page, doc_rank_map=doc_rank_map),
+                    features=build_page_feature_dict(
+                        row,
+                        page,
+                        doc_rank_map=doc_rank_map,
+                        legacy_selected_docs=legacy_selected_docs,
+                        sidecar_selected_docs=sidecar_selected_docs,
+                    ),
                     label=1 if page.page_id in positive_pages else 0,
                     sample_weight=sample_weight,
                     supervision_source=supervision_source,
@@ -210,6 +224,8 @@ def build_page_feature_dict(
     page: PageCandidateRecord,
     *,
     doc_rank_map: dict[str, int],
+    legacy_selected_docs: set[str],
+    sidecar_selected_docs: set[str],
 ) -> dict[str, str | int | float | bool]:
     """Build one feature dictionary for offline page scoring.
 
@@ -217,6 +233,8 @@ def build_page_feature_dict(
         row: Parent grounding ML row.
         page: Candidate page record.
         doc_rank_map: 1-based document-rank mapping within the row.
+        legacy_selected_docs: Docs already selected by legacy grounding.
+        sidecar_selected_docs: Docs already selected by sidecar grounding.
 
     Returns:
         Feature dictionary for DictVectorizer.
@@ -229,11 +247,33 @@ def build_page_feature_dict(
         "label_source": row.label_source,
         "doc_rank": doc_rank_map.get(page.doc_id, 0),
         "page_num": page.page_num,
+        "is_first_page": page.page_num == 1,
+        "doc_selected_by_legacy": page.doc_id in legacy_selected_docs,
+        "doc_selected_by_sidecar": page.doc_id in sidecar_selected_docs,
         "doc_candidate_count": len(row.doc_candidates),
         "page_candidate_count": len(row.page_candidates),
         "anchor_hit_count": len(page.anchor_hits),
         "has_anchor_hit": bool(page.anchor_hits),
         "answer_in_snippet": bool(answer_text and answer_text.casefold() in snippet),
+        "requires_all_docs_in_case": row.support_fact_features.requires_all_docs_in_case,
+        "should_force_empty_grounding_on_null": row.support_fact_features.should_force_empty_grounding_on_null,
+        "explicit_anchor_count": row.support_fact_features.explicit_anchor_count,
+        "target_page_roles_count": row.support_fact_features.target_page_roles_count,
+        "doc_ref_count": row.support_fact_features.doc_ref_count,
+        "legacy_retrieved_page_count": row.page_retrieval_features.legacy_retrieved_page_count,
+        "legacy_context_page_count": row.page_retrieval_features.legacy_context_page_count,
+        "legacy_cited_page_count": row.page_retrieval_features.legacy_cited_page_count,
+        "sidecar_retrieved_page_count": row.page_retrieval_features.sidecar_retrieved_page_count,
+        "sidecar_context_page_count": row.page_retrieval_features.sidecar_context_page_count,
+        "sidecar_cited_page_count": row.page_retrieval_features.sidecar_cited_page_count,
+        "legacy_sidecar_used_overlap_count": row.page_retrieval_features.legacy_sidecar_used_overlap_count,
+        "targets_title_cover": "title_cover" in row.target_page_roles,
+        "targets_caption": "caption" in row.target_page_roles,
+        "targets_issued_by_block": "issued_by_block" in row.target_page_roles,
+        "targets_operative_order": "operative_order" in row.target_page_roles,
+        "targets_costs_block": "costs_block" in row.target_page_roles,
+        "targets_article_clause": "article_clause" in row.target_page_roles,
+        "targets_schedule_table": "schedule_table" in row.target_page_roles,
         "legacy_retrieved_rank": page.legacy_retrieved_rank or 0,
         "legacy_context_rank": page.legacy_context_rank or 0,
         "legacy_cited_rank": page.legacy_cited_rank or 0,
