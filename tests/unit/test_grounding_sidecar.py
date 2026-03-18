@@ -236,6 +236,29 @@ async def test_grounding_sidecar_leaves_broad_free_text_on_legacy_path() -> None
 
 
 @pytest.mark.asyncio
+async def test_grounding_sidecar_returns_empty_pages_for_negative_null_query() -> None:
+    selector, retriever = _make_selector(retrieved_pages=[])
+
+    result = await selector.select_page_ids(
+        query="What was the jury finding in this DIFC matter?",
+        answer="There is no information on this question.",
+        answer_type="free_text",
+        context_chunks=[
+            _make_ranked_chunk(
+                chunk_id="case-doc:0:0:title",
+                doc_id="case-doc",
+                doc_title="CFI 001/2024 Alpha Holdings",
+                section_path="page:1",
+                text="Case title page.",
+            )
+        ],
+    )
+
+    assert result == []
+    retriever.retrieve_pages.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_grounding_sidecar_compare_scope_limits_doc_scope_to_requested_cases() -> None:
     selector, retriever = _make_selector(
         retrieved_pages=[

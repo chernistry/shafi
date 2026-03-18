@@ -842,6 +842,13 @@ class GenerationLogicMixin:
             context_chunks: Ranked context chunks used for answering.
             current_used_ids: Support chunk IDs selected before late page shaping.
         """
+        from rag_challenge.core.grounding.evidence_selector import answer_requires_empty_grounding
+
+        if answer_requires_empty_grounding(answer):
+            collector.set_used_ids(list(current_used_ids))
+            collector.set_used_page_ids_override([])
+            return
+
         # Try grounding sidecar first
         selector = self._get_grounding_selector()
         if selector is not None:
@@ -857,8 +864,7 @@ class GenerationLogicMixin:
                 )
                 if sidecar_page_ids is not None:
                     collector.set_used_ids(list(current_used_ids))
-                    if sidecar_page_ids:
-                        collector.set_used_page_ids_override(sidecar_page_ids)
+                    collector.set_used_page_ids_override(sidecar_page_ids)
                     return
             except Exception:
                 logger.warning("Grounding sidecar failed; falling back to legacy", exc_info=True)

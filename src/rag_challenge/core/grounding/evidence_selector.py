@@ -54,6 +54,16 @@ _SAFE_SINGLE_DOC_ROLES = frozenset(
         "schedule_table",
     }
 )
+_EMPTY_GROUNDING_ANSWERS = frozenset(
+    {
+        "",
+        "n/a",
+        "no information",
+        "none",
+        "null",
+        "there is no information on this question",
+    }
+)
 
 
 def _normalize_answer_value(answer: str, answer_type: str) -> str:
@@ -78,6 +88,19 @@ def _normalize_answer_value(answer: str, answer_type: str) -> str:
         if low in {"null", "none", "no information"}:
             return ""
     return re.sub(r"\s+", " ", text).strip(" .;:")
+
+
+def answer_requires_empty_grounding(answer: str) -> bool:
+    """Return whether an answer should emit empty grounding.
+
+    Args:
+        answer: Final answer text.
+
+    Returns:
+        True when the answer is an explicit null/unsupported response.
+    """
+    normalized = re.sub(r"\s+", " ", str(answer or "")).strip(" .;:").casefold()
+    return normalized in _EMPTY_GROUNDING_ANSWERS
 
 
 class GroundingEvidenceSelector:
@@ -135,10 +158,8 @@ class GroundingEvidenceSelector:
             return None
 
         # Force empty grounding on null answers for negative/unanswerable queries
-        if scope.should_force_empty_grounding_on_null:
-            answer_low = (answer or "").strip().lower()
-            if not answer_low or answer_low in {"null", "none", "no information", "n/a"}:
-                return []
+        if scope.should_force_empty_grounding_on_null and answer_requires_empty_grounding(answer):
+            return []
 
         doc_ids = self._select_doc_scope(
             query=query,
@@ -346,6 +367,9 @@ class GroundingEvidenceSelector:
         doc_ids = {chunk.doc_id for chunk in context_chunks if chunk.doc_id}
 
         if scope.scope_mode in {ScopeMode.COMPARE_PAIR, ScopeMode.FULL_CASE_FILES}:
+            return True
+
+        if scope.scope_mode is ScopeMode.NEGATIVE_UNANSWERABLE:
             return True
 
         if scope.scope_mode is ScopeMode.EXPLICIT_PAGE:

@@ -1438,6 +1438,91 @@ async def test_set_final_used_pages_keeps_title_page_compare_to_one_page_per_doc
     assert telemetry.used_page_ids == ["ca1_1", "sct2_1"]
 
 
+@pytest.mark.asyncio
+async def test_set_final_used_pages_sidecar_empty_override_clears_used_pages() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    mock_retriever = MagicMock()
+    mock_retriever._settings.pipeline.enable_grounding_sidecar = True
+    builder = RAGPipelineBuilder(
+        retriever=mock_retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    builder._grounding_selector_cached = MagicMock(select_page_ids=AsyncMock(return_value=[]))
+
+    collector = TelemetryCollector(request_id="sidecar-empty", question_id="sidecar-empty", answer_type="free_text")
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:title",
+            doc_id="law",
+            doc_title="Example Law",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="Title page.",
+            retrieval_score=0.91,
+            rerank_score=0.91,
+            doc_summary="",
+        )
+    ]
+
+    await builder._set_final_used_pages(
+        collector=collector,
+        query="What was the jury finding?",
+        answer="null",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        current_used_ids=["law:title"],
+    )
+
+    telemetry = collector.finalize()
+
+    assert telemetry.used_page_ids == []
+
+
+@pytest.mark.asyncio
+async def test_set_final_used_pages_null_answer_without_sidecar_clears_used_pages() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    mock_retriever = MagicMock()
+    mock_retriever._settings.pipeline.enable_grounding_sidecar = False
+    builder = RAGPipelineBuilder(
+        retriever=mock_retriever,
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+
+    collector = TelemetryCollector(request_id="legacy-empty", question_id="legacy-empty", answer_type="free_text")
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:title",
+            doc_id="law",
+            doc_title="Example Law",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="Title page.",
+            retrieval_score=0.91,
+            rerank_score=0.91,
+            doc_summary="",
+        )
+    ]
+
+    await builder._set_final_used_pages(
+        collector=collector,
+        query="What was the jury finding?",
+        answer="There is no information on this question.",
+        answer_type="free_text",
+        context_chunks=context_chunks,
+        current_used_ids=["law:title"],
+    )
+
+    telemetry = collector.finalize()
+
+    assert telemetry.used_page_ids == []
+
+
 def test_expand_page_spanning_support_chunk_ids_includes_adjacent_continuation_page() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
