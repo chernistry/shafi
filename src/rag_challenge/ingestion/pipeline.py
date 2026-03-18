@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # Preprocessing enrichment utilities (additive metadata, no architecture changes)
 # ---------------------------------------------------------------------------
 
-_CASE_ID_RE = re.compile(r"\b(?:CFI|CA|ARB|SCT|TCD|ENF)\s+\d{3}/\d{4}\b", re.IGNORECASE)
+_CASE_ID_RE = re.compile(r"\b(?:CFI|CA|ARB|SCT|TCD|ENF|DEC)\s+\d{3}/\d{4}\b", re.IGNORECASE)
 _CURRENCY_RE = re.compile(r"(?:AED|USD|GBP|EUR)\s*[\d,]+(?:\.\d+)?", re.IGNORECASE)
 _ARTICLE_REF_RE = re.compile(
     r"\b(?:Article|Section|Schedule|Part|Rule|Regulation|Clause)\s+[A-Za-z0-9]+(?:\([A-Za-z0-9]+\))*",
@@ -130,12 +130,16 @@ def _normalize_identifiers(text: str) -> str:
 
 def _extract_amount_roles(page_text: str) -> list[str]:
     if not page_text or not _CURRENCY_RE.search(page_text):
+        if "no order as to costs" in (page_text.lower() if page_text else ""):
+            return ["costs_awarded"]
         return []
     t = page_text.lower()
     roles: list[str] = []
     if any(kw in t for kw in ("claim value", "claimed amount", "claim for")):
         roles.append("claim_amount")
-    if any(kw in t for kw in ("ordered to pay", "costs awarded", "assessed in the amount", "sum of")):
+    if any(kw in t for kw in ("ordered to pay", "shall pay", "costs awarded", "assessed in the amount", "sum of")):
+        roles.append("costs_awarded")
+    if "no order as to costs" in t and "costs_awarded" not in roles:
         roles.append("costs_awarded")
     if any(kw in t for kw in ("costs schedule", "claimed costs", "statement of costs")):
         roles.append("costs_claimed")
@@ -201,6 +205,113 @@ _ISSUED_BY_BLOCK_RE = re.compile(
 _LAW_NO_RE = re.compile(r"\b(?:DIFC\s+)?Law\s+No\.?\s+(\d+)\s+of\s+(\d{4})\b", re.IGNORECASE)
 _SCHEDULE_RE = re.compile(r"\bSchedule\s+(\d+[A-Z]?)\b", re.IGNORECASE)
 _SECTION_RE = re.compile(r"\bSection\s+(\d+[A-Z]?)\b", re.IGNORECASE)
+_CAPTION_V_RE = re.compile(r"\b(?:v\.?|vs\.?|versus)\b", re.IGNORECASE)
+_CAPTION_STOP_RE = re.compile(
+    r"\b(?:Claim\s+No\.?|THE\s+DUBAI\s+INTERNATIONAL\s+FINANCIAL\s+CENTRE\s+COURTS|"
+    r"COURT\s+OF|SMALL\s+CLAIMS\s+TRIBUNAL|DIGITAL\s+ECONOMY\s+COURT|"
+    r"TECHNOLOGY\s+AND\s+CONSTRUCTION\s+DIVISION|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|"
+    r"JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|\[\d{4}\])\b",
+    re.IGNORECASE,
+)
+_CAPTION_NOISE_VALUES = frozenset({
+    "and",
+    "order",
+    "orders",
+    "judgment",
+    "hearing",
+    "claim no",
+})
+_PARTY_NOISE_VALUES = _CAPTION_NOISE_VALUES | frozenset({
+    "claim no.",
+})
+
+
+def _looks_like_case_caption(page_text: str, page_num: int) -> bool:
+    """Determine whether a page has a case-caption style heading.
+
+    Args:
+        page_text: Raw page text content.
+        page_num: 1-based page number.
+
+    Returns:
+        True when the page looks like a first-page `A v B` caption.
+    """
+    if page_num != 1 or not page_text:
+        return False
+    head = _normalize_identifiers(page_text[:1200])
+    return bool(_CAPTION_V_RE.search(head))
+
+
+def _extract_case_caption_parties(*texts: str) -> list[str]:
+    """Extract party names from case-caption style `A v B` strings.
+
+    Args:
+        *texts: Candidate title or page strings to inspect.
+
+    Returns:
+        Unique normalized party-like strings parsed from case captions.
+    """
+    values: list[str] = []
+    for text in texts:
+        normalized = re.sub(r"\s+", " ", _normalize_identifiers(text or "")).strip()
+        if not normalized:
+            continue
+        match = re.search(r"(?P<lhs>.+?)\s+(?:v\.?|vs\.?|versus)\s+(?P<rhs>.+)", normalized, re.IGNORECASE)
+        if match is None:
+            continue
+
+        lhs = re.sub(r"^\S+\s+\d{3}/\d{4}\s+", "", match.group("lhs")).strip(" ,.;:-")
+        lhs = _CASE_ID_RE.sub("", lhs).strip(" ,.;:-")
+        if lhs:
+            values.append(lhs)
+
+        rhs = _CAPTION_STOP_RE.split(match.group("rhs"), maxsplit=1)[0].strip(" ,.;:-")
+        numbered_parts = [part.strip(" ,.;:-") for part in re.split(r"\(\d+\)\s*", rhs) if part.strip(" ,.;:-")]
+        if numbered_parts:
+            values.extend(numbered_parts)
+        elif rhs:
+            values.append(rhs)
+
+    cleaned_values: list[str] = []
+    for value in _unique_normalized(values):
+        cleaned = _CASE_ID_RE.sub("", value)
+        cleaned = re.sub(r"\[\d{4}\](?:\s+.*)?$", "", cleaned).strip(" ,.;:-")
+        if cleaned.casefold() in _CAPTION_NOISE_VALUES:
+            continue
+        cleaned_values.append(cleaned)
+
+    return _unique_normalized(cleaned_values)
+
+
+def _page_role_for_fact(*, fact_type: str, page_role: str, page_num: int, page_text: str) -> str:
+    """Map a support fact to the semantic role most useful for sidecar filters.
+
+    Args:
+        fact_type: Extracted support-fact type.
+        page_role: Primary page role assigned to the page.
+        page_num: 1-based page number.
+        page_text: Raw page text content.
+
+    Returns:
+        The semantic role string that should be stored on the fact payload.
+    """
+    from rag_challenge.models.schemas import PageRole
+
+    if fact_type == "party" and _looks_like_case_caption(page_text, page_num):
+        return PageRole.CAPTION
+    if fact_type in {"judge_or_registrar", "date_of_issue", "date_of_reissue"}:
+        return PageRole.ISSUED_BY_BLOCK
+    if fact_type in {"article_id", "section_id"}:
+        return PageRole.ARTICLE_CLAUSE
+    if fact_type == "schedule_id":
+        return PageRole.SCHEDULE_TABLE
+    if fact_type in {"claim_amount", "costs_awarded", "costs_claimed", "damages", "penalty"}:
+        return PageRole.COSTS_BLOCK
+    if fact_type == "operative_order":
+        return PageRole.OPERATIVE_ORDER
+    if fact_type == "case_number" and page_num == 1:
+        return PageRole.TITLE_COVER
+    return page_role
 
 
 def _page_role_for_text(page_text: str, page_num: int, total_pages: int) -> str:
@@ -217,7 +328,9 @@ def _page_role_for_text(page_text: str, page_num: int, total_pages: int) -> str:
     from rag_challenge.models.schemas import PageRole
 
     t = page_text[:3000].lower() if page_text else ""
-    if page_num == 1 and _CASE_ID_RE.search(t):
+    if _looks_like_case_caption(page_text, page_num):
+        return PageRole.CAPTION
+    if page_num == 1 and (_CASE_ID_RE.search(t) or re.search(r"\blaw\s+no\b", t)):
         return PageRole.TITLE_COVER
     if "issued by:" in t and "date of issue:" in t:
         return PageRole.ISSUED_BY_BLOCK
@@ -233,8 +346,6 @@ def _page_role_for_text(page_text: str, page_num: int, total_pages: int) -> str:
         return PageRole.COMMENCEMENT
     if "administered by" in t:
         return PageRole.ADMINISTRATION
-    if page_num == 1 and re.search(r"\bv\.?\s+\b", page_text[:1500] if page_text else ""):
-        return PageRole.CAPTION
     return PageRole.OTHER
 
 
@@ -337,6 +448,12 @@ def _extract_support_facts_for_page(
     ) -> None:
         raw_key = f"{doc_id}:{page_num}:{fact_type}:{normalized_value}:{scope_ref}"
         fact_id = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        fact_page_role = _page_role_for_fact(
+            fact_type=fact_type,
+            page_role=page_role,
+            page_num=page_num,
+            page_text=page_text,
+        )
         facts.append({
             "fact_id": fact_id,
             "doc_id": doc_id,
@@ -346,7 +463,7 @@ def _extract_support_facts_for_page(
             "doc_type": doc_type,
             "doc_family": doc_family,
             "page_family": page_family,
-            "page_role": page_role,
+            "page_role": fact_page_role,
             "fact_type": fact_type,
             "normalized_value": normalized_value,
             "quote_text": quote_text.strip()[:1200],
@@ -356,7 +473,7 @@ def _extract_support_facts_for_page(
                 doc_title=doc_title,
                 doc_family=doc_family,
                 page_family=page_family,
-                page_role=page_role,
+                page_role=fact_page_role,
                 fact_type=fact_type,
                 normalized_value=normalized_value,
                 quote_text=quote_text,
@@ -388,7 +505,18 @@ def _extract_support_facts_for_page(
     from rag_challenge.models.schemas import PageRole as _PageRole
 
     if page_role in {_PageRole.TITLE_COVER, _PageRole.CAPTION}:
-        for party in _extract_party_names(norm_text):
+        caption_parties = _extract_case_caption_parties(doc_title)
+        if not caption_parties:
+            caption_parties = _extract_case_caption_parties(norm_text[:400])
+        labeled_parties = _extract_party_names(doc_title)
+        if not labeled_parties:
+            labeled_parties = _extract_party_names(norm_text[:400])
+        party_candidates = [
+            value
+            for value in _unique_normalized([*labeled_parties, *caption_parties])
+            if value.casefold() not in _PARTY_NOISE_VALUES
+        ]
+        for party in party_candidates:
             _append(
                 fact_type="party",
                 normalized_value=party,

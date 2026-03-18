@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from rag_challenge.models import Chunk, DocType, ParsedDocument
+from rag_challenge.models import Chunk, DocType, PageRole, ParsedDocument
 
 
 @pytest.fixture
@@ -255,3 +255,71 @@ async def test_pipeline_skips_unchanged_docs_on_second_run(mock_settings, mock_d
     embedder.embed_documents.assert_not_awaited()
     store.upsert_chunks.assert_not_awaited()
     store.delete_stale_doc_versions.assert_not_awaited()
+
+
+def test_page_role_for_text_prioritizes_case_caption_over_generic_cover() -> None:
+    from rag_challenge.ingestion.pipeline import _page_role_for_text
+
+    text = (
+        "DEC 001/2025 Techteryx Ltd v Aria Commodities DMCC OCTOBER 17, 2025 "
+        "DIGITAL ECONOMY COURT - ORDERS Claim No. DEC 001/2025"
+    )
+
+    assert _page_role_for_text(text, 1, 3) == PageRole.CAPTION
+
+
+def test_page_role_for_text_keeps_law_front_page_as_title_cover() -> None:
+    from rag_challenge.ingestion.pipeline import _page_role_for_text
+
+    text = "DIFC Law No. 2 of 2024 Operating Law"
+
+    assert _page_role_for_text(text, 1, 3) == PageRole.TITLE_COVER
+
+
+def test_extract_support_facts_for_page_adds_caption_parties_from_case_title() -> None:
+    from rag_challenge.ingestion.pipeline import _extract_support_facts_for_page
+
+    facts = _extract_support_facts_for_page(
+        doc_id="case-doc",
+        doc_title="Techteryx Ltd v (1) Aria Commodities DMCC (2) Mashreq Bank PSC",
+        doc_type=DocType.CASE_LAW.value,
+        page_num=1,
+        total_pages=3,
+        page_text=(
+            "DEC 001/2025 Techteryx Ltd v (1) Aria Commodities DMCC (2) Mashreq Bank PSC "
+            "OCTOBER 17, 2025 DIGITAL ECONOMY COURT - ORDERS"
+        ),
+        doc_family="order",
+    )
+
+    party_facts = [fact for fact in facts if fact["fact_type"] == "party"]
+    assert party_facts
+    assert {fact["page_role"] for fact in party_facts} == {PageRole.CAPTION}
+    assert any(str(fact["normalized_value"]).startswith("Techteryx Ltd") for fact in party_facts)
+    assert any("Aria Commodities DMCC" in str(fact["normalized_value"]) for fact in party_facts)
+
+
+def test_extract_support_facts_for_page_uses_fact_specific_roles_on_mixed_order_page() -> None:
+    from rag_challenge.ingestion.pipeline import _extract_support_facts_for_page
+
+    facts = _extract_support_facts_for_page(
+        doc_id="order-doc",
+        doc_title="Olexa v Odon [2025] DIFC SCT 295",
+        doc_type=DocType.CASE_LAW.value,
+        page_num=2,
+        total_pages=12,
+        page_text=(
+            "IT IS HEREBY ORDERED THAT: 1. The appeal is refused. "
+            "2. There shall be no order as to costs. "
+            "Issued by: Delvin Sumo SCT Judge and Assistant Registrar "
+            "Date of Issue: 20 January 2025 "
+            "The Defendant shall pay AED 5,000."
+        ),
+        doc_family="judgment",
+    )
+
+    fact_roles = {(str(fact["fact_type"]), str(fact["page_role"])) for fact in facts}
+    assert ("operative_order", PageRole.OPERATIVE_ORDER) in fact_roles
+    assert ("date_of_issue", PageRole.ISSUED_BY_BLOCK) in fact_roles
+    assert ("judge_or_registrar", PageRole.ISSUED_BY_BLOCK) in fact_roles
+    assert ("costs_awarded", PageRole.COSTS_BLOCK) in fact_roles
