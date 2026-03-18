@@ -92,6 +92,10 @@ class GroundingMlRow(BaseModel):
     label_page_ids: list[str] = Field(default_factory=list)
     label_source: LabelSource
     label_trust_tier: str = ""
+    label_confidence: str = ""
+    label_status: str = ""
+    label_weight: float = 0.0
+    label_note_present: bool = False
     scope_mode: str
     target_page_roles: list[str] = Field(default_factory=list)
     hard_anchor_strings: list[str] = Field(default_factory=list)
@@ -144,6 +148,11 @@ class _LabelRecord(BaseModel):
     page_ids: list[str] = Field(default_factory=list)
     label_source: LabelSource
     trust_tier: str = ""
+    confidence: str = ""
+    label_status: str = ""
+    label_weight: float = 0.0
+    audit_note: str = ""
+    current_label_problem: str = ""
     label_is_suspect: bool = False
 
 
@@ -276,6 +285,10 @@ def build_grounding_ml_rows(
                 label_page_ids=list(label.page_ids),
                 label_source=label.label_source,
                 label_trust_tier=label.trust_tier,
+                label_confidence=label.confidence,
+                label_status=label.label_status,
+                label_weight=label.label_weight,
+                label_note_present=bool(label.audit_note or label.current_label_problem),
                 scope_mode=scope.scope_mode.value,
                 target_page_roles=list(scope.target_page_roles),
                 hard_anchor_strings=list(scope.hard_anchor_strings),
@@ -404,6 +417,11 @@ def _load_label_records(
                 page_ids=_coerce_str_list(item.get("golden_page_ids")),
                 label_source="soft_ai_gold",
                 trust_tier="",
+                confidence=_coerce_str(item.get("confidence")),
+                label_status=_coerce_str(item.get("label_status")),
+                label_weight=_coerce_label_weight(item.get("label_weight"), fallback_confidence=_coerce_str(item.get("confidence"))),
+                audit_note=_coerce_str(item.get("audit_note")),
+                current_label_problem=_coerce_str(item.get("current_label_problem")),
                 label_is_suspect=False,
             )
 
@@ -452,7 +470,12 @@ def _load_label_records(
                 golden_answer=_coerce_scalar_answer(item.get("golden_answer")),
                 page_ids=_coerce_str_list(item.get("golden_page_ids") or item.get("gold_page_ids")),
                 label_source="reviewed",
-                trust_tier=_coerce_str(item.get("trust_tier")),
+                trust_tier=_coerce_str(item.get("trust_tier")) or _coerce_str(item.get("confidence")),
+                confidence=_coerce_str(item.get("confidence")),
+                label_status=_coerce_str(item.get("label_status")),
+                label_weight=_coerce_label_weight(item.get("label_weight"), fallback_confidence=_coerce_str(item.get("confidence"))),
+                audit_note=_coerce_str(item.get("audit_note")),
+                current_label_problem=_coerce_str(item.get("current_label_problem")),
                 label_is_suspect=False,
             )
 
@@ -611,7 +634,7 @@ def _build_feature_inventory(*, rows: list[GroundingMlRow]) -> str:
         "- `doc_candidates`, `page_candidates`",
         "- `legacy_selected_pages`, `sidecar_selected_pages`",
         "- `support_fact_features`, `page_retrieval_features`",
-        "- `label_source`, `label_trust_tier`, `label_is_suspect`",
+        "- `label_source`, `label_trust_tier`, `label_confidence`, `label_status`, `label_weight`, `label_is_suspect`",
         "",
         "## Candidate feature notes",
         "",
@@ -734,3 +757,23 @@ def _coerce_scalar_answer(value: object) -> str | bool | int | float | None:
     if isinstance(value, str):
         return value.strip()
     return None
+
+
+def _coerce_label_weight(value: object, *, fallback_confidence: str) -> float:
+    """Coerce an explicit or derived label weight.
+
+    Args:
+        value: Raw weight object.
+        fallback_confidence: Confidence string used when weight is omitted.
+
+    Returns:
+        Normalized non-negative label weight.
+    """
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return max(0.0, float(value))
+    confidence = fallback_confidence.strip().lower()
+    if confidence == "high":
+        return 1.0
+    if confidence == "medium":
+        return 0.5
+    return 0.0
