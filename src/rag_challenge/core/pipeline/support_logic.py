@@ -42,6 +42,7 @@ from .support_page_policy import (
     apply_support_shape_policy,
     boost_family_context_chunks,
     enhance_page_recall,
+    explicit_anchor_page_ids,
     explicit_page_reference_support_chunk_ids,
     extract_citation_pages,
     is_metadata_page_family_query,
@@ -116,6 +117,7 @@ class SupportLogicMixin:
     doc_ids_for_chunk_ids = doc_ids_for_chunk_ids
     doc_shortlist_score = doc_shortlist_score
     enhance_page_recall = enhance_page_recall
+    explicit_anchor_page_ids = explicit_anchor_page_ids
     expand_page_spanning_support_chunk_ids = expand_page_spanning_support_chunk_ids
     explicit_page_reference_support_chunk_ids = explicit_page_reference_support_chunk_ids
     extract_citation_pages = staticmethod(extract_citation_pages)
@@ -190,6 +192,7 @@ _SUPPORT_COMPAT_ALIASES: dict[str, str] = {
     "_doc_ids_for_chunk_ids": "doc_ids_for_chunk_ids",
     "_doc_shortlist_score": "doc_shortlist_score",
     "_enhance_page_recall": "enhance_page_recall",
+    "_explicit_anchor_page_ids": "explicit_anchor_page_ids",
     "_expand_page_spanning_support_chunk_ids": "expand_page_spanning_support_chunk_ids",
     "_explicit_page_reference_support_chunk_ids": "explicit_page_reference_support_chunk_ids",
     "_extract_citation_pages": "extract_citation_pages",

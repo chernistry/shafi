@@ -1312,6 +1312,126 @@ def test_apply_support_shape_policy_prunes_nonrequested_title_page_noise_when_ti
     assert flags == ["explicit_page_reference_pruned"]
 
 
+def test_set_final_used_pages_clamps_citation_override_to_explicit_anchor() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    builder = RAGPipelineBuilder(
+        retriever=MagicMock(),
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="anchor-clamp", question_id="anchor-clamp", answer_type="number")
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:page7",
+            doc_id="civil-commercial-law",
+            doc_title="DIFC Law on the Application of Civil and Commercial Laws",
+            doc_type=DocType.STATUTE,
+            section_path="page:7",
+            text="Later operative clause repeating Law No. 3 of 2004 in the body text.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:title",
+            doc_id="civil-commercial-law",
+            doc_title="DIFC Law on the Application of Civil and Commercial Laws",
+            doc_type=DocType.STATUTE,
+            section_path="page:1",
+            text="This is DIFC Law No. 3 of 2004.",
+            retrieval_score=0.95,
+            rerank_score=0.95,
+            doc_summary="",
+        ),
+    ]
+
+    builder._set_final_used_pages(
+        collector=collector,
+        query="According to the title page of the DIFC Law on the Application of Civil and Commercial Laws, what is its official law number?",
+        answer="Law No. 3 of 2004",
+        answer_type="number",
+        context_chunks=context_chunks,
+        current_used_ids=["law:page7", "law:title"],
+    )
+
+    telemetry = collector.finalize()
+
+    assert telemetry.used_page_ids == ["civil-commercial-law_1"]
+
+
+def test_set_final_used_pages_keeps_title_page_compare_to_one_page_per_doc() -> None:
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    builder = RAGPipelineBuilder(
+        retriever=MagicMock(),
+        reranker=MagicMock(),
+        generator=MagicMock(),
+        classifier=MagicMock(),
+    )
+    collector = TelemetryCollector(request_id="title-compare", question_id="title-compare", answer_type="name")
+    context_chunks = [
+        RankedChunk(
+            chunk_id="ca1:body",
+            doc_id="ca1",
+            doc_title="CA 001/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:2",
+            text="The claimant is Alice Example in the reasons section.",
+            retrieval_score=0.97,
+            rerank_score=0.97,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="ca1:title",
+            doc_id="ca1",
+            doc_title="CA 001/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="Between Alice Example and Bob Example.",
+            retrieval_score=0.90,
+            rerank_score=0.90,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct2:body",
+            doc_id="sct2",
+            doc_title="SCT 002/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:3",
+            text="The claimant is Alice Example in the factual background.",
+            retrieval_score=0.96,
+            rerank_score=0.96,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="sct2:title",
+            doc_id="sct2",
+            doc_title="SCT 002/2024 Example v Example",
+            doc_type=DocType.CASE_LAW,
+            section_path="page:1",
+            text="Between Alice Example and Carol Example.",
+            retrieval_score=0.89,
+            rerank_score=0.89,
+            doc_summary="",
+        ),
+    ]
+
+    builder._set_final_used_pages(
+        collector=collector,
+        query="Which claimant appears on the title page of both CA 001/2024 and SCT 002/2024?",
+        answer="Alice Example",
+        answer_type="name",
+        context_chunks=context_chunks,
+        current_used_ids=["ca1:body", "ca1:title", "sct2:body", "sct2:title"],
+    )
+
+    telemetry = collector.finalize()
+
+    assert telemetry.used_page_ids == ["ca1_1", "sct2_1"]
+
+
 def test_expand_page_spanning_support_chunk_ids_includes_adjacent_continuation_page() -> None:
     from rag_challenge.core.pipeline import RAGPipelineBuilder
 
@@ -4340,6 +4460,45 @@ def test_rerank_support_pages_within_selected_docs_skips_explicit_page_queries(m
     )
 
     assert reranked_ids == ["arb34:page2"]
+
+
+def test_rerank_support_pages_within_selected_docs_caps_single_doc_strict_to_one_page(mock_settings):
+    from rag_challenge.core.pipeline import RAGPipelineBuilder
+
+    del mock_settings
+    context_chunks = [
+        RankedChunk(
+            chunk_id="law:page3",
+            doc_id="law",
+            doc_title="LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:3",
+            text="A weaker match mentioning the amount in passing.",
+            retrieval_score=0.92,
+            rerank_score=0.90,
+            doc_summary="",
+        ),
+        RankedChunk(
+            chunk_id="law:page5",
+            doc_id="law",
+            doc_title="LAW",
+            doc_type=DocType.STATUTE,
+            section_path="page:5",
+            text="The exact amount awarded is USD 10,000.",
+            retrieval_score=0.96,
+            rerank_score=0.97,
+            doc_summary="",
+        ),
+    ]
+
+    reranked_ids = RAGPipelineBuilder._rerank_support_pages_within_selected_docs(
+        query="What amount was awarded under the law?",
+        answer_type="number",
+        context_chunks=context_chunks,
+        used_ids=["law:page3", "law:page5"],
+    )
+
+    assert reranked_ids == ["law:page5"]
 
 
 def test_collapse_doc_family_crowding_context_keeps_existing_doc_diversity(mock_settings):

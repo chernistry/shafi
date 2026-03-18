@@ -41,9 +41,13 @@ _STRUCTURAL_REF_RE = re.compile(
     re.IGNORECASE,
 )
 _MULTI_WS_RE = re.compile(r"\s+")
-_TITLE_PAGE_RE = re.compile(r"\b(?:title|cover)\s+page\b", re.IGNORECASE)
+_TITLE_PAGE_RE = re.compile(
+    r"\b(?:title|cover)\s+page\b|\b(?:front\s+page|cover\s+sheet|first\s+page)\b",
+    re.IGNORECASE,
+)
 _CAPTION_HEADER_RE = re.compile(r"\b(?:caption|header)\b", re.IGNORECASE)
-_SECOND_PAGE_RE = re.compile(r"\b(?:second\s+page|page\s+2)\b", re.IGNORECASE)
+_SECOND_PAGE_RE = re.compile(r"\b(?:second\s+page|page\s+2|2nd\s+page)\b", re.IGNORECASE)
+_ORDINAL_PAGE_RE = re.compile(r"\b(\d{1,3})(?:st|nd|rd|th)\s+page\b", re.IGNORECASE)
 _NUMERIC_PAGE_RE = re.compile(r"\bpage\s+(\d{1,3})\b", re.IGNORECASE)
 
 _ACRONYMS = {
@@ -326,6 +330,15 @@ class QueryClassifier:
 
     @staticmethod
     def extract_explicit_page_reference(query: str) -> ExplicitPageReference | None:
+        """Extract an explicit page anchor from the user query.
+
+        Args:
+            query: Raw user question text.
+
+        Returns:
+            A normalized explicit page reference when the query names a
+            concrete page anchor, otherwise ``None``.
+        """
         text = query.strip()
         if not text:
             return None
@@ -341,6 +354,17 @@ class QueryClassifier:
         second_page_match = _SECOND_PAGE_RE.search(text)
         if second_page_match is not None:
             return ExplicitPageReference(kind="second_page", phrase=second_page_match.group(0), requested_page=2)
+
+        ordinal_page_match = _ORDINAL_PAGE_RE.search(text)
+        if ordinal_page_match is not None:
+            requested_page = int(ordinal_page_match.group(1))
+            if requested_page == 2:
+                return ExplicitPageReference(kind="second_page", phrase=ordinal_page_match.group(0), requested_page=2)
+            return ExplicitPageReference(
+                kind="numeric_page",
+                phrase=ordinal_page_match.group(0),
+                requested_page=requested_page,
+            )
 
         numeric_page_match = _NUMERIC_PAGE_RE.search(text)
         if numeric_page_match is not None:

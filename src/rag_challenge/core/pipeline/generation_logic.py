@@ -9,7 +9,10 @@ from rag_challenge.core.premise_guard import check_query_premise
 from rag_challenge.models import Citation, QueryComplexity
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
+
+    from rag_challenge.models import RankedChunk
+    from rag_challenge.telemetry import TelemetryCollector
 
 from .constants import _STRICT_REPAIR_HINT_TEMPLATE
 from .query_rules import (
@@ -476,30 +479,14 @@ class GenerationLogicMixin:
                     context_chunks=context_chunks,
                     used_ids=shaped_used_ids if shaped_used_ids else used_ids,
                 )
-            final_used_ids = self._enhance_page_recall(
+            self._set_final_used_pages(
+                collector=collector,
                 query=state["query"],
+                answer=answer,
                 answer_type=answer_type,
                 context_chunks=context_chunks,
                 current_used_ids=final_used_ids,
             )
-            citation_pages = self._extract_citation_pages(
-                question=state["query"],
-                answer=answer,
-                answer_type=answer_type,
-                context_chunks=context_chunks,
-            )
-            if citation_pages:
-                collector.set_used_page_ids_override(citation_pages)
-            else:
-                collector.set_used_ids(final_used_ids)
-            trimmed = self._trim_to_article_page(
-                question=state["query"],
-                answer_type=answer_type,
-                context_chunks=context_chunks,
-                current_page_ids=citation_pages if citation_pages else final_used_ids,
-            )
-            if trimmed:
-                collector.set_used_page_ids_override(trimmed)
             citations: list[Citation] = []
             cited_ids = list(cited_ids)
         else:
@@ -782,30 +769,14 @@ class GenerationLogicMixin:
                     context_chunks=context_chunks,
                     used_ids=shaped_used_ids,
                 )
-            final_used_ids = self._enhance_page_recall(
+            self._set_final_used_pages(
+                collector=collector,
                 query=state["query"],
+                answer=answer,
                 answer_type=answer_type,
                 context_chunks=context_chunks,
                 current_used_ids=final_used_ids,
             )
-            citation_pages = self._extract_citation_pages(
-                question=state["query"],
-                answer=answer,
-                answer_type=answer_type,
-                context_chunks=context_chunks,
-            )
-            if citation_pages:
-                collector.set_used_page_ids_override(citation_pages)
-            else:
-                collector.set_used_ids(final_used_ids)
-            trimmed = self._trim_to_article_page(
-                question=state["query"],
-                answer_type=answer_type,
-                context_chunks=context_chunks,
-                current_page_ids=citation_pages if citation_pages else final_used_ids,
-            )
-            if trimmed:
-                collector.set_used_page_ids_override(trimmed)
             if answer_type == "free_text" and streamed and answer.strip():
                 writer({"type": "answer_final", "text": answer})
 
@@ -822,6 +793,140 @@ class GenerationLogicMixin:
             "cited_chunk_ids": cited_ids,
             "streamed": streamed,
         }
+
+    def _set_final_used_pages(
+        self,
+        *,
+        collector: TelemetryCollector,
+        query: str,
+        answer: str,
+        answer_type: str,
+        context_chunks: Sequence[RankedChunk],
+        current_used_ids: Sequence[str],
+    ) -> None:
+        """Finalize used-page telemetry with terminal anchor constraints.
+
+        Args:
+            collector: Telemetry collector for the current request.
+            query: Raw user question.
+            answer: Final answer text.
+            answer_type: Normalized answer type.
+            context_chunks: Ranked context chunks used for answering.
+            current_used_ids: Support chunk IDs selected before late page shaping.
+        """
+        anchor_page_ids = self._explicit_anchor_page_ids(
+            query=query,
+            context_chunks=context_chunks,
+            preferred_chunk_ids=current_used_ids,
+        )
+        final_used_ids = list(current_used_ids)
+        if not anchor_page_ids:
+            final_used_ids = self._enhance_page_recall(
+                query=query,
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_used_ids=final_used_ids,
+            )
+        collector.set_used_ids(final_used_ids)
+
+        final_page_ids = self._chunk_ids_to_page_ids(
+            chunk_ids=final_used_ids,
+            context_chunks=context_chunks,
+        )
+        citation_pages = self._extract_citation_pages(
+            question=query,
+            answer=answer,
+            answer_type=answer_type,
+            context_chunks=context_chunks,
+        )
+        if citation_pages:
+            final_page_ids = citation_pages
+
+        if anchor_page_ids:
+            final_page_ids = self._constrain_page_ids_to_anchor(
+                page_ids=final_page_ids,
+                anchor_page_ids=anchor_page_ids,
+            )
+
+        trimmed = self._trim_to_article_page(
+            question=query,
+            answer_type=answer_type,
+            context_chunks=context_chunks,
+            current_page_ids=final_page_ids,
+        )
+        if trimmed:
+            final_page_ids = (
+                self._constrain_page_ids_to_anchor(
+                    page_ids=trimmed,
+                    anchor_page_ids=anchor_page_ids,
+                )
+                if anchor_page_ids
+                else trimmed
+            )
+
+        if final_page_ids:
+            collector.set_used_page_ids_override(final_page_ids)
+
+    def _chunk_ids_to_page_ids(
+        self,
+        *,
+        chunk_ids: Sequence[str],
+        context_chunks: Sequence[RankedChunk],
+    ) -> list[str]:
+        """Convert support chunk IDs into ordered page IDs.
+
+        Args:
+            chunk_ids: Candidate support chunk IDs.
+            context_chunks: Ranked context chunks that define page identity.
+
+        Returns:
+            Ordered unique page IDs present in the provided context chunks.
+        """
+        context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+        page_ids: list[str] = []
+        seen_page_ids: set[str] = set()
+        for raw_chunk_id in chunk_ids:
+            chunk = context_by_id.get(str(raw_chunk_id).strip())
+            if chunk is None:
+                continue
+            doc_id = str(getattr(chunk, "doc_id", "") or "").strip()
+            page_num = self._page_num(str(getattr(chunk, "section_path", "") or ""))
+            if not doc_id or page_num <= 0:
+                continue
+            page_id = f"{doc_id}_{page_num}"
+            if page_id in seen_page_ids:
+                continue
+            seen_page_ids.add(page_id)
+            page_ids.append(page_id)
+        return page_ids
+
+    @staticmethod
+    def _constrain_page_ids_to_anchor(
+        *,
+        page_ids: Sequence[str],
+        anchor_page_ids: Sequence[str],
+    ) -> list[str]:
+        """Clamp used-page output to the explicit anchor set.
+
+        Args:
+            page_ids: Candidate used page IDs.
+            anchor_page_ids: Allowed page IDs derived from the explicit anchor.
+
+        Returns:
+            Ordered page IDs that stay within the anchor set.
+        """
+        ordered_anchor_page_ids = [str(page_id).strip() for page_id in anchor_page_ids if str(page_id).strip()]
+        if not ordered_anchor_page_ids:
+            return [str(page_id).strip() for page_id in page_ids if str(page_id).strip()]
+
+        allowed_page_ids = set(ordered_anchor_page_ids)
+        constrained = [
+            str(page_id).strip()
+            for page_id in page_ids
+            if str(page_id).strip() and str(page_id).strip() in allowed_page_ids
+        ]
+        return constrained or ordered_anchor_page_ids
+
     async def _verify(self, state: RAGState) -> dict[str, object]:
         verifier_settings = getattr(self._settings, "verifier", None)
         if verifier_settings is not None and not bool(getattr(verifier_settings, "enabled", True)):

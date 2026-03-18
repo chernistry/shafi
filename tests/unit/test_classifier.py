@@ -168,6 +168,24 @@ def test_extract_explicit_page_reference_detects_second_page():
     assert ref.requested_page == 2
 
 
+def test_extract_explicit_page_reference_detects_ordinal_second_page():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("Who is listed on the 2nd page of the judgment?")
+    assert ref is not None
+    assert ref.kind == "second_page"
+    assert ref.requested_page == 2
+
+
+def test_extract_explicit_page_reference_detects_ordinal_numeric_page():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("What happens on the 3rd page of the judgment?")
+    assert ref is not None
+    assert ref.kind == "numeric_page"
+    assert ref.requested_page == 3
+
+
 def test_extract_explicit_page_reference_detects_numeric_page():
     from rag_challenge.core.classifier import QueryClassifier
 
@@ -175,6 +193,24 @@ def test_extract_explicit_page_reference_detects_numeric_page():
     assert ref is not None
     assert ref.kind == "numeric_page"
     assert ref.requested_page == 7
+
+
+def test_extract_explicit_page_reference_detects_front_page():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("Which respondent appears on the front page of the judgment?")
+    assert ref is not None
+    assert ref.kind == "title_page"
+    assert ref.requested_page == 1
+
+
+def test_extract_explicit_page_reference_detects_cover_sheet():
+    from rag_challenge.core.classifier import QueryClassifier
+
+    ref = QueryClassifier.extract_explicit_page_reference("What law number appears on the cover sheet?")
+    assert ref is not None
+    assert ref.kind == "title_page"
+    assert ref.requested_page == 1
 
 
 def test_extract_explicit_page_reference_detects_caption_header():

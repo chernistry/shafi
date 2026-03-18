@@ -100,6 +100,16 @@ def explicit_page_reference_support_chunk_ids(
     query: str,
     context_chunks: Sequence[RankedChunk],
 ) -> list[str]:
+    """Resolve support chunks for an explicit page anchor.
+
+    Args:
+        pipeline: Pipeline builder facade.
+        query: Raw user question.
+        context_chunks: Ranked context chunks available for support shaping.
+
+    Returns:
+        Chunk IDs that best represent the explicitly requested page.
+    """
     explicit_ref = QueryClassifier.extract_explicit_page_reference(query)
     if explicit_ref is None or explicit_ref.requested_page is None or explicit_ref.requested_page <= 0:
         return []
@@ -134,6 +144,67 @@ def explicit_page_reference_support_chunk_ids(
         context_chunks=context_chunks,
     )
     return [fallback_chunk_id] if fallback_chunk_id else []
+
+
+def explicit_anchor_page_ids(
+    pipeline: RAGPipelineBuilder,
+    *,
+    query: str,
+    context_chunks: Sequence[RankedChunk],
+    preferred_chunk_ids: Sequence[str] = (),
+) -> list[str]:
+    """Return the allowed page IDs for an explicit page-anchor query.
+
+    Args:
+        pipeline: Pipeline builder facade.
+        query: Raw user question.
+        context_chunks: Ranked context chunks available for support shaping.
+        preferred_chunk_ids: Candidate chunk IDs whose pages should be kept
+            when they already satisfy the explicit anchor.
+
+    Returns:
+        Ordered page IDs allowed by the explicit anchor, or an empty list when
+        the query has no explicit page constraint.
+    """
+    explicit_ref = QueryClassifier.extract_explicit_page_reference(query)
+    if explicit_ref is None or explicit_ref.requested_page is None or explicit_ref.requested_page <= 0:
+        return []
+
+    requested_page = explicit_ref.requested_page
+    context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+    page_ids: list[str] = []
+    seen_page_ids: set[str] = set()
+
+    def _push_page_id(chunk_id: str) -> None:
+        chunk = context_by_id.get(chunk_id)
+        if chunk is None:
+            return
+        doc_id = str(getattr(chunk, "doc_id", "") or "").strip()
+        page_num = pipeline.page_num(str(getattr(chunk, "section_path", "") or ""))
+        if not doc_id or page_num != requested_page:
+            return
+        page_id = f"{doc_id}_{page_num}"
+        if page_id in seen_page_ids:
+            return
+        seen_page_ids.add(page_id)
+        page_ids.append(page_id)
+
+    for chunk_id in preferred_chunk_ids:
+        _push_page_id(str(chunk_id).strip())
+
+    if page_ids:
+        return page_ids
+
+    for chunk_id in explicit_page_reference_support_chunk_ids(
+        pipeline,
+        query=query,
+        context_chunks=context_chunks,
+    ):
+        _push_page_id(chunk_id)
+
+    return page_ids
+
+
 def trim_to_article_page(
     *,
     question: str,
@@ -450,6 +521,18 @@ def rerank_support_pages_within_selected_docs(
     context_chunks: Sequence[RankedChunk],
     used_ids: Sequence[str],
 ) -> list[str]:
+    """Collapse chunk support into a tighter page-level posterior.
+
+    Args:
+        pipeline: Pipeline builder facade.
+        query: Raw user question.
+        answer_type: Normalized answer type.
+        context_chunks: Ranked context chunks available for reranking.
+        used_ids: Candidate support chunk IDs.
+
+    Returns:
+        A narrowed list of representative support chunk IDs.
+    """
     ordered_used_ids: list[str] = []
     seen_used_ids: set[str] = set()
     for raw_chunk_id in used_ids:
@@ -477,6 +560,7 @@ def rerank_support_pages_within_selected_docs(
         or "appeared in both" in q_lower
         or "administ" in q_lower
     )
+    strict_single_doc_like = normalized_answer_type in {"boolean", "name", "names", "date", "number"} and not compare_like
     metadata_like = (
         pipeline.is_named_metadata_support_query(query)
         or _is_named_multi_title_lookup_query(query)
@@ -495,7 +579,7 @@ def rerank_support_pages_within_selected_docs(
             return ordered_used_ids
         if metadata_page_family_query and len(used_pages) == 2:
             return ordered_used_ids
-    if not (compare_like or metadata_like):
+    if not (compare_like or metadata_like or strict_single_doc_like):
         return ordered_used_ids
 
     selected_doc_ids = pipeline.doc_ids_for_chunk_ids(chunk_ids=ordered_used_ids, context_chunks=context_chunks)
@@ -512,8 +596,13 @@ def rerank_support_pages_within_selected_docs(
         )
         if doc_id
     ]
-    page_one_bias = 0.18 if metadata_like else 0.12
-    early_page_bias = 0.04 if metadata_like else 0.0
+    page_one_bias = 0.0
+    early_page_bias = 0.0
+    if metadata_like:
+        page_one_bias = 0.18
+        early_page_bias = 0.04
+    elif compare_like:
+        page_one_bias = 0.12
     if compare_like and any(
         term in q_lower for term in ("judge", "party", "claimant", "respondent", "title", "citation title")
     ):
@@ -532,6 +621,18 @@ def rerank_support_pages_within_selected_docs(
     )
     if not scored_pages:
         return ordered_used_ids
+
+    if strict_single_doc_like:
+        best_page = scored_pages[0]
+        doc_id, _, page_raw = best_page.page_id.rpartition("_")
+        if not doc_id or not page_raw.isdigit():
+            return ordered_used_ids
+        chunk_id = pipeline.best_support_chunk_id_for_doc_page(
+            doc_id=doc_id,
+            page_num=int(page_raw),
+            context_chunks=context_chunks,
+        )
+        return [chunk_id] if chunk_id else ordered_used_ids
 
     selected_pages = select_top_pages_per_doc(
         scored_pages=scored_pages,
@@ -642,6 +743,20 @@ def apply_support_shape_policy(
     cited_ids: Sequence[str],
     support_ids: Sequence[str],
 ) -> tuple[list[str], list[str]]:
+    """Shape support chunk IDs before late page selection.
+
+    Args:
+        pipeline: Pipeline builder facade.
+        answer_type: Normalized answer type.
+        answer: Final answer text.
+        query: Raw user question.
+        context_chunks: Ranked context chunks.
+        cited_ids: Chunk IDs cited by the answerer.
+        support_ids: Chunk IDs localized as support.
+
+    Returns:
+        The shaped support chunk IDs and diagnostic flags.
+    """
     ordered_ids = list(
         dict.fromkeys(
             str(chunk_id).strip()
