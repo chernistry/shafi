@@ -31,11 +31,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "pandas>=2.2",
+    "pyarrow>=18.0",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
     "ruff>=0.9",
     "pyright>=1.1",
+    "PyYAML>=6.0",
     "scikit-learn>=1.5",
     "httpx",  # for TestClient
 ]
