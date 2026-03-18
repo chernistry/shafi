@@ -55,6 +55,7 @@ def mock_embedder():
 def mock_store():
     store = MagicMock()
     store.collection_name = "legal_chunks"
+    store.page_collection_name = "legal_pages"
     store.shadow_collection_name = "legal_chunks_shadow"
     store.client = AsyncMock()
     store.client.collection_exists = AsyncMock(return_value=True)
@@ -77,6 +78,38 @@ def mock_store():
         points.append(point)
     store.client.query_points = AsyncMock(return_value=SimpleNamespace(points=points))
     return store
+
+
+def _make_page_point(
+    *,
+    page_id: str = "doc-1_16",
+    doc_id: str = "doc-1",
+    page_num: int = 16,
+    page_role: str = "article_clause",
+    page_family: str = "body",
+    article_refs: list[str] | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=page_id,
+        score=0.95,
+        payload={
+            "page_id": page_id,
+            "doc_id": doc_id,
+            "page_num": page_num,
+            "doc_title": "Operating Law 2018",
+            "doc_type": "statute",
+            "page_text": "Article 16 filing obligation",
+            "page_role": page_role,
+            "page_family": page_family,
+            "article_refs": article_refs or ["Article 16"],
+            "normalized_refs": ["Article 16"],
+            "law_titles": ["Operating Law 2018"],
+            "case_numbers": [],
+            "amount_roles": [],
+            "linked_refs": [],
+            "doc_family": "law",
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -499,3 +532,56 @@ async def test_retrieve_runs_bounded_anchor_retrieval_when_enabled(mock_settings
     assert any(chunk.chunk_id == "anchor-c1" for chunk in chunks)
     assert debug["anchor_retrieval_used"] is True
     assert debug["source_hits"]["anchor"] == 1
+
+
+def test_build_page_filter_includes_all_page_level_constraints() -> None:
+    from rag_challenge.core.retriever import HybridRetriever
+
+    where = HybridRetriever._build_page_filter(
+        doc_ids=["doc-1"],
+        page_nums=[16],
+        article_refs=["Article 16"],
+        page_roles=["article_clause"],
+        page_families=["body"],
+    )
+
+    assert isinstance(where, models.Filter)
+    must = where.must
+    assert isinstance(must, list)
+    keys = {getattr(condition, "key", "") for condition in must}
+    assert keys == {"doc_id", "page_num", "article_refs", "page_role", "page_family"}
+
+
+@pytest.mark.asyncio
+async def test_retrieve_pages_uses_hybrid_fusion_and_page_filters(mock_settings, mock_embedder, mock_store) -> None:
+    from rag_challenge.core.retriever import HybridRetriever
+
+    mock_store.client.query_points = AsyncMock(return_value=SimpleNamespace(points=[_make_page_point()]))
+    retriever = HybridRetriever(store=mock_store, embedder=mock_embedder)
+
+    pages = await retriever.retrieve_pages(
+        "According to Article 16 of the Operating Law 2018, what document must be filed?",
+        top_k=3,
+        doc_refs=["Operating Law 2018"],
+        doc_ids=["doc-1"],
+        page_nums=[16],
+        article_refs=["Article 16"],
+        page_roles=["article_clause"],
+        page_families=["body"],
+    )
+
+    assert len(pages) == 1
+    kwargs = mock_store.client.query_points.await_args.kwargs
+    assert kwargs["collection_name"] == "legal_pages"
+    assert kwargs["limit"] == 3
+    assert isinstance(kwargs["query"], models.FusionQuery)
+    prefetch = kwargs["prefetch"]
+    assert isinstance(prefetch, list)
+    assert len(prefetch) == 2
+    for prefetch_query in prefetch:
+        assert prefetch_query.limit == 6
+        assert isinstance(prefetch_query.filter, models.Filter)
+        must = prefetch_query.filter.must
+        assert isinstance(must, list)
+        keys = {getattr(condition, "key", "") for condition in must}
+        assert keys == {"doc_id", "page_num", "article_refs", "page_role", "page_family"}

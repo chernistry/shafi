@@ -154,6 +154,45 @@ async def test_grounding_sidecar_passes_explicit_page_filter_for_single_doc_scop
 
 
 @pytest.mark.asyncio
+async def test_grounding_sidecar_passes_article_anchor_filter_for_single_doc_scope() -> None:
+    selector, retriever = _make_selector(
+        retrieved_pages=[
+            RetrievedPage(
+                page_id="law_16",
+                doc_id="law",
+                page_num=16,
+                doc_title="Law",
+                doc_type="statute",
+                page_text="Article 16 requires the filing of the annual return.",
+                score=0.91,
+                page_role="article_clause",
+                article_refs=["Article 16"],
+            )
+        ]
+    )
+
+    result = await selector.select_page_ids(
+        query="According to Article 16 of the law, what document must be filed?",
+        answer="annual return",
+        answer_type="name",
+        context_chunks=[
+            _make_ranked_chunk(
+                chunk_id="law:15:0:article",
+                doc_id="law",
+                section_path="page:16",
+                text="Article 16 requires the filing of the annual return.",
+            )
+        ],
+    )
+
+    assert result == ["law_16"]
+    kwargs = retriever.retrieve_pages.await_args.kwargs
+    assert kwargs["doc_ids"] == ["law"]
+    assert kwargs["article_refs"] == ["Article 16"]
+    assert "article_clause" in kwargs["page_roles"]
+
+
+@pytest.mark.asyncio
 async def test_grounding_sidecar_leaves_broad_free_text_on_legacy_path() -> None:
     selector, retriever = _make_selector(retrieved_pages=[])
 
