@@ -4,15 +4,25 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from rag_challenge.core.grounding.evidence_selector import GroundingEvidenceSelector
-from rag_challenge.core.grounding.query_scope_classifier import extract_explicit_page_numbers
-from rag_challenge.models import DocType, RankedChunk, RetrievedPage
+from rag_challenge.core.grounding.query_scope_classifier import (
+    classify_query_scope,
+    extract_explicit_page_numbers,
+)
+from rag_challenge.models import DocType, RankedChunk, RetrievedPage, ScopeMode
 
 
-def _make_ranked_chunk(*, chunk_id: str, doc_id: str, section_path: str, text: str) -> RankedChunk:
+def _make_ranked_chunk(
+    *,
+    chunk_id: str,
+    doc_id: str,
+    section_path: str,
+    text: str,
+    doc_title: str = "Doc",
+) -> RankedChunk:
     return RankedChunk(
         chunk_id=chunk_id,
         doc_id=doc_id,
-        doc_title="Doc",
+        doc_title=doc_title,
         doc_type=DocType.STATUTE,
         section_path=section_path,
         text=text,
@@ -48,6 +58,17 @@ def _make_selector(*, retrieved_pages: list[RetrievedPage]) -> tuple[GroundingEv
 
 def test_extract_explicit_page_numbers_returns_unique_positive_page_numbers() -> None:
     assert extract_explicit_page_numbers("What is stated on page 2 and pages 2 and 5?") == [2, 5]
+
+
+def test_classify_query_scope_uses_issued_by_role_for_compare_judge_queries() -> None:
+    prediction = classify_query_scope(
+        "Who was the judge in CFI 001/2024 and CFI 002/2024?",
+        "name",
+    )
+
+    assert prediction.scope_mode is ScopeMode.COMPARE_PAIR
+    assert "issued_by_block" in prediction.target_page_roles
+    assert "title_cover" in prediction.target_page_roles
 
 
 @pytest.mark.asyncio
@@ -212,3 +233,127 @@ async def test_grounding_sidecar_leaves_broad_free_text_on_legacy_path() -> None
 
     assert result is None
     retriever.retrieve_pages.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_grounding_sidecar_compare_scope_limits_doc_scope_to_requested_cases() -> None:
+    selector, retriever = _make_selector(
+        retrieved_pages=[
+            RetrievedPage(
+                page_id="case-a-doc_2",
+                doc_id="case-a-doc",
+                page_num=2,
+                doc_title="CFI 001/2024 Alpha Holdings",
+                doc_type="case_law",
+                page_text="Issued by: Justice A.",
+                score=0.93,
+                page_role="issued_by_block",
+            ),
+            RetrievedPage(
+                page_id="case-b-doc_3",
+                doc_id="case-b-doc",
+                page_num=3,
+                doc_title="CFI 002/2024 Beta Capital",
+                doc_type="case_law",
+                page_text="Issued by: Justice B.",
+                score=0.91,
+                page_role="issued_by_block",
+            ),
+        ]
+    )
+
+    result = await selector.select_page_ids(
+        query="Who was the judge in CFI 001/2024 and CFI 002/2024?",
+        answer="Justice A; Justice B",
+        answer_type="names",
+        context_chunks=[
+            _make_ranked_chunk(
+                chunk_id="case-a-doc:1:0:judge",
+                doc_id="case-a-doc",
+                doc_title="CFI 001/2024 Alpha Holdings",
+                section_path="page:2",
+                text="Issued by: Justice A.",
+            ),
+            _make_ranked_chunk(
+                chunk_id="case-b-doc:2:0:judge",
+                doc_id="case-b-doc",
+                doc_title="CFI 002/2024 Beta Capital",
+                section_path="page:3",
+                text="Issued by: Justice B.",
+            ),
+            _make_ranked_chunk(
+                chunk_id="noise-doc:0:0:title",
+                doc_id="noise-doc",
+                doc_title="CFI 003/2024 Noise Corp",
+                section_path="page:1",
+                text="Noise case title page.",
+            ),
+        ],
+    )
+
+    assert result == ["case-a-doc_2", "case-b-doc_3"]
+    kwargs = retriever.retrieve_pages.await_args.kwargs
+    assert kwargs["doc_ids"] == ["case-a-doc", "case-b-doc"]
+    assert "issued_by_block" in kwargs["page_roles"]
+
+
+@pytest.mark.asyncio
+async def test_grounding_sidecar_full_case_scope_excludes_unrelated_docs() -> None:
+    selector, retriever = _make_selector(
+        retrieved_pages=[
+            RetrievedPage(
+                page_id="case-doc-judgment_5",
+                doc_id="case-doc-judgment",
+                page_num=5,
+                doc_title="CFI 001/2024 Alpha Holdings Judgment",
+                doc_type="case_law",
+                page_text="Issued by: Justice A.",
+                score=0.92,
+                page_role="issued_by_block",
+            ),
+            RetrievedPage(
+                page_id="case-doc-order_2",
+                doc_id="case-doc-order",
+                page_num=2,
+                doc_title="CFI 001/2024 Alpha Holdings Order",
+                doc_type="case_law",
+                page_text="Issued by: Justice A.",
+                score=0.89,
+                page_role="issued_by_block",
+            ),
+        ]
+    )
+
+    result = await selector.select_page_ids(
+        query="Look through all documents in CFI 001/2024 and tell me who the judge was.",
+        answer="Justice A",
+        answer_type="name",
+        context_chunks=[
+            _make_ranked_chunk(
+                chunk_id="case-doc-judgment:4:0:judge",
+                doc_id="case-doc-judgment",
+                doc_title="CFI 001/2024 Alpha Holdings Judgment",
+                section_path="page:5",
+                text="Issued by: Justice A.",
+            ),
+            _make_ranked_chunk(
+                chunk_id="case-doc-order:1:0:judge",
+                doc_id="case-doc-order",
+                doc_title="CFI 001/2024 Alpha Holdings Order",
+                section_path="page:2",
+                text="Issued by: Justice A.",
+            ),
+            _make_ranked_chunk(
+                chunk_id="noise-doc:0:0:title",
+                doc_id="noise-doc",
+                doc_title="CFI 999/2024 Noise Corp",
+                section_path="page:1",
+                text="Noise case title page.",
+            ),
+        ],
+    )
+
+    assert result == ["case-doc-judgment_5", "case-doc-order_2"]
+    kwargs = retriever.retrieve_pages.await_args.kwargs
+    assert kwargs["doc_ids"] == ["case-doc-judgment", "case-doc-order"]
+    assert "issued_by_block" in kwargs["page_roles"]

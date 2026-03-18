@@ -32,6 +32,8 @@ _FULL_CASE_PHRASES = (
 _NEGATIVE_TERMS = ("jury", "parole", "miranda", "plea bargain", "plea")
 
 _COSTS_TERMS = ("costs", "cost awarded", "final ruling", "outcome", "it is hereby ordered")
+_PARTY_SCOPE_TERMS = ("party", "parties", "claimant", "defendant", "appellant", "respondent")
+_JUDGE_SCOPE_TERMS = ("judge", "registrar", "justice")
 
 
 def extract_explicit_page_numbers(query: str) -> list[int]:
@@ -56,6 +58,43 @@ def extract_explicit_page_numbers(query: str) -> list[int]:
             seen.add(page_num)
             page_numbers.append(page_num)
     return page_numbers
+
+
+def _dedupe_roles(*roles: str) -> list[str]:
+    """Return roles in input order without duplicates or blanks.
+
+    Args:
+        *roles: Candidate page-role values.
+
+    Returns:
+        Ordered unique role strings.
+    """
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for role in roles:
+        value = str(role or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered
+
+
+def _case_scope_roles(query_lower: str) -> list[str]:
+    """Infer page roles for multi-doc compare/full-case questions.
+
+    Args:
+        query_lower: Lower-cased query text.
+
+    Returns:
+        Ordered page-role list for sidecar page retrieval.
+    """
+    roles = [PageRole.TITLE_COVER.value]
+    if any(term in query_lower for term in _JUDGE_SCOPE_TERMS):
+        roles.append(PageRole.ISSUED_BY_BLOCK.value)
+    if any(term in query_lower for term in _PARTY_SCOPE_TERMS):
+        roles.append(PageRole.CAPTION.value)
+    return _dedupe_roles(*roles)
 
 
 def classify_query_scope(query: str, answer_type: str) -> QueryScopePrediction:
@@ -83,9 +122,7 @@ def classify_query_scope(query: str, answer_type: str) -> QueryScopePrediction:
 
     # Full-case scope
     if any(phrase in ql for phrase in _FULL_CASE_PHRASES):
-        roles = [PageRole.TITLE_COVER.value]
-        if any(term in ql for term in ("judge", "party", "claimant", "defendant")):
-            roles = [PageRole.TITLE_COVER.value, PageRole.CAPTION.value]
+        roles = _case_scope_roles(ql)
         return QueryScopePrediction(
             scope_mode=ScopeMode.FULL_CASE_FILES,
             target_page_roles=roles,
@@ -111,11 +148,9 @@ def classify_query_scope(query: str, answer_type: str) -> QueryScopePrediction:
     # Compare pair (multiple case refs)
     case_refs = _CASE_REF_RE.findall(q)
     if len(case_refs) >= 2:
-        roles = [PageRole.TITLE_COVER.value]
-        if any(term in ql for term in ("judge", "party")):
-            roles = [PageRole.TITLE_COVER.value, PageRole.CAPTION.value]
-        elif "date of issue" in ql:
-            roles = [PageRole.ISSUED_BY_BLOCK.value, PageRole.TITLE_COVER.value]
+        roles = _case_scope_roles(ql)
+        if "date of issue" in ql:
+            roles = _dedupe_roles(PageRole.ISSUED_BY_BLOCK.value, *roles)
         return QueryScopePrediction(
             scope_mode=ScopeMode.COMPARE_PAIR,
             target_page_roles=roles,

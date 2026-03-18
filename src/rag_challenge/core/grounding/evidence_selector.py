@@ -23,6 +23,7 @@ from rag_challenge.core.grounding.query_scope_classifier import (
     classify_query_scope,
     extract_explicit_page_numbers,
 )
+from rag_challenge.core.grounding.scope_policy import select_sidecar_doc_scope
 from rag_challenge.models.schemas import (
     QueryScopePrediction,
     RetrievedPage,
@@ -41,8 +42,6 @@ if TYPE_CHECKING:
     from rag_challenge.models import RankedChunk
 
 logger = logging.getLogger(__name__)
-
-_CASE_REF_RE = re.compile(r"\b[A-Z]{2,4}\s+\d{3}/\d{4}\b", re.IGNORECASE)
 _SAFE_SINGLE_DOC_TYPES = frozenset({"boolean", "number", "date", "name", "names"})
 _SAFE_SINGLE_DOC_ROLES = frozenset(
     {
@@ -163,6 +162,13 @@ class GroundingEvidenceSelector:
                     context_page_ids.add(f"{chunk.doc_id}_{page_num + 1}")
                 except (ValueError, IndexError):
                     pass
+        if doc_ids:
+            allowed_doc_ids = set(doc_ids)
+            context_page_ids = {
+                page_id
+                for page_id in context_page_ids
+                if page_id.rpartition("_")[0] in allowed_doc_ids
+            }
 
         answer_value = _normalize_answer_value(answer, answer_type)
 
@@ -212,12 +218,11 @@ class GroundingEvidenceSelector:
         Returns:
             Sorted list of document IDs in scope.
         """
-        if scope.scope_mode is ScopeMode.FULL_CASE_FILES:
-            # For full-case, use all doc_ids from context
-            return sorted({chunk.doc_id for chunk in context_chunks if chunk.doc_id})
-
-        # Default: use doc footprint from answer path
-        return sorted({chunk.doc_id for chunk in context_chunks if chunk.doc_id})
+        return select_sidecar_doc_scope(
+            query=query,
+            scope=scope,
+            context_chunks=context_chunks,
+        )
 
     async def _retrieve_support_fact_candidates(
         self,
