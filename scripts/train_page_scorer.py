@@ -31,13 +31,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """
     repo_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-jsonl", type=Path, default=repo_root / "data" / "derived" / "grounding_ml" / "v1" / "train.jsonl")
-    parser.add_argument("--dev-jsonl", type=Path, default=repo_root / "data" / "derived" / "grounding_ml" / "v1" / "dev.jsonl")
+    parser.add_argument(
+        "--train-jsonl",
+        type=Path,
+        default=repo_root / "data" / "derived" / "grounding_ml" / "v2_reviewed" / "train.jsonl",
+    )
+    parser.add_argument(
+        "--dev-jsonl",
+        type=Path,
+        default=repo_root / "data" / "derived" / "grounding_ml" / "v2_reviewed" / "dev.jsonl",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=610)
     parser.add_argument("--max-train-rows", type=int, default=0)
     parser.add_argument("--max-dev-rows", type=int, default=0)
-    parser.add_argument("--label-mode", choices=["reviewed_only", "soft_and_reviewed", "all"], default="all")
+    parser.add_argument(
+        "--label-mode",
+        choices=["reviewed_high_confidence", "reviewed_weighted", "reviewed_only", "soft_and_reviewed", "all"],
+        default="reviewed_weighted",
+    )
     parser.add_argument("--top-feature-count", type=int, default=12)
     return parser
 
@@ -59,7 +71,12 @@ def main() -> int:
     y_train = [example.label for example in train_examples]
     sample_weight = [example.sample_weight for example in train_examples]
 
-    model = LogisticRegression(max_iter=400, class_weight="balanced", random_state=args.seed)
+    model = LogisticRegression(
+        max_iter=2000,
+        class_weight="balanced",
+        random_state=args.seed,
+        solver="liblinear",
+    )
     model.fit(x_train, y_train, sample_weight=sample_weight)
 
     train_scores = model.predict_proba(vectorizer.transform([example.features for example in train_examples]))[:, 1]
@@ -86,10 +103,7 @@ def main() -> int:
         "train_supervision_question_counts": count_question_sources(train_examples),
         "dev_supervision_question_counts": count_question_sources(dev_examples),
         "label_mode": args.label_mode,
-        "label_quality_note": (
-            "suspect_ai_gold page labels are excluded from direct supervision; "
-            "the scorer trains on reviewed/soft labels plus low-weight heuristic fallback pages."
-        ),
+        "label_quality_note": _build_label_quality_note(args.label_mode),
     }
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -126,6 +140,29 @@ def main() -> int:
     print(args.output_dir)
     print(json.dumps(metrics, indent=2))
     return 0
+
+
+def _build_label_quality_note(label_mode: str) -> str:
+    """Describe the supervision policy used for the current training run.
+
+    Args:
+        label_mode: CLI label-mode string.
+
+    Returns:
+        Short human-readable supervision note for metrics artifacts.
+    """
+    if label_mode == "reviewed_high_confidence":
+        return "Only reviewed high-confidence page labels are used for direct supervision."
+    if label_mode == "reviewed_weighted":
+        return "Reviewed page labels are used with confidence-aware weighting; low-confidence rows are excluded."
+    if label_mode == "reviewed_only":
+        return "Only reviewed page labels are used for direct supervision."
+    if label_mode == "soft_and_reviewed":
+        return "Reviewed labels are primary and soft AI-gold rows are kept only as low-value diagnostics."
+    return (
+        "suspect_ai_gold page labels are excluded from direct supervision; "
+        "the scorer trains on reviewed/soft labels plus low-weight heuristic fallback pages."
+    )
 
 
 if __name__ == "__main__":

@@ -35,8 +35,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """
     repo_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-jsonl", type=Path, default=repo_root / "data" / "derived" / "grounding_ml" / "v1" / "train.jsonl")
-    parser.add_argument("--dev-jsonl", type=Path, default=repo_root / "data" / "derived" / "grounding_ml" / "v1" / "dev.jsonl")
+    parser.add_argument(
+        "--train-jsonl",
+        type=Path,
+        default=repo_root / "data" / "derived" / "grounding_ml" / "v2_reviewed" / "train.jsonl",
+    )
+    parser.add_argument(
+        "--dev-jsonl",
+        type=Path,
+        default=repo_root / "data" / "derived" / "grounding_ml" / "v2_reviewed" / "dev.jsonl",
+    )
     parser.add_argument(
         "--external-jsonl",
         type=Path,
@@ -49,6 +57,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-external-rows", type=int, default=0)
     parser.add_argument("--external-sample-weight", type=float, default=0.25)
     parser.add_argument("--top-feature-count", type=int, default=12)
+    parser.add_argument(
+        "--internal-label-mode",
+        choices=["reviewed_high_confidence", "reviewed_weighted", "reviewed_only", "soft_and_reviewed", "all"],
+        default="reviewed_weighted",
+    )
     parser.add_argument("--disable-external-augmentation", action="store_true")
     return parser
 
@@ -72,8 +85,14 @@ def main() -> int:
         seed=args.seed,
     )
 
-    internal_train_examples = build_internal_router_examples(internal_train_rows)
-    internal_dev_examples = build_internal_router_examples(internal_dev_rows)
+    internal_train_examples = build_internal_router_examples(
+        internal_train_rows,
+        label_mode=args.internal_label_mode,
+    )
+    internal_dev_examples = build_internal_router_examples(
+        internal_dev_rows,
+        label_mode=args.internal_label_mode,
+    )
 
     external_examples: list[RouterTrainingExample] = []
     external_source_counts: dict[str, int] = {}
@@ -131,6 +150,7 @@ def main() -> int:
         "internal_dev_count": len(internal_dev_examples),
         "external_train_count": len(external_examples),
         "external_source_counts": external_source_counts,
+        "internal_label_mode": args.internal_label_mode,
         "scope_accuracy": scope_metrics["accuracy"],
         "scope_majority_accuracy": scope_metrics["majority_accuracy"],
         "scope_rule_reference_accuracy": 1.0,
@@ -166,6 +186,7 @@ def main() -> int:
                 "dev_jsonl": str(args.dev_jsonl),
                 "external_jsonl": str(args.external_jsonl),
                 "seed": args.seed,
+                "internal_label_mode": args.internal_label_mode,
                 "max_train_rows": args.max_train_rows,
                 "max_dev_rows": args.max_dev_rows,
                 "max_external_rows": args.max_external_rows,
@@ -275,6 +296,7 @@ def _train_roles_model(
 
     mlb = MultiLabelBinarizer()
     y_train = mlb.fit_transform(y_train_labels)
+    train_role_labels = [str(label) for label in mlb.classes_]
     estimators: list[LogisticRegression] = []
     for column_index in range(y_train.shape[1]):
         estimator = LogisticRegression(max_iter=400, class_weight="balanced", random_state=616)
@@ -282,24 +304,36 @@ def _train_roles_model(
         estimators.append(estimator)
 
     x_dev = vectorizer.transform([example.text for example in dev_examples])
-    y_dev = mlb.transform([example.role_targets for example in dev_examples])
+    unseen_dev_role_labels = _unseen_dev_role_labels(
+        dev_examples=dev_examples,
+        train_role_labels=train_role_labels,
+    )
+    eval_labels = [*train_role_labels, *unseen_dev_role_labels]
+    eval_mlb = MultiLabelBinarizer(classes=eval_labels)
+    eval_mlb.fit([[]])
+    y_dev = eval_mlb.transform([example.role_targets for example in dev_examples])
     prediction_columns = [estimator.predict(x_dev).tolist() for estimator in estimators] if dev_examples else []
-    predictions = [list(values) for values in zip(*prediction_columns, strict=False)] if prediction_columns else []
+    predictions = _build_role_prediction_matrix(
+        prediction_columns=prediction_columns,
+        row_count=len(dev_examples),
+        unseen_label_count=len(unseen_dev_role_labels),
+    )
 
     majority_roles = _majority_role_set([example.role_targets for example in train_examples])
-    majority_matrix = mlb.transform([majority_roles] * len(dev_examples)) if dev_examples else []
+    majority_matrix = eval_mlb.transform([majority_roles] * len(dev_examples)) if dev_examples else []
 
     metrics = {
         "micro_f1": float(f1_score(y_dev, predictions, average="micro", zero_division=0)) if dev_examples else 0.0,
         "majority_micro_f1": (
             float(f1_score(y_dev, majority_matrix, average="micro", zero_division=0)) if dev_examples else 0.0
         ),
-        "top_features": _top_features_for_ovr(estimators, vectorizer, list(mlb.classes_), top_n=top_feature_count),
+        "held_out_unseen_role_labels": unseen_dev_role_labels,
+        "top_features": _top_features_for_ovr(estimators, vectorizer, train_role_labels, top_n=top_feature_count),
     }
     model_bundle = {
         "model_type": "independent_logreg_roles",
         "estimators": estimators,
-        "role_labels": list(mlb.classes_),
+        "role_labels": train_role_labels,
     }
     return model_bundle, metrics
 
@@ -366,6 +400,54 @@ def _majority_role_set(role_lists: Sequence[Sequence[str]]) -> list[str]:
     if selected:
         return sorted(selected)
     return [counts.most_common(1)[0][0]]
+
+
+def _unseen_dev_role_labels(
+    *,
+    dev_examples: Sequence[RouterTrainingExample],
+    train_role_labels: Sequence[str],
+) -> list[str]:
+    """Return sorted dev-only role labels missing from router training.
+
+    Args:
+        dev_examples: Internal dev examples.
+        train_role_labels: Role labels seen during training.
+
+    Returns:
+        Sorted list of dev labels absent from training.
+    """
+    train_label_set = set(train_role_labels)
+    unseen = {
+        role
+        for example in dev_examples
+        for role in example.role_targets
+        if role not in train_label_set
+    }
+    return sorted(unseen)
+
+
+def _build_role_prediction_matrix(
+    *,
+    prediction_columns: Sequence[Sequence[int]],
+    row_count: int,
+    unseen_label_count: int,
+) -> list[list[int]]:
+    """Build an evaluation matrix aligned to the full dev role label set.
+
+    Args:
+        prediction_columns: Predicted columns for role labels seen in training.
+        row_count: Number of dev examples.
+        unseen_label_count: Count of dev-only role labels with no trained estimator.
+
+    Returns:
+        Dense binary prediction matrix aligned to the evaluation label order.
+    """
+    if row_count == 0:
+        return []
+    base_rows = [list(values) for values in zip(*prediction_columns, strict=False)] if prediction_columns else [[] for _ in range(row_count)]
+    if unseen_label_count <= 0:
+        return base_rows
+    return [row + [0] * unseen_label_count for row in base_rows]
 
 
 def _top_features_for_logistic(

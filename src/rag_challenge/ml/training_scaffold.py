@@ -12,7 +12,13 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-LabelMode = Literal["reviewed_only", "soft_and_reviewed", "all"]
+LabelMode = Literal[
+    "reviewed_high_confidence",
+    "reviewed_weighted",
+    "reviewed_only",
+    "soft_and_reviewed",
+    "all",
+]
 
 
 @dataclass(frozen=True)
@@ -206,17 +212,71 @@ def choose_page_supervision(
     Returns:
         Tuple of positive page IDs, supervision source label, and sample weight.
     """
+    reviewed_weight = internal_row_sample_weight(row, label_mode=label_mode)
     if row.label_source == "reviewed" and row.label_page_ids:
-        return set(row.label_page_ids), "reviewed", 3.0
+        if reviewed_weight > 0.0:
+            return set(row.label_page_ids), "reviewed", 3.0 * reviewed_weight
+        if label_mode in {"reviewed_high_confidence", "reviewed_weighted", "reviewed_only"}:
+            return set(), "none", 0.0
     if row.label_source == "soft_ai_gold" and row.label_page_ids and label_mode in {"soft_and_reviewed", "all"}:
         return set(row.label_page_ids), "soft_ai_gold", 1.5
-    if label_mode == "reviewed_only":
+    if label_mode in {"reviewed_high_confidence", "reviewed_weighted", "reviewed_only"}:
         return set(), "none", 0.0
     if row.sidecar_selected_pages:
         return set(row.sidecar_selected_pages), "sidecar_selected", 0.35
     if row.legacy_selected_pages:
         return set(row.legacy_selected_pages), "legacy_selected", 0.2
     return set(), "none", 0.0
+
+
+def internal_row_sample_weight(
+    row: GroundingMlRow,
+    *,
+    label_mode: LabelMode,
+) -> float:
+    """Return the internal-training sample weight for one row.
+
+    Args:
+        row: Grounding ML row.
+        label_mode: Reviewed-aware label selection mode.
+
+    Returns:
+        Non-negative sample weight. Zero means the row should be excluded from
+        supervised training for the chosen mode.
+    """
+    if row.label_source == "reviewed":
+        confidence = row.label_confidence.strip().lower()
+        default_weight = row.label_weight if row.label_weight > 0.0 else _default_reviewed_weight(confidence)
+        if label_mode == "reviewed_high_confidence":
+            return 1.0 if confidence == "high" else 0.0
+        if label_mode == "reviewed_weighted":
+            return default_weight
+        if label_mode == "reviewed_only":
+            return 1.0
+        if label_mode in {"soft_and_reviewed", "all"}:
+            return default_weight
+        return 0.0
+    if row.label_source == "soft_ai_gold" and label_mode in {"soft_and_reviewed", "all"}:
+        return 1.0
+    return 0.0
+
+
+def _default_reviewed_weight(confidence: str) -> float:
+    """Return the fallback reviewed weight for a confidence tier.
+
+    Args:
+        confidence: Normalized reviewed confidence string.
+
+    Returns:
+        Default row weight when the export omitted an explicit numeric weight.
+    """
+    if confidence == "high":
+        return 1.0
+    if confidence == "medium":
+        return 0.5
+    if confidence == "low":
+        return 0.0
+    return 1.0
 
 
 def build_page_feature_dict(

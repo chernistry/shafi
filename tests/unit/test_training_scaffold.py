@@ -11,6 +11,7 @@ from rag_challenge.ml.training_scaffold import (
     build_page_training_examples,
     build_router_dataset,
     deterministic_subset,
+    internal_row_sample_weight,
 )
 
 
@@ -20,6 +21,8 @@ def _build_row(
     answer_type: str = "name",
     scope_mode: str = "single_field_single_doc",
     label_source: str = "soft_ai_gold",
+    label_confidence: str = "",
+    label_weight: float = 0.0,
     label_page_ids: list[str] | None = None,
     legacy_selected_pages: list[str] | None = None,
     sidecar_selected_pages: list[str] | None = None,
@@ -31,6 +34,8 @@ def _build_row(
         golden_answer="annual return",
         label_page_ids=list(label_page_ids or []),
         label_source=label_source,
+        label_confidence=label_confidence,
+        label_weight=label_weight,
         scope_mode=scope_mode,
         target_page_roles=["article_clause"],
         hard_anchor_strings=["Article 16"],
@@ -111,6 +116,8 @@ def test_page_training_examples_prefer_reviewed_labels() -> None:
     row = _build_row(
         question_id="qid-reviewed",
         label_source="reviewed",
+        label_confidence="high",
+        label_weight=1.0,
         label_page_ids=["law_16"],
         legacy_selected_pages=["law_17"],
         sidecar_selected_pages=["law_17"],
@@ -142,3 +149,59 @@ def test_page_training_examples_skip_unreviewed_rows_in_reviewed_only_mode() -> 
     examples = build_page_training_examples([row], label_mode="reviewed_only")
 
     assert examples == []
+
+
+def test_page_training_examples_weight_reviewed_medium_rows() -> None:
+    row = _build_row(
+        question_id="qid-medium",
+        label_source="reviewed",
+        label_confidence="medium",
+        label_weight=0.5,
+        label_page_ids=["law_16"],
+    )
+
+    examples = build_page_training_examples([row], label_mode="reviewed_weighted")
+
+    positive = next(example for example in examples if example.page_id == "law_16")
+    assert positive.sample_weight == 1.5
+    assert positive.supervision_source == "reviewed"
+
+
+def test_page_training_examples_drop_medium_rows_in_high_confidence_mode() -> None:
+    row = _build_row(
+        question_id="qid-medium",
+        label_source="reviewed",
+        label_confidence="medium",
+        label_weight=0.5,
+        label_page_ids=["law_16"],
+    )
+
+    examples = build_page_training_examples([row], label_mode="reviewed_high_confidence")
+
+    assert examples == []
+
+
+def test_internal_row_sample_weight_uses_reviewed_confidence_modes() -> None:
+    high = _build_row(
+        question_id="qid-high",
+        label_source="reviewed",
+        label_confidence="high",
+        label_weight=1.0,
+    )
+    medium = _build_row(
+        question_id="qid-medium",
+        label_source="reviewed",
+        label_confidence="medium",
+        label_weight=0.5,
+    )
+    low = _build_row(
+        question_id="qid-low",
+        label_source="reviewed",
+        label_confidence="low",
+        label_weight=0.0,
+    )
+
+    assert internal_row_sample_weight(high, label_mode="reviewed_high_confidence") == 1.0
+    assert internal_row_sample_weight(medium, label_mode="reviewed_high_confidence") == 0.0
+    assert internal_row_sample_weight(medium, label_mode="reviewed_weighted") == 0.5
+    assert internal_row_sample_weight(low, label_mode="reviewed_weighted") == 0.0

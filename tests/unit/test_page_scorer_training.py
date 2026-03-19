@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from scripts.train_page_scorer import _build_label_quality_note
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.linear_model import LogisticRegression
 
@@ -109,3 +110,9 @@ def test_top_feature_weights_returns_positive_and_negative_features() -> None:
 
     assert summary["positive"][0]["feature"] == "feature_a"
     assert summary["negative"][0]["feature"] == "feature_b"
+
+
+def test_build_label_quality_note_describes_reviewed_weighted_mode() -> None:
+    note = _build_label_quality_note("reviewed_weighted")
+
+    assert "confidence-aware weighting" in note

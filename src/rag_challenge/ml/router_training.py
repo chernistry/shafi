@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rag_challenge.ml.external_grounding_data import NormalizedExternalRow
-from rag_challenge.ml.training_scaffold import build_router_text, derive_page_budget_target
+from rag_challenge.ml.training_scaffold import (
+    LabelMode,
+    build_router_text,
+    derive_page_budget_target,
+    internal_row_sample_weight,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -39,27 +44,37 @@ class RouterTrainingExample:
     source: str
 
 
-def build_internal_router_examples(rows: Sequence[GroundingMlRow]) -> list[RouterTrainingExample]:
+def build_internal_router_examples(
+    rows: Sequence[GroundingMlRow],
+    *,
+    label_mode: LabelMode = "reviewed_weighted",
+) -> list[RouterTrainingExample]:
     """Convert exported internal rows into router training examples.
 
     Args:
         rows: Exported internal grounding rows.
+        label_mode: Reviewed-aware internal label mode.
 
     Returns:
         Internal router examples.
     """
-    return [
-        RouterTrainingExample(
-            sample_id=row.question_id,
-            text=build_router_text(row),
-            scope_target=row.scope_mode,
-            page_budget_target=derive_page_budget_target(row),
-            role_targets=list(row.target_page_roles),
-            sample_weight=1.0,
-            source="internal",
+    examples: list[RouterTrainingExample] = []
+    for row in rows:
+        sample_weight = internal_row_sample_weight(row, label_mode=label_mode)
+        if sample_weight <= 0.0:
+            continue
+        examples.append(
+            RouterTrainingExample(
+                sample_id=row.question_id,
+                text=build_router_text(row),
+                scope_target=row.scope_mode,
+                page_budget_target=derive_page_budget_target(row),
+                role_targets=list(row.target_page_roles),
+                sample_weight=sample_weight,
+                source="internal",
+            )
         )
-        for row in rows
-    ]
+    return examples
 
 
 def load_external_normalized_rows(path: Path) -> list[NormalizedExternalRow]:
