@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from qdrant_client.models import SparseVector
 
 logger = logging.getLogger(__name__)
+_LEGACY_CONTAINER_FASTEMBED_CACHE_DIR = Path("/home/appuser/.cache/fastembed")
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -55,10 +56,24 @@ class BM25SparseEncoder:
 
     @staticmethod
     def _resolve_cache_dir(cache_dir: str | None) -> str:
+        """Resolve the BM25 cache directory to a writable local path.
+
+        Args:
+            cache_dir: Configured fastembed cache directory, if any.
+
+        Returns:
+            Absolute path to the cache directory that should be used.
+
+        Raises:
+            SparseEncoderError: If neither the preferred nor fallback cache
+                directory can be created.
+        """
         raw = (cache_dir or "").strip()
         # Keep fastembed cache inside the workspace by default so local runs stay writable
         # and deterministic instead of falling back to container-specific homes like /home/appuser.
         preferred = Path(raw).expanduser() if raw else BM25SparseEncoder._workspace_cache_dir()
+        if BM25SparseEncoder._uses_legacy_container_default_cache_dir(preferred):
+            return BM25SparseEncoder._prepare_cache_dir(BM25SparseEncoder._workspace_cache_dir())
         try:
             return BM25SparseEncoder._prepare_cache_dir(preferred)
         except OSError as exc:
@@ -80,7 +95,28 @@ class BM25SparseEncoder:
         return Path.cwd() / ".cache" / "fastembed"
 
     @staticmethod
+    def _uses_legacy_container_default_cache_dir(path: Path) -> bool:
+        """Return whether the configured cache path is the legacy container preset.
+
+        Args:
+            path: Cache path requested by configuration.
+
+        Returns:
+            ``True`` when the path is the legacy `/home/appuser` preset that
+            should silently map to the workspace cache on local runs.
+        """
+        return path == _LEGACY_CONTAINER_FASTEMBED_CACHE_DIR
+
+    @staticmethod
     def _prepare_cache_dir(path: Path) -> str:
+        """Create and return the absolute cache directory path.
+
+        Args:
+            path: Directory to create if needed.
+
+        Returns:
+            Absolute filesystem path to the cache directory.
+        """
         resolved = path.resolve()
         resolved.mkdir(parents=True, exist_ok=True)
         return str(resolved)

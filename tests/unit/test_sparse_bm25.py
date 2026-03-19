@@ -76,3 +76,26 @@ def test_bm25_sparse_encoder_falls_back_when_custom_cache_dir_is_unavailable(tmp
     assert encoder._cache_dir == str(expected)
     assert expected.is_dir()
     assert recorded["cache_dir"] == str(expected)
+
+
+def test_bm25_sparse_encoder_silently_maps_legacy_container_cache_to_workspace(tmp_path: Path) -> None:
+    recorded: dict[str, object] = {}
+
+    class _FakeSparseTextEmbedding:
+        def __init__(self, model_name: str, *, cache_dir: str | None, threads: int | None, lazy_load: bool) -> None:
+            recorded["cache_dir"] = cache_dir
+
+    legacy_cache = Path("/home/appuser/.cache/fastembed")
+
+    with (
+        patch("rag_challenge.core.sparse_bm25.Path.cwd", return_value=tmp_path),
+        patch("rag_challenge.core.sparse_bm25.logger.warning") as warning_mock,
+        patch("fastembed.sparse.SparseTextEmbedding", _FakeSparseTextEmbedding),
+    ):
+        encoder = BM25SparseEncoder(model_name="Qdrant/bm25", cache_dir=str(legacy_cache))
+
+    expected = (tmp_path / ".cache" / "fastembed").resolve()
+    assert encoder._cache_dir == str(expected)
+    assert expected.is_dir()
+    assert recorded["cache_dir"] == str(expected)
+    warning_mock.assert_not_called()
