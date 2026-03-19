@@ -45,7 +45,7 @@ dashboard/
 1. User runs `python -m dashboard.server` (or `python dashboard/server.py`)
 2. FastAPI serves `static/index.html` + mounts `/api/*` routes
 3. Each API call triggers the relevant parser to scan files on disk
-4. Parsers cache results in memory keyed by directory mtime — rescan only on change
+4. Parsers cache results in memory keyed by `max(file.stat().st_mtime for file in glob)` — rescan when any file in the glob set changes (not directory mtime, which doesn't update on content-only changes on macOS)
 5. Frontend fetches JSON, Plotly.js renders interactive charts
 6. Locale toggle swaps all visible labels via `i18n/{lang}.json` without reload
 
@@ -53,14 +53,21 @@ dashboard/
 
 | Endpoint | Source Files | Returns |
 |----------|-------------|---------|
-| `GET /api/eval/timeline` | `data/eval_*.json` | Array of `{timestamp, scores_by_type, latency, compliance}` |
-| `GET /api/eval/latest` | Latest eval JSON | Full breakdown: KPI cards, gap bars, worst cases |
-| `GET /api/judge/timeline` | `data/judge_*.jsonl` | `{timestamp, pass_rate, avg_accuracy, avg_grounding, avg_clarity}[]` |
-| `GET /api/judge/latest` | Latest judge JSONL | Per-case detail with verdict, scores, worst grounding |
-| `GET /api/benchmark/timeline` | `data/page_benchmark_*.md` | `{timestamp, f_beta, slot_recall, orphan_rate}[]` |
-| `GET /api/matrix` | `data/competition_matrix.json` | Leaderboard state, gap targets, rank history |
+| `GET /api/eval/timeline` | `data/eval_*.json` | `{timestamp, label, citation_coverage, doc_ref_hit_rate, format_compliance, ttft_p50, ttft_p95, ttft_by_type: {type: {p50, p95, count}}, compliance_by_type: {type: float}}[]` |
+| `GET /api/eval/latest` | Latest eval JSON | Same shape as one timeline entry, plus per-case detail from the JSON |
+| `GET /api/judge/timeline` | `data/judge_*.jsonl` | `{timestamp, label, pass_rate, n_cases, avg_accuracy, avg_grounding, avg_clarity, avg_uncertainty}[]` |
+| `GET /api/judge/latest` | Latest judge JSONL | Per-case array: `{case_id, question_id, answer_type, verdict, accuracy, grounding, clarity}[]` |
+| `GET /api/benchmark/timeline` | `data/page_benchmark_*.md` | `{timestamp, label, f_beta, orphan_rate, slot_recall, overprune_violations, worst_cases: [...]}[]` |
+| `GET /api/matrix` | `data/competition_matrix.json` | `{team, rank, total, s, g, t, f, latency_ms, submissions, gap_targets: [...]}` |
+| `GET /api/scores/timeline` | `data/competition_matrix.json` (rows array) + `.sdd/researches/**/platform_scoring_*.json` | `{timestamp, label, total, s, g, t, f}[]` — G/S/T/F over time from platform scoring artifacts |
 | `GET /api/research/tickets` | `.sdd/researches/*/closeout.md` | `{ticket_id, title, date, status, impact_summary}[]` |
 | `GET /api/research/experiments` | `.sdd/researches/*.json` | Version comparison summaries, delta scores |
+
+#### Data provenance notes
+
+- **F-beta by answer type** is available in `data/page_benchmark_*.md` files (page-level F-beta) and in golden-label scoring reports (stored as `data/eval_*` or `/tmp/` artifacts). The eval JSON files do **not** contain F-beta — they contain `citation_coverage`, `doc_ref_hit_rate`, `format_compliance`, and latency. For the "Where to Invest" gap bars, the benchmark parser extracts F-beta from the markdown. For per-type breakdown, we join benchmark worst-case data (which includes answer type) with judge per-case data (which has answer_type per question).
+- **G/S/T/F scores** live in `competition_matrix.json` (current snapshot) and in `.sdd/researches/**/platform_scoring_*.json` files (historical). They do **not** come from eval JSONs. The `/api/scores/timeline` endpoint aggregates these.
+- **Judge scores** (accuracy, grounding, clarity, uncertainty_handling) come from `judge_*.jsonl` files, not eval JSONs. These are the per-case quality signals for the "System Health" tab.
 
 ### Timestamp parsing
 
@@ -82,26 +89,26 @@ Three-row layout following the BI narrative layers:
 
 **Row 2 — Why + Where:**
 - Left panel (220px): ROI-ranked investment map — answer types sorted by ROI score, with progress bars and counts
-- Right panel (flex): Horizontal bar chart of F-beta by answer type from latest eval, color-coded red→orange→green
+- Right panel (flex): Horizontal bar chart of judge avg grounding score by answer type (from latest judge JSONL), color-coded red→orange→green. If a page benchmark is available with the same timestamp, overlay F-beta markers.
 
 **Row 3 — Diagnostic detail:**
 - Left: Ticket impact sparkline — bar chart of recent tickets colored green (improvement) / red (regression) by G-score delta
 - Right: Worst grounding cases table — QID, type, F-beta, match status from latest eval
 
-**ROI computation:** `roi = (1 - avg_fbeta) * question_count * improvability` where improvability is 1.0 for types with answer match=True but F-beta=0 (pure grounding problem), 0.5 for types with some mismatches, 0.2 for free_text (structurally hard).
+**ROI computation:** `roi = (1 - avg_grounding_score/5) * question_count * improvability` where `avg_grounding_score` is the judge grounding average (0-5 scale) for that answer type, and `improvability` is a static heuristic: 1.0 for boolean/number (discrete, fixable with better page selection), 0.7 for name/names (entity-dependent), 0.2 for free_text (structurally hard, LLM-quality bound).
 
 ### Tab 2: "Score Timeline"
 
-**Main chart:** Multi-line Plotly time series showing key metrics over time:
+**Main chart:** Multi-line Plotly time series from `/api/scores/timeline` (sourced from `competition_matrix.json` rows and `.sdd/researches/**/platform_scoring_*.json`):
 - G-score (primary, bold line)
 - S-score, T-score, F-score (secondary, thinner)
 - Total score (dashed)
 
-**Below:** Stacked area or grouped bar chart of F-beta by answer type over time — shows which types are improving/regressing.
+**Below:** Grouped bar chart of judge avg grounding by answer type over time (from `/api/judge/timeline`) — shows which types are improving/regressing.
 
-**Annotations:** Vertical dashed lines at significant events (labeled eval runs, ticket completions) parsed from filename suffixes.
+**Annotations:** Vertical dashed lines at labeled eval runs parsed from filename suffixes (e.g., `_rule_alignment_lock`).
 
-**Interactions:** Hover for exact values, click a point to see that eval's full breakdown in a side panel.
+**Interactions:** Hover for exact values, click a point to see that run's full breakdown in a side panel.
 
 ### Tab 3: "System Health"
 
@@ -169,7 +176,15 @@ Toggle: `[EN | RU]` button in top-right header. Saves preference to `localStorag
 - **Typography:** System monospace stack for data, system sans for labels
 - **Layout:** Max-width 1200px centered, responsive flex rows that stack on narrow screens
 
-## 7. Startup & Usage
+## 7. Error Handling
+
+- **Missing directories:** If `data/`, `platform_runs/`, or `.sdd/researches/` don't exist, the corresponding API endpoints return `{"data": [], "warning": "directory not found"}` with HTTP 200 (not 404 — the dashboard still loads, just with empty sections).
+- **Malformed files:** Parsers wrap individual file parsing in try/except. A malformed eval JSON or benchmark MD is logged and skipped — never crashes the endpoint. The response includes a `skipped_files` count.
+- **Empty data:** Frontend handles empty arrays gracefully — shows "No data yet" placeholder instead of broken charts.
+- **Benchmark MD parsing:** These files have semi-structured format. Parser uses regex `r"F_beta\(2\.5\):\s*([\d.]+)"` and similar patterns. If the format drifts, the file is skipped (logged). Consider converting benchmarks to JSON at eval-generation time in the future.
+- **Missing competition_matrix.json:** `/api/matrix` and `/api/scores/timeline` return empty data with a warning. KPI cards show "—" placeholders.
+
+## 8. Startup & Usage
 
 ```bash
 # From project root:
@@ -180,7 +195,7 @@ python dashboard/server.py
 No build step, no npm, no dependencies beyond FastAPI + uvicorn (already in project).
 Plotly.js loaded from CDN in index.html.
 
-## 8. Blog Export Path (future)
+## 9. Blog Export Path (future)
 
 Each Plotly chart supports `Plotly.toImage()` for static PNG/SVG export. The `/api/*` endpoints return clean JSON that can be re-rendered in any frontend. The eventual blog integration would either:
 - Embed static chart images exported from the dashboard
@@ -188,7 +203,7 @@ Each Plotly chart supports `Plotly.toImage()` for static PNG/SVG export. The `/a
 
 Not in scope for v1 — just noting the path is clean.
 
-## 9. Out of Scope
+## 10. Out of Scope
 
 - Real-time WebSocket updates (page refresh is fine)
 - User authentication
@@ -197,6 +212,6 @@ Not in scope for v1 — just noting the path is clean.
 - The `data/external/` and `data/derived/` directories (ML training data, not measurement)
 - The 558 `code_archive_*.json` files in `platform_runs/warmup/` (code snapshots, not metrics)
 
-## 10. File Cleanup Context
+## 11. File Cleanup Context
 
 The user also asked to "навести порядок" (tidy up) in data/, platform_runs/, .sdd/researches/. The dashboard itself is the primary deliverable. File cleanup (removing stale tmp files, organizing naming) can happen as a separate follow-up task after the dashboard is working, since the dashboard's parsers will define what file patterns matter.
