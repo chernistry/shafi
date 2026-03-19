@@ -512,7 +512,7 @@ class GroundingEvidenceSelector:
         # schedule/interpretation pages dominating over the actual article page)
         for fact in support_candidates:
             scores[fact.page_id] += 0.8 * float(fact.score)
-            if answer_value and answer_value.casefold() in (fact.normalized_value or "").casefold():
+            if answer_value and answer_value.casefold() == (fact.normalized_value or "").casefold():
                 scores[fact.page_id] += 1.0
             if fact.page_role and fact.page_role in scope.target_page_roles:
                 scores[fact.page_id] += 0.5
