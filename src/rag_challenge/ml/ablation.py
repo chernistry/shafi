@@ -133,3 +133,22 @@ def compute_selected_page_metrics(
         average_selected_pages=average_selected_pages_total / total_rows if total_rows else 0.0,
         average_positive_recall=positive_recall_total / supervised_question_count if supervised_question_count else 0.0,
     )
+
+
+def filter_rows_by_question_ids(
+    rows: Sequence[GroundingMlRow],
+    *,
+    question_ids: set[str],
+) -> list[GroundingMlRow]:
+    """Filter exported rows to a reviewed question-ID slice.
+
+    Args:
+        rows: Candidate export rows.
+        question_ids: Allowed question IDs for the target slice.
+
+    Returns:
+        Stable filtered row list.
+    """
+    if not question_ids:
+        return []
+    return [row for row in rows if row.question_id in question_ids]

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from rag_challenge.ml.ablation import compute_selected_page_metrics
+from scripts.run_grounding_sidecar_ablation import _pad_role_prediction_rows, _unseen_role_labels
+
+from rag_challenge.ml.ablation import compute_selected_page_metrics, filter_rows_by_question_ids
 from rag_challenge.ml.grounding_dataset import (
     DocCandidateRecord,
     GroundingMlRow,
@@ -91,3 +93,26 @@ def test_compute_selected_page_metrics_reports_hits_and_zero_negative_pages() ->
     assert metrics.negative_unanswerable_zero_pages_rate == 1.0
     assert metrics.average_selected_pages == 2 / 3
     assert metrics.average_positive_recall == 1.0
+
+
+def test_filter_rows_by_question_ids_keeps_stable_order() -> None:
+    rows = [_row("q1"), _row("q2"), _row("q3")]
+
+    filtered = filter_rows_by_question_ids(rows, question_ids={"q3", "q1"})
+
+    assert [row.question_id for row in filtered] == ["q1", "q3"]
+
+
+def test_ablation_role_helpers_preserve_unseen_eval_labels() -> None:
+    unseen = _unseen_role_labels(
+        role_targets=[["article_clause", "costs_block"], ["operative_order"]],
+        trained_role_labels=["article_clause"],
+    )
+    padded = _pad_role_prediction_rows(
+        rows=[[1], [0]],
+        row_count=2,
+        unseen_label_count=len(unseen),
+    )
+
+    assert unseen == ["costs_block", "operative_order"]
+    assert padded == [[1, 0, 0], [0, 0, 0]]
