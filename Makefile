@@ -1,31 +1,29 @@
-.PHONY: install lint typecheck test format all
+.PHONY: install lint typecheck test format ops-smoke platform-archive all
 
-# Use only real executables from PATH (avoid shell functions/aliases that `command -v` can return).
-PYRIGHT := $(shell if [ -x .venv/bin/pyright ]; then echo .venv/bin/pyright; else p=$$(command -v pyright 2>/dev/null); echo "$$p" | grep -E '^/' || true; fi)
-PYTEST := $(shell if [ -x .venv/bin/pytest ]; then echo .venv/bin/pytest; else p=$$(command -v pytest 2>/dev/null); echo "$$p" | grep -E '^/' || true; fi)
+UV ?= uv
+UV_DEV := $(UV) run --extra dev
+COMPOSE ?= docker compose
 
 install:
-	pip install -e ".[dev]"
+	$(UV) sync --extra dev
 
 lint:
-	ruff check .
+	$(UV_DEV) ruff check src tests scripts
 
 format:
-	ruff format .
-	ruff check --fix .
+	$(UV_DEV) ruff format src tests scripts
+	$(UV_DEV) ruff check --fix src tests scripts
 
 typecheck:
-	@if [ -z "$(PYRIGHT)" ]; then \
-		echo "pyright not found. Run: pip install -e \".[dev]\" (or activate .venv)"; \
-		exit 1; \
-	fi
-	$(PYRIGHT)
+	$(UV_DEV) pyright src/rag_challenge tests/unit
 
 test:
-	@if [ -z "$(PYTEST)" ]; then \
-		echo "pytest not found. Run: pip install -e \".[dev]\" (or activate .venv)"; \
-		exit 1; \
-	fi
-	PYTHONPATH=src $(PYTEST) -v --tb=short
+	$(UV_DEV) pytest tests/unit -q
+
+ops-smoke:
+	$(UV) run python scripts/container_contract_smoke.py
+
+platform-archive:
+	$(COMPOSE) --profile tools run --rm eval python -m rag_challenge.submission.platform --archive-only
 
 all: lint typecheck test
