@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from scripts.run_grounding_sidecar_ablation import _pad_role_prediction_rows, _unseen_role_labels
+from scripts.run_grounding_sidecar_ablation import (
+    _current_sidecar_budget_map,
+    _pad_role_prediction_rows,
+    _unseen_role_labels,
+)
 
 from rag_challenge.ml.ablation import compute_selected_page_metrics, filter_rows_by_question_ids
 from rag_challenge.ml.grounding_dataset import (
@@ -116,3 +120,17 @@ def test_ablation_role_helpers_preserve_unseen_eval_labels() -> None:
 
     assert unseen == ["costs_block", "operative_order"]
     assert padded == [[1, 0, 0], [0, 0, 0]]
+
+
+def test_current_sidecar_budget_map_tracks_existing_page_budget() -> None:
+    rows = [
+        _row("q1"),
+        _row("q2"),
+        _row("q3", scope_mode="negative_unanswerable"),
+    ]
+    rows[0].sidecar_selected_pages = ["q1_1", "q1_2"]
+    rows[1].legacy_selected_pages = ["q2_2"]
+
+    budgets = _current_sidecar_budget_map(rows)
+
+    assert budgets == {"q1": 2, "q2": 1, "q3": 0}

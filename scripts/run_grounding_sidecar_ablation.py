@@ -149,6 +149,12 @@ def main() -> int:
         budgets=budget_predictions,
         selector=lambda group: rank_group_with_heuristic(group),
     )
+    heuristic_budget_plus_page_scorer = _select_with_budget(
+        rows,
+        grouped_examples=candidate_groups,
+        budgets=_current_sidecar_budget_map(rows),
+        selector=lambda group: rank_group_with_scores(group, score_lookup),
+    )
     trained_router_plus_page_scorer = _select_with_budget(
         rows,
         grouped_examples=candidate_groups,
@@ -162,6 +168,7 @@ def main() -> int:
             grouped_examples=hard_grouped_examples,
             legacy_selected=legacy_selected,
             sidecar_selected=sidecar_selected,
+            heuristic_budget_plus_page_scorer=heuristic_budget_plus_page_scorer,
             trained_router_only=trained_router_only,
             trained_router_plus_page_scorer=trained_router_plus_page_scorer,
         ),
@@ -170,6 +177,7 @@ def main() -> int:
             grouped_examples=soft_grouped_examples,
             legacy_selected=legacy_selected,
             sidecar_selected=sidecar_selected,
+            heuristic_budget_plus_page_scorer=heuristic_budget_plus_page_scorer,
             trained_router_only=trained_router_only,
             trained_router_plus_page_scorer=trained_router_plus_page_scorer,
         ),
@@ -193,9 +201,17 @@ def main() -> int:
             "answer_drift_note": "offline ablation only; no answer-path mutation occurred",
         },
         "router": router_metrics,
+        "page_scorer": {
+            "feature_policy": str(page_bundle.get("feature_policy") or ""),
+            "label_mode": str(page_bundle.get("label_mode") or ""),
+        },
         "lanes": lane_metrics,
         "pairwise": {
             "hard_gate": {
+                "heuristic_budget_plus_page_scorer_vs_heuristic_sidecar": _pairwise_delta(
+                    baseline=lane_metrics["hard_gate"]["heuristic_sidecar"],
+                    candidate=lane_metrics["hard_gate"]["heuristic_budget_plus_page_scorer"],
+                ),
                 "trained_router_only_vs_heuristic_sidecar": _pairwise_delta(
                     baseline=lane_metrics["hard_gate"]["heuristic_sidecar"],
                     candidate=lane_metrics["hard_gate"]["trained_router_only"],
@@ -206,6 +222,10 @@ def main() -> int:
                 ),
             },
             "soft_diagnostic": {
+                "heuristic_budget_plus_page_scorer_vs_heuristic_sidecar": _pairwise_delta(
+                    baseline=lane_metrics["soft_diagnostic"]["heuristic_sidecar"],
+                    candidate=lane_metrics["soft_diagnostic"]["heuristic_budget_plus_page_scorer"],
+                ),
                 "trained_router_only_vs_heuristic_sidecar": _pairwise_delta(
                     baseline=lane_metrics["soft_diagnostic"]["heuristic_sidecar"],
                     candidate=lane_metrics["soft_diagnostic"]["trained_router_only"],
@@ -233,6 +253,7 @@ def _compute_slice_lane_metrics(
     grouped_examples: dict[str, list[PageTrainingExample]],
     legacy_selected: dict[str, list[str]],
     sidecar_selected: dict[str, list[str]],
+    heuristic_budget_plus_page_scorer: dict[str, list[str]],
     trained_router_only: dict[str, list[str]],
     trained_router_plus_page_scorer: dict[str, list[str]],
 ) -> dict[str, dict[str, float | int]]:
@@ -243,6 +264,7 @@ def _compute_slice_lane_metrics(
         grouped_examples: Supervised grouped examples for the slice.
         legacy_selected: Legacy selected pages keyed by question ID.
         sidecar_selected: Heuristic sidecar selected pages keyed by question ID.
+        heuristic_budget_plus_page_scorer: Page-scorer-only selected pages keyed by question ID.
         trained_router_only: Router-only selected pages keyed by question ID.
         trained_router_plus_page_scorer: Router+page scorer selected pages keyed by question ID.
 
@@ -259,6 +281,11 @@ def _compute_slice_lane_metrics(
             rows,
             grouped_examples=grouped_examples,
             selected_pages_by_question=sidecar_selected,
+        ).to_dict(),
+        "heuristic_budget_plus_page_scorer": compute_selected_page_metrics(
+            rows,
+            grouped_examples=grouped_examples,
+            selected_pages_by_question=heuristic_budget_plus_page_scorer,
         ).to_dict(),
         "trained_router_only": compute_selected_page_metrics(
             rows,
@@ -284,7 +311,11 @@ def _build_verdict(lane_metrics: dict[str, dict[str, dict[str, float | int]]]) -
     """
     hard_heuristic = lane_metrics["hard_gate"]["heuristic_sidecar"]
     soft_heuristic = lane_metrics["soft_diagnostic"]["heuristic_sidecar"]
-    candidate_names = ["trained_router_only", "trained_router_plus_page_scorer"]
+    candidate_names = [
+        "heuristic_budget_plus_page_scorer",
+        "trained_router_only",
+        "trained_router_plus_page_scorer",
+    ]
     best_candidate = max(
         candidate_names,
         key=lambda name: float(lane_metrics["hard_gate"][name]["weighted_selected_hit_rate"]),
@@ -387,6 +418,25 @@ def _evaluate_router(rows: Sequence[GroundingMlRow], router_bundle: dict[str, ob
         },
         budget_map,
     )
+
+
+def _current_sidecar_budget_map(rows: Sequence[GroundingMlRow]) -> dict[str, int]:
+    """Return the current heuristic sidecar page budget per reviewed row.
+
+    Args:
+        rows: Reviewed export rows.
+
+    Returns:
+        Question-ID keyed current sidecar budget map.
+    """
+    budgets: dict[str, int] = {}
+    for row in rows:
+        if row.scope_mode == "negative_unanswerable":
+            budgets[row.question_id] = 0
+            continue
+        selected = row.sidecar_selected_pages or row.legacy_selected_pages
+        budgets[row.question_id] = max(1, len(selected)) if selected else 1
+    return budgets
 
 
 def _select_with_budget(

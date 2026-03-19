@@ -134,6 +134,9 @@ def test_page_training_examples_prefer_reviewed_labels() -> None:
     assert positive.features["from_legacy_used"] is True
     assert positive.features["doc_selected_by_legacy"] is True
     assert positive.features["explicit_anchor_count"] == 1
+    assert "from_sidecar_used" not in positive.features
+    assert "from_sidecar_cited" not in positive.features
+    assert "legacy_cited_rank" not in positive.features
     assert negative.label == 0
 
 

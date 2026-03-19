@@ -17,6 +17,7 @@ from rag_challenge.ml.page_scorer_training import (
     top_feature_weights,
 )
 from rag_challenge.ml.training_scaffold import (
+    PAGE_SCORER_FEATURE_POLICY,
     build_page_training_examples,
     deterministic_subset,
     load_grounding_rows,
@@ -103,6 +104,7 @@ def main() -> int:
         "train_supervision_question_counts": count_question_sources(train_examples),
         "dev_supervision_question_counts": count_question_sources(dev_examples),
         "label_mode": args.label_mode,
+        "feature_policy": PAGE_SCORER_FEATURE_POLICY,
         "label_quality_note": _build_label_quality_note(args.label_mode),
     }
 
@@ -113,6 +115,7 @@ def main() -> int:
             "model": model,
             "seed": args.seed,
             "label_mode": args.label_mode,
+            "feature_policy": PAGE_SCORER_FEATURE_POLICY,
         },
         args.output_dir / "page_scorer.joblib",
     )
@@ -124,6 +127,7 @@ def main() -> int:
                 "dev_jsonl": str(args.dev_jsonl),
                 "seed": args.seed,
                 "label_mode": args.label_mode,
+                "feature_policy": PAGE_SCORER_FEATURE_POLICY,
                 "max_train_rows": args.max_train_rows,
                 "max_dev_rows": args.max_dev_rows,
                 "top_feature_count": args.top_feature_count,
