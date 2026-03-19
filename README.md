@@ -118,6 +118,11 @@ The default `docker compose` setup brings up:
 
 No extra `QDRANT_URL` juggling is required for the default local workflow.
 
+Canonical local and Docker operator commands now live in:
+
+- [docs/ops_runbook.md](docs/ops_runbook.md)
+- [docs/scripts_index.md](docs/scripts_index.md)
+
 ### Environment Contract
 
 - Host-local `uv run ...` and other shell commands use `QDRANT_URL=http://localhost:6333`.
@@ -185,6 +190,8 @@ Private-day scanner triage:
 
 - after a private scanner run, inspect `top20_report.md`, `top20_cluster_collapsed_report.md`, and `top_by_family_report.md`, then follow `.sdd/researches/private_day_scanner_triage_sop.md`
 - treat scanner output as advisory only; it ranks review targets, it does not auto-gate submission or auto-change retrieval
+
+If you only need the canonical local operator surface, prefer the Make targets and runbook in [docs/ops_runbook.md](docs/ops_runbook.md) over ad-hoc shell history.
 
 ---
 
