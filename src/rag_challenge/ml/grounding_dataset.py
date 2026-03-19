@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -120,6 +120,8 @@ class ExportManifest(BaseModel):
     train_count: int
     dev_count: int
     label_source_counts: dict[str, int]
+    reviewed_slice_counts: dict[str, int] = Field(default_factory=dict)
+    label_confidence_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class _NormalizedRawRow(BaseModel):
@@ -154,6 +156,14 @@ class _LabelRecord(BaseModel):
     audit_note: str = ""
     current_label_problem: str = ""
     label_is_suspect: bool = False
+
+
+class _ReviewedManifestMetadata(TypedDict):
+    """Typed manifest metadata derived from reviewed benchmark artifacts."""
+
+    source_paths: dict[str, str]
+    slice_counts: dict[str, int]
+    confidence_counts: dict[str, int]
 
 
 def export_grounding_ml_dataset(
@@ -213,6 +223,12 @@ def export_grounding_ml_dataset(
         encoding="utf-8",
     )
 
+    reviewed_metadata = _build_reviewed_manifest_metadata(
+        reviewed_labels_path=reviewed_labels_path,
+        page_benchmark_path=page_benchmark_path,
+        rows=rows,
+    )
+
     manifest = ExportManifest(
         generated_at=datetime.now(UTC).isoformat(),
         split_seed=split_seed,
@@ -224,17 +240,89 @@ def export_grounding_ml_dataset(
             "page_benchmark": str(page_benchmark_path),
             "suspect_labels": str(suspect_labels_path) if suspect_labels_path is not None else "",
             "reviewed_labels": str(reviewed_labels_path) if reviewed_labels_path is not None else "",
+            **reviewed_metadata["source_paths"],
         },
         row_count=len(rows),
         train_count=len(train_rows),
         dev_count=len(dev_rows),
         label_source_counts=_count_label_sources(rows),
+        reviewed_slice_counts=reviewed_metadata["slice_counts"],
+        label_confidence_counts=reviewed_metadata["confidence_counts"],
     )
     (output_dir / "export_manifest.json").write_text(
         json.dumps(manifest.model_dump(mode="json"), ensure_ascii=True, indent=2) + "\n",
         encoding="utf-8",
     )
     return manifest
+
+
+def _build_reviewed_manifest_metadata(
+    *,
+    reviewed_labels_path: Path | None,
+    page_benchmark_path: Path,
+    rows: list[GroundingMlRow],
+) -> _ReviewedManifestMetadata:
+    """Build reviewed-lineage metadata for the export manifest.
+
+    Args:
+        reviewed_labels_path: Optional reviewed-label slice used for export.
+        page_benchmark_path: Page-benchmark slice used for export.
+        rows: Final exported rows.
+
+    Returns:
+        Mapping containing reviewed source paths, slice counts, and confidence counts.
+    """
+    empty: _ReviewedManifestMetadata = {
+        "source_paths": {},
+        "slice_counts": {},
+        "confidence_counts": {},
+    }
+    if reviewed_labels_path is None or not reviewed_labels_path.exists():
+        return empty
+
+    reviewed_dir = reviewed_labels_path.parent
+    import_manifest_path = reviewed_dir / "import_manifest.json"
+    reviewed_source_paths = {
+        "reviewed_import_manifest": str(import_manifest_path) if import_manifest_path.exists() else "",
+        "reviewed_all_100": str(reviewed_dir / "reviewed_all_100.json"),
+        "reviewed_high_confidence_81": str(reviewed_dir / "reviewed_high_confidence_81.json"),
+        "reviewed_medium_plus_high_95": str(reviewed_dir / "reviewed_medium_plus_high_95.json"),
+        "reviewed_page_benchmark_all_100": str(reviewed_dir / "reviewed_page_benchmark_all_100.json"),
+        "reviewed_page_benchmark_high_confidence_81": str(reviewed_dir / "reviewed_page_benchmark_high_confidence_81.json"),
+        "reviewed_page_benchmark_medium_plus_high_95": str(reviewed_dir / "reviewed_page_benchmark_medium_plus_high_95.json"),
+        "active_reviewed_page_benchmark": str(page_benchmark_path),
+    }
+
+    if import_manifest_path.exists():
+        manifest_payload = json.loads(import_manifest_path.read_text(encoding="utf-8"))
+        if isinstance(manifest_payload, dict):
+            slice_counts = _coerce_str_int_dict(manifest_payload.get("slice_counts"))
+            confidence_counts = _coerce_str_int_dict(manifest_payload.get("confidence_counts"))
+            return {
+                "source_paths": reviewed_source_paths,
+                "slice_counts": slice_counts,
+                "confidence_counts": confidence_counts,
+            }
+
+    confidence_counts: dict[str, int] = {}
+    for row in rows:
+        if row.label_source != "reviewed" or not row.label_confidence:
+            continue
+        confidence_counts[row.label_confidence] = confidence_counts.get(row.label_confidence, 0) + 1
+
+    reviewed_all_path = reviewed_dir / "reviewed_all_100.json"
+    reviewed_high_path = reviewed_dir / "reviewed_high_confidence_81.json"
+    reviewed_medium_path = reviewed_dir / "reviewed_medium_plus_high_95.json"
+    slice_counts = {
+        "reviewed_all_100": _load_reviewed_slice_count(reviewed_all_path),
+        "reviewed_high_confidence_81": _load_reviewed_slice_count(reviewed_high_path),
+        "reviewed_medium_plus_high_95": _load_reviewed_slice_count(reviewed_medium_path),
+    }
+    return {
+        "source_paths": reviewed_source_paths,
+        "slice_counts": slice_counts,
+        "confidence_counts": dict(sorted(confidence_counts.items())),
+    }
 
 
 def build_grounding_ml_rows(
@@ -748,6 +836,27 @@ def _coerce_str_dict(value: object) -> dict[str, str]:
     return result
 
 
+def _coerce_str_int_dict(value: object) -> dict[str, int]:
+    """Coerce a raw mapping into a clean string-to-int dictionary.
+
+    Args:
+        value: Raw mapping candidate.
+
+    Returns:
+        Clean string-keyed integer mapping.
+    """
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, int] = {}
+    for raw_key, raw_value in value.items():
+        key = _coerce_str(raw_key)
+        if not key:
+            continue
+        if isinstance(raw_value, int | float) and not isinstance(raw_value, bool):
+            result[key] = int(raw_value)
+    return dict(sorted(result.items()))
+
+
 def _coerce_scalar_answer(value: object) -> str | bool | int | float | None:
     """Coerce a golden answer into a JSON-safe scalar."""
     if isinstance(value, bool):
@@ -777,3 +886,24 @@ def _coerce_label_weight(value: object, *, fallback_confidence: str) -> float:
     if confidence == "medium":
         return 0.5
     return 0.0
+
+
+def _load_reviewed_slice_count(path: Path) -> int:
+    """Load one reviewed slice and return its row count.
+
+    Args:
+        path: Reviewed slice JSON path.
+
+    Returns:
+        Row count, or zero when the file is missing/unreadable.
+    """
+    if not path.exists():
+        return 0
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict):
+        rows = payload.get("cases")
+        if isinstance(rows, list):
+            return len(rows)
+    return 0

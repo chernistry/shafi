@@ -36,6 +36,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--legacy-raw-results",
         type=Path,
         default=_default_path(
+            str(
+                repo_root
+                / ".sdd"
+                / "researches"
+                / "624_reviewed_heuristic_grounding_repair_r1_2026-03-19"
+                / "raw_results_reviewed_public100_legacy_baseline.json"
+            ),
             "/Users/sasha/IdeaProjects/.codex-worktrees/rag_challenge-grounding-sidecar-recovery/platform_runs/warmup/raw_results_v4_grounding_sidecar_r1_legacy.json",
             str(repo_root / "platform_runs" / "warmup" / "raw_results_v4_grounding_sidecar.json"),
         ),
@@ -44,6 +51,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--sidecar-raw-results",
         type=Path,
         default=_default_path(
+            str(
+                repo_root
+                / ".sdd"
+                / "researches"
+                / "624_reviewed_heuristic_grounding_repair_r1_2026-03-19"
+                / "raw_results_reviewed_public100_sidecar_r1.json"
+            ),
             "/Users/sasha/IdeaProjects/.codex-worktrees/rag_challenge-grounding-sidecar-recovery/platform_runs/warmup/raw_results_v4_grounding_sidecar_r1_sidecar.json",
             str(repo_root / "platform_runs" / "warmup" / "raw_results_v4_grounding_sidecar.json"),
         ),
@@ -51,12 +65,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--golden-labels",
         type=Path,
-        default=repo_root / ".sdd" / "golden" / "synthetic-ai-generated" / "golden_labels_v2.json",
+        default=_default_path(
+            str(repo_root / ".sdd" / "golden" / "reviewed" / "corrected_golden_labels_v3.json"),
+            str(repo_root / ".sdd" / "golden" / "synthetic-ai-generated" / "golden_labels_v2.json"),
+        ),
     )
     parser.add_argument(
         "--page-benchmark",
         type=Path,
-        default=repo_root / ".sdd" / "golden" / "page_benchmark_v2.json",
+        default=_default_path(
+            str(repo_root / ".sdd" / "golden" / "reviewed" / "reviewed_page_benchmark_all_100.json"),
+            str(repo_root / ".sdd" / "golden" / "page_benchmark_v2.json"),
+        ),
     )
     parser.add_argument(
         "--suspect-labels",
@@ -66,11 +86,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
             str(repo_root / ".sdd" / "researches" / "missing_suspect_labels.json"),
         ),
     )
-    parser.add_argument("--reviewed-labels", type=Path, default=None)
+    parser.add_argument(
+        "--reviewed-labels",
+        type=Path,
+        default=_default_path(
+            str(repo_root / ".sdd" / "golden" / "reviewed" / "reviewed_all_100.json"),
+            str(repo_root / ".sdd" / "golden" / "missing_reviewed_labels.json"),
+        ),
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=repo_root / "data" / "derived" / "grounding_ml" / "v1",
+        default=repo_root / "data" / "derived" / "grounding_ml" / "v2_reviewed",
     )
     parser.add_argument("--split-seed", type=int, default=601)
     parser.add_argument("--dev-ratio", type=float, default=0.2)

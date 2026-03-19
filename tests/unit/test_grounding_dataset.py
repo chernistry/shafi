@@ -41,7 +41,15 @@ def test_export_grounding_ml_dataset_preserves_reviewed_metadata(tmp_path: Path)
     sidecar_raw = tmp_path / "sidecar.json"
     golden = tmp_path / "golden.json"
     benchmark = tmp_path / "benchmark.json"
-    reviewed = tmp_path / "reviewed.json"
+    reviewed_dir = tmp_path / "reviewed"
+    reviewed_dir.mkdir()
+    reviewed = reviewed_dir / "reviewed_all_100.json"
+    reviewed_high = reviewed_dir / "reviewed_high_confidence_81.json"
+    reviewed_medium_plus_high = reviewed_dir / "reviewed_medium_plus_high_95.json"
+    reviewed_benchmark_all = reviewed_dir / "reviewed_page_benchmark_all_100.json"
+    reviewed_benchmark_high = reviewed_dir / "reviewed_page_benchmark_high_confidence_81.json"
+    reviewed_benchmark_medium = reviewed_dir / "reviewed_page_benchmark_medium_plus_high_95.json"
+    import_manifest = reviewed_dir / "import_manifest.json"
     output_dir = tmp_path / "out"
 
     _write_raw_results(legacy_raw, question_id="qid-1")
@@ -85,6 +93,28 @@ def test_export_grounding_ml_dataset_preserves_reviewed_metadata(tmp_path: Path)
         ),
         encoding="utf-8",
     )
+    reviewed_high.write_text(reviewed.read_text(encoding="utf-8"), encoding="utf-8")
+    reviewed_medium_plus_high.write_text(reviewed.read_text(encoding="utf-8"), encoding="utf-8")
+    reviewed_benchmark_all.write_text(benchmark.read_text(encoding="utf-8"), encoding="utf-8")
+    reviewed_benchmark_high.write_text(benchmark.read_text(encoding="utf-8"), encoding="utf-8")
+    reviewed_benchmark_medium.write_text(benchmark.read_text(encoding="utf-8"), encoding="utf-8")
+    import_manifest.write_text(
+        json.dumps(
+            {
+                "slice_counts": {
+                    "reviewed_all_100": 100,
+                    "reviewed_high_confidence_81": 81,
+                    "reviewed_medium_plus_high_95": 95,
+                },
+                "confidence_counts": {
+                    "high": 81,
+                    "medium": 14,
+                    "low": 5,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     manifest = export_grounding_ml_dataset(
         legacy_raw_results_path=legacy_raw,
@@ -99,6 +129,15 @@ def test_export_grounding_ml_dataset_preserves_reviewed_metadata(tmp_path: Path)
     )
 
     assert manifest.label_source_counts["reviewed"] == 1
+    assert manifest.reviewed_slice_counts == {
+        "reviewed_all_100": 100,
+        "reviewed_high_confidence_81": 81,
+        "reviewed_medium_plus_high_95": 95,
+    }
+    assert manifest.label_confidence_counts == {"high": 81, "low": 5, "medium": 14}
+    assert manifest.source_paths["reviewed_all_100"] == str(reviewed)
+    assert manifest.source_paths["reviewed_high_confidence_81"] == str(reviewed_high)
+    assert manifest.source_paths["active_reviewed_page_benchmark"] == str(benchmark)
     row = json.loads((output_dir / "train.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert row["label_source"] == "reviewed"
     assert row["label_confidence"] == "medium"
