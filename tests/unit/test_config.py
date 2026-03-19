@@ -1,6 +1,8 @@
 import os
 from unittest.mock import patch
 
+import pytest
+
 
 def test_settings_load_defaults():
     env = {
@@ -124,3 +126,51 @@ def test_platform_settings_load_from_eval_env() -> None:
         assert s.platform.base_url == "https://platform.agentic-challenge.ai/api/v1"
         assert s.platform.phase == "warmup"
         assert s.platform.collection_prefix == "phase_chunks"
+
+
+@pytest.mark.usefixtures("monkeypatch")
+def test_settings_env_local_overrides_env(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "ISAACUS_API_KEY=from-env",
+                "ZEROENTROPY_API_KEY=from-env",
+                "COHERE_API_KEY=from-env",
+                "OPENAI_API_KEY=from-env",
+                "QDRANT_COLLECTION=from-env",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env.local").write_text("QDRANT_COLLECTION=from-env-local\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    with patch.dict(os.environ, {}, clear=True):
+        from rag_challenge.config.settings import Settings
+
+        s = Settings()
+        assert s.qdrant.collection == "from-env-local"
+
+
+@pytest.mark.usefixtures("monkeypatch")
+def test_settings_process_env_overrides_env_local(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "ISAACUS_API_KEY=from-env",
+                "ZEROENTROPY_API_KEY=from-env",
+                "COHERE_API_KEY=from-env",
+                "OPENAI_API_KEY=from-env",
+                "QDRANT_COLLECTION=from-env",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env.local").write_text("QDRANT_COLLECTION=from-env-local\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    with patch.dict(os.environ, {"QDRANT_COLLECTION": "from-process-env"}, clear=True):
+        from rag_challenge.config.settings import Settings
+
+        s = Settings()
+        assert s.qdrant.collection == "from-process-env"

@@ -8,9 +8,19 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 def _settings_model_config(*, env_prefix: str = "") -> SettingsConfigDict:
+    """Build the shared settings config for all settings models.
+
+    Args:
+        env_prefix: Prefix applied to environment variables for this settings
+            group.
+
+    Returns:
+        Pydantic settings config with deterministic env precedence:
+        process environment, then `.env.local`, then `.env`, then defaults.
+    """
     return SettingsConfigDict(
         env_prefix=env_prefix,
-        env_file=".env",
+        env_file=(".env", ".env.local"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

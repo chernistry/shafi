@@ -32,19 +32,15 @@ Current focus:
 
 ## Architecture
 
-Every query flows through a staged LangGraph pipeline with conditional retry on low-confidence retrieval:
+Every query flows through a staged LangGraph pipeline with page-first retrieval and anchor-based filtering:
 
 ```mermaid
 graph LR
     Q([Query]) --> Classify
-    Classify --> Decompose
-    Decompose --> Retrieve
-    Retrieve --> Rerank
-    Rerank --> Conflicts["Detect Conflicts"]
-    Conflicts --> Confidence{"Confidence\nCheck"}
-    Confidence -->|Low| Retry["Retry Retrieve"]
-    Confidence -->|OK| Generate
-    Retry --> Generate
+    Classify --> PageRetrieval["Page-Level Retrieval"]
+    PageRetrieval --> AnchorFilter["Anchor Filter"]
+    AnchorFilter --> Rerank
+    Rerank --> Generate
     Generate --> Verify
     Verify --> Emit
     Emit --> Finalize
@@ -53,12 +49,18 @@ graph LR
 
 Key design choices:
 
-- Hybrid retrieval: dense embeddings + BM25 sparse search fused via Reciprocal Rank Fusion
-- Legal-domain embeddings: Kanon 2 Embedder for DIFC-heavy terminology and statute references
-- Reranking: Zerank 2 with Cohere Rerank fallback
-- Model routing: `gpt-4.1-mini` for strict answer types, `gpt-4.1` for complex free-text reasoning
-- Faithfulness guardrails: premise guard, conflict detection, citation verification, and final post-processing bound to `answer_final`
-- Telemetry bound to the final answer: `used_page_ids`, `cited_page_ids`, per-stage timings, and model metadata in every response
+- **Page-first retrieval**: Hybrid search (dense + BM25) at page level, then anchor-based filtering for precision
+- **Legal-domain embeddings**: Kanon 2 Embedder for DIFC-heavy terminology and statute references
+- **Anchor filtering**: Extracts legal references, entity names, and cross-references to localize relevant pages
+- **Reranking**: Zerank 2 with Cohere Rerank fallback for final page ordering
+- **Model routing**: `gpt-4.1-mini` for strict answer types, `gpt-4.1` for complex free-text reasoning
+- **Faithfulness guardrails**: premise guard, conflict detection, citation verification, and final post-processing bound to `answer_final`
+- **Telemetry bound to the final answer**: `used_page_ids`, `cited_page_ids`, per-stage timings, and model metadata in every response
+
+Latest candidate: **page_localizer_anchor_filter_r1** (March 18, 2026)
+- Warmup phase: 100 questions, 30 PDFs, 3865 Qdrant points
+- Submission SHA256: `d4140f9e644d03f35d0366add4a9859399b707909d3eee0d1229dd1dc028fc42`
+- Code archive SHA256: `1a42a72bbc22f5f384ca254c6fc50faebdffef1881881dfc463ae8200b60323a`
 
 The system was developed with support from [SDDRush](https://github.com/chernistry/SDDRush), a lightweight toolkit I built for research, best-practice capture, and implementation tickets.
 
@@ -74,6 +76,13 @@ See [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md) for contact details.
 ---
 
 ## Quick Start
+
+Bootstrap the local config once:
+
+```bash
+cp .env.example .env
+# Optional: put machine-specific overrides in .env.local
+```
 
 ```bash
 # 1. Start the local stack (API + local Qdrant)
@@ -108,6 +117,14 @@ The default `docker compose` setup brings up:
 - `ingest` and `eval` as tool-profile services inside the same Docker network
 
 No extra `QDRANT_URL` juggling is required for the default local workflow.
+
+### Environment Contract
+
+- Host-local `uv run ...` and other shell commands use `QDRANT_URL=http://localhost:6333`.
+- Docker Compose service containers always use `QDRANT_URL=http://qdrant:6333` internally.
+- Local config precedence is: process env > `.env.local` > `.env` > code defaults.
+- Compose services load `.env`, then `.env.local`, then an optional extra override file if you run `ENV_FILE=/abs/path/to/file docker compose ...`.
+- Keep shared defaults in `.env`; keep workstation-specific overrides and secrets in `.env.local`.
 
 ## Platform Submission
 
