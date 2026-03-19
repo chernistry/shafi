@@ -72,7 +72,7 @@ def test_classify_query_scope_uses_issued_by_role_for_compare_judge_queries() ->
 
 
 @pytest.mark.asyncio
-async def test_grounding_sidecar_activates_for_single_doc_date_scope() -> None:
+async def test_grounding_sidecar_leaves_single_doc_date_scope_on_legacy_path() -> None:
     selector, retriever = _make_selector(
         retrieved_pages=[
             RetrievedPage(
@@ -102,11 +102,8 @@ async def test_grounding_sidecar_activates_for_single_doc_date_scope() -> None:
         ],
     )
 
-    assert result == ["law_2"]
-    retriever.retrieve_pages.assert_awaited_once()
-    kwargs = retriever.retrieve_pages.await_args.kwargs
-    assert kwargs["doc_ids"] == ["law"]
-    assert "issued_by_block" in kwargs["page_roles"]
+    assert result is None
+    retriever.retrieve_pages.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -175,7 +172,7 @@ async def test_grounding_sidecar_passes_explicit_page_filter_for_single_doc_scop
 
 
 @pytest.mark.asyncio
-async def test_grounding_sidecar_passes_article_anchor_filter_for_single_doc_scope() -> None:
+async def test_grounding_sidecar_leaves_single_doc_article_scope_on_legacy_path() -> None:
     selector, retriever = _make_selector(
         retrieved_pages=[
             RetrievedPage(
@@ -206,11 +203,8 @@ async def test_grounding_sidecar_passes_article_anchor_filter_for_single_doc_sco
         ],
     )
 
-    assert result == ["law_16"]
-    kwargs = retriever.retrieve_pages.await_args.kwargs
-    assert kwargs["doc_ids"] == ["law"]
-    assert kwargs["article_refs"] == ["Article 16"]
-    assert "article_clause" in kwargs["page_roles"]
+    assert result is None
+    retriever.retrieve_pages.assert_not_awaited()
 
 
 @pytest.mark.asyncio

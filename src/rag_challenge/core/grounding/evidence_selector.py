@@ -42,18 +42,6 @@ if TYPE_CHECKING:
     from rag_challenge.models import RankedChunk
 
 logger = logging.getLogger(__name__)
-_SAFE_SINGLE_DOC_TYPES = frozenset({"boolean", "number", "date", "name", "names"})
-_SAFE_SINGLE_DOC_ROLES = frozenset(
-    {
-        "title_cover",
-        "caption",
-        "issued_by_block",
-        "operative_order",
-        "costs_block",
-        "article_clause",
-        "schedule_table",
-    }
-)
 _EMPTY_GROUNDING_ANSWERS = frozenset(
     {
         "",
@@ -375,17 +363,12 @@ class GroundingEvidenceSelector:
         if scope.scope_mode is ScopeMode.EXPLICIT_PAGE:
             return len(doc_ids) == 1
 
-        if scope.scope_mode is not ScopeMode.SINGLE_FIELD_SINGLE_DOC:
-            return False
-
-        if answer_type not in _SAFE_SINGLE_DOC_TYPES:
-            return False
-
-        if len(doc_ids) != 1:
-            return False
-
-        role_set = {role for role in scope.target_page_roles if role}
-        return bool(role_set) and role_set.issubset(_SAFE_SINGLE_DOC_ROLES)
+        # Reviewed public100 gating showed that widened single-doc activation
+        # regressed grounding on article/boolean strict queries while compare/full-case
+        # remained the only stable positive sidecar lane. Keep the sidecar narrow until
+        # the single-doc reviewed failures are fixed with a separate measured patch.
+        del answer_type
+        return False
 
     def _score_candidates(
         self,
