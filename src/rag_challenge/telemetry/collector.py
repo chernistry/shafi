@@ -53,6 +53,10 @@ class TelemetryCollector:
         self._retried = False
         self._model_upgraded: bool = False
         self._used_page_ids_override: list[str] | None = None
+        self._trained_page_scorer_used = False
+        self._trained_page_scorer_model_path = ""
+        self._trained_page_scorer_page_ids: list[str] = []
+        self._trained_page_scorer_fallback_reason = ""
 
     @contextmanager
     def timed(self, stage: StageName):
@@ -82,6 +86,27 @@ class TelemetryCollector:
     def set_used_page_ids_override(self, page_ids: list[str]) -> None:
         """Directly set used_page_ids, bypassing chunk-to-page inference."""
         self._used_page_ids_override = list(page_ids)
+
+    def set_trained_page_scorer_diagnostics(
+        self,
+        *,
+        used: bool,
+        model_path: str = "",
+        page_ids: list[str] | None = None,
+        fallback_reason: str = "",
+    ) -> None:
+        """Record runtime trained-page-scorer diagnostics.
+
+        Args:
+            used: Whether the trained scorer actively reordered pages.
+            model_path: Model artifact path used for scoring, if any.
+            page_ids: Ranked page IDs returned by the scorer.
+            fallback_reason: Fail-closed reason when the scorer was skipped.
+        """
+        self._trained_page_scorer_used = bool(used)
+        self._trained_page_scorer_model_path = str(model_path).strip()
+        self._trained_page_scorer_page_ids = list(page_ids or [])
+        self._trained_page_scorer_fallback_reason = str(fallback_reason).strip()
 
     def set_chunk_snippets(self, snippets: dict[str, str]) -> None:
         for raw_chunk_id, raw_snippet in snippets.items():
@@ -219,6 +244,10 @@ class TelemetryCollector:
             malformed_tail_detected=self._malformed_tail_detected,
             retried=self._retried,
             model_upgraded=self._model_upgraded,
+            trained_page_scorer_used=self._trained_page_scorer_used,
+            trained_page_scorer_model_path=self._trained_page_scorer_model_path,
+            trained_page_scorer_page_ids=list(self._trained_page_scorer_page_ids),
+            trained_page_scorer_fallback_reason=self._trained_page_scorer_fallback_reason,
         )
 
     def _chunk_ids_to_page_ids(self, ids: list[str]) -> list[str]:

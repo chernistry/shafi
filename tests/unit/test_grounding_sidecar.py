@@ -8,7 +8,9 @@ from rag_challenge.core.grounding.query_scope_classifier import (
     classify_query_scope,
     extract_explicit_page_numbers,
 )
+from rag_challenge.ml.page_scorer_runtime import RuntimePageScorerResult
 from rag_challenge.models import DocType, RankedChunk, RetrievedPage, ScopeMode
+from rag_challenge.telemetry import TelemetryCollector
 
 
 def _make_ranked_chunk(
@@ -42,6 +44,8 @@ def _make_selector(*, retrieved_pages: list[RetrievedPage]) -> tuple[GroundingEv
 
     embedder = MagicMock()
     settings = SimpleNamespace(
+        enable_trained_page_scorer=False,
+        trained_page_scorer_model_path="",
         grounding_support_fact_top_k=8,
         grounding_page_top_k=5,
     )
@@ -374,3 +378,222 @@ async def test_grounding_sidecar_full_case_scope_excludes_unrelated_docs() -> No
     kwargs = retriever.retrieve_pages.await_args.kwargs
     assert kwargs["doc_ids"] == ["case-doc-judgment", "case-doc-order"]
     assert "issued_by_block" in kwargs["page_roles"]
+
+
+@pytest.mark.asyncio
+async def test_grounding_sidecar_uses_trained_page_scorer_for_compare_scope() -> None:
+    selector, _retriever = _make_selector(
+        retrieved_pages=[
+            RetrievedPage(
+                page_id="case-a-doc_2",
+                doc_id="case-a-doc",
+                page_num=2,
+                doc_title="CFI 001/2024 Alpha Holdings",
+                doc_type="case_law",
+                page_text="Issued by: Justice A.",
+                score=0.95,
+                page_role="issued_by_block",
+            ),
+            RetrievedPage(
+                page_id="case-a-doc_3",
+                doc_id="case-a-doc",
+                page_num=3,
+                doc_title="CFI 001/2024 Alpha Holdings",
+                doc_type="case_law",
+                page_text="Issued by: Justice A.",
+                score=0.93,
+                page_role="issued_by_block",
+            ),
+            RetrievedPage(
+                page_id="case-b-doc_3",
+                doc_id="case-b-doc",
+                page_num=3,
+                doc_title="CFI 002/2024 Beta Capital",
+                doc_type="case_law",
+                page_text="Issued by: Justice B.",
+                score=0.91,
+                page_role="issued_by_block",
+            ),
+        ]
+    )
+    selector._trained_page_scorer = SimpleNamespace(
+        model_path="/tmp/runtime-safe-page-scorer.joblib",
+        rank_pages=MagicMock(
+            return_value=RuntimePageScorerResult(
+                used=True,
+                model_path="/tmp/runtime-safe-page-scorer.joblib",
+                ranked_page_ids=["case-a-doc_3", "case-b-doc_3", "case-a-doc_2"],
+            )
+        ),
+    )
+    collector = TelemetryCollector(request_id="trained-page-scorer-compare")
+
+    result = await selector.select_page_ids(
+        query="Who was the judge in CFI 001/2024 and CFI 002/2024?",
+        answer="Justice A; Justice B",
+        answer_type="names",
+        context_chunks=[
+            _make_ranked_chunk(
+                chunk_id="case-a-doc:1:0:judge",
+                doc_id="case-a-doc",
+                doc_title="CFI 001/2024 Alpha Holdings",
+                section_path="page:2",
+                text="Issued by: Justice A.",
+            ),
+            _make_ranked_chunk(
+                chunk_id="case-b-doc:2:0:judge",
+                doc_id="case-b-doc",
+                doc_title="CFI 002/2024 Beta Capital",
+                section_path="page:3",
+                text="Issued by: Justice B.",
+            ),
+        ],
+        current_used_ids=["case-a-doc:1:0:judge", "case-b-doc:2:0:judge"],
+        collector=collector,
+    )
+
+    assert result == ["case-a-doc_3", "case-b-doc_3"]
+    telemetry = collector.finalize()
+    assert telemetry.trained_page_scorer_used is True
+    assert telemetry.trained_page_scorer_model_path == "/tmp/runtime-safe-page-scorer.joblib"
+    assert telemetry.trained_page_scorer_page_ids == ["case-a-doc_3", "case-b-doc_3", "case-a-doc_2"]
+    assert telemetry.trained_page_scorer_fallback_reason == ""
+
+
+@pytest.mark.asyncio
+async def test_grounding_sidecar_reranks_candidate_subset_when_context_only_page_exists() -> None:
+    selector, _retriever = _make_selector(
+        retrieved_pages=[
+            RetrievedPage(
+                page_id="case-a-doc_2",
+                doc_id="case-a-doc",
+                page_num=2,
+                doc_title="CFI 001/2024 Alpha Holdings",
+                doc_type="case_law",
+                page_text="Issued by: Justice A.",
+                score=0.95,
+                page_role="issued_by_block",
+            ),
+            RetrievedPage(
+                page_id="case-b-doc_3",
+                doc_id="case-b-doc",
+                page_num=3,
+                doc_title="CFI 002/2024 Beta Capital",
+                doc_type="case_law",
+                page_text="Issued by: Justice B.",
+                score=0.91,
+                page_role="issued_by_block",
+            ),
+        ]
+    )
+    fake_ranker = MagicMock(
+        return_value=RuntimePageScorerResult(
+            used=True,
+            model_path="/tmp/runtime-safe-page-scorer.joblib",
+            ranked_page_ids=["case-a-doc_2", "case-b-doc_3"],
+        )
+    )
+    selector._trained_page_scorer = SimpleNamespace(
+        model_path="/tmp/runtime-safe-page-scorer.joblib",
+        rank_pages=fake_ranker,
+    )
+    collector = TelemetryCollector(request_id="trained-page-scorer-fallback")
+
+    result = await selector.select_page_ids(
+        query="Who was the judge in CFI 001/2024 and CFI 002/2024?",
+        answer="Justice A; Justice B",
+        answer_type="names",
+        context_chunks=[
+            _make_ranked_chunk(
+                chunk_id="case-a-doc:3:0:judge",
+                doc_id="case-a-doc",
+                doc_title="CFI 001/2024 Alpha Holdings",
+                section_path="page:4",
+                text="Issued by: Justice A.",
+            ),
+            _make_ranked_chunk(
+                chunk_id="case-b-doc:2:0:judge",
+                doc_id="case-b-doc",
+                doc_title="CFI 002/2024 Beta Capital",
+                section_path="page:3",
+                text="Issued by: Justice B.",
+            ),
+        ],
+        current_used_ids=["case-a-doc:3:0:judge", "case-b-doc:2:0:judge"],
+        collector=collector,
+    )
+
+    assert result == ["case-a-doc_2", "case-b-doc_3"]
+    fake_ranker.assert_called_once()
+    telemetry = collector.finalize()
+    assert telemetry.trained_page_scorer_used is True
+    assert telemetry.trained_page_scorer_page_ids == ["case-a-doc_2", "case-a-doc_4", "case-b-doc_3"]
+    assert telemetry.trained_page_scorer_fallback_reason == ""
+
+
+@pytest.mark.asyncio
+async def test_grounding_sidecar_fails_closed_for_invalid_ranked_candidate_subset() -> None:
+    selector, _retriever = _make_selector(
+        retrieved_pages=[
+            RetrievedPage(
+                page_id="case-a-doc_2",
+                doc_id="case-a-doc",
+                page_num=2,
+                doc_title="CFI 001/2024 Alpha Holdings",
+                doc_type="case_law",
+                page_text="Issued by: Justice A.",
+                score=0.95,
+                page_role="issued_by_block",
+            ),
+            RetrievedPage(
+                page_id="case-b-doc_3",
+                doc_id="case-b-doc",
+                page_num=3,
+                doc_title="CFI 002/2024 Beta Capital",
+                doc_type="case_law",
+                page_text="Issued by: Justice B.",
+                score=0.91,
+                page_role="issued_by_block",
+            ),
+        ]
+    )
+    selector._trained_page_scorer = SimpleNamespace(
+        model_path="/tmp/runtime-safe-page-scorer.joblib",
+        rank_pages=MagicMock(
+            return_value=RuntimePageScorerResult(
+                used=True,
+                model_path="/tmp/runtime-safe-page-scorer.joblib",
+                ranked_page_ids=["case-a-doc_2"],
+            )
+        ),
+    )
+    collector = TelemetryCollector(request_id="trained-page-scorer-invalid-subset")
+
+    result = await selector.select_page_ids(
+        query="Who was the judge in CFI 001/2024 and CFI 002/2024?",
+        answer="Justice A; Justice B",
+        answer_type="names",
+        context_chunks=[
+            _make_ranked_chunk(
+                chunk_id="case-a-doc:3:0:judge",
+                doc_id="case-a-doc",
+                doc_title="CFI 001/2024 Alpha Holdings",
+                section_path="page:4",
+                text="Issued by: Justice A.",
+            ),
+            _make_ranked_chunk(
+                chunk_id="case-b-doc:2:0:judge",
+                doc_id="case-b-doc",
+                doc_title="CFI 002/2024 Beta Capital",
+                section_path="page:3",
+                text="Issued by: Justice B.",
+            ),
+        ],
+        current_used_ids=["case-a-doc:3:0:judge", "case-b-doc:2:0:judge"],
+        collector=collector,
+    )
+
+    assert result == ["case-b-doc_3", "case-a-doc_4"]
+    telemetry = collector.finalize()
+    assert telemetry.trained_page_scorer_used is False
+    assert telemetry.trained_page_scorer_fallback_reason == "ranked_subset_mismatch"

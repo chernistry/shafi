@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING, cast
 
 from qdrant_client import models
 
+from rag_challenge.core.grounding.page_rank_merge import (
+    merge_ranked_candidate_subset,
+    ordered_rankable_candidate_page_ids,
+)
 from rag_challenge.core.grounding.query_scope_classifier import (
     classify_query_scope,
     extract_explicit_page_numbers,
@@ -39,7 +43,9 @@ if TYPE_CHECKING:
     from rag_challenge.core.qdrant import QdrantStore
     from rag_challenge.core.retriever import HybridRetriever
     from rag_challenge.core.sparse_bm25 import BM25SparseEncoder
+    from rag_challenge.ml.page_scorer_runtime import RuntimePageScorer
     from rag_challenge.models import RankedChunk
+    from rag_challenge.telemetry.collector import TelemetryCollector
 
 logger = logging.getLogger(__name__)
 _EMPTY_GROUNDING_ANSWERS = frozenset(
@@ -116,6 +122,12 @@ class GroundingEvidenceSelector:
         self._embedder = embedder
         self._sparse_encoder = sparse_encoder
         self._settings = pipeline_settings
+        self._trained_page_scorer: RuntimePageScorer | None = None
+        model_path = str(getattr(self._settings, "trained_page_scorer_model_path", "") or "").strip()
+        if bool(getattr(self._settings, "enable_trained_page_scorer", False)) and model_path:
+            from rag_challenge.ml.page_scorer_runtime import RuntimePageScorer
+
+            self._trained_page_scorer = RuntimePageScorer(model_path=model_path)
 
     async def select_page_ids(
         self,
@@ -124,6 +136,8 @@ class GroundingEvidenceSelector:
         answer: str,
         answer_type: str,
         context_chunks: Sequence[RankedChunk],
+        current_used_ids: Sequence[str] = (),
+        collector: TelemetryCollector | None = None,
     ) -> list[str] | None:
         """Select minimal evidentiary page IDs for grounding.
 
@@ -132,6 +146,8 @@ class GroundingEvidenceSelector:
             answer: Final answer text (already generated).
             answer_type: Normalized answer type.
             context_chunks: Ranked context chunks used for answering.
+            current_used_ids: Answer-path used chunk IDs before sidecar override.
+            collector: Optional telemetry collector for scorer diagnostics.
 
         Returns:
             List of page IDs, empty list for null/negative, or None to fall back to legacy.
@@ -160,24 +176,19 @@ class GroundingEvidenceSelector:
         # Collect pages already cited by the answer path — strong prior.
         # chunk_id format: "doc_id:page_num:chunk_idx:hash"
         # page_id format: "doc_id_{page_num+1}" (1-indexed)
-        context_page_ids: set[str] = set()
-        for chunk in context_chunks:
-            if not chunk.doc_id:
-                continue
-            parts = chunk.chunk_id.split(":")
-            if len(parts) >= 2:
-                try:
-                    page_num = int(parts[1])
-                    context_page_ids.add(f"{chunk.doc_id}_{page_num + 1}")
-                except (ValueError, IndexError):
-                    pass
         if doc_ids:
             allowed_doc_ids = set(doc_ids)
-            context_page_ids = {
-                page_id
-                for page_id in context_page_ids
-                if page_id.rpartition("_")[0] in allowed_doc_ids
-            }
+            context_page_ids = self._page_ids_from_context_chunks(
+                context_chunks=context_chunks,
+                allowed_doc_ids=allowed_doc_ids,
+            )
+            legacy_used_page_ids = self._page_ids_from_chunk_ids(
+                chunk_ids=current_used_ids,
+                allowed_doc_ids=allowed_doc_ids,
+            )
+        else:
+            context_page_ids = []
+            legacy_used_page_ids = []
 
         answer_value = _normalize_answer_value(answer, answer_type)
 
@@ -201,7 +212,19 @@ class GroundingEvidenceSelector:
             answer_value=answer_value,
             support_candidates=support_candidates,
             page_candidates=page_candidates,
+            context_page_ids=set(context_page_ids),
+        )
+        scored = self._maybe_apply_trained_page_scorer(
+            query=query,
+            answer_type=answer_type,
+            scope=scope,
+            answer_value=answer_value,
+            doc_ids=doc_ids,
+            page_candidates=page_candidates,
             context_page_ids=context_page_ids,
+            legacy_used_page_ids=legacy_used_page_ids,
+            heuristic_scores=scored,
+            collector=collector,
         )
 
         selected = self._select_minimal_pages(scope=scope, scored=scored)
@@ -209,6 +232,79 @@ class GroundingEvidenceSelector:
             return selected
 
         return None  # fall back to legacy
+
+    @staticmethod
+    def _page_ids_from_context_chunks(
+        *,
+        context_chunks: Sequence[RankedChunk],
+        allowed_doc_ids: set[str],
+    ) -> list[str]:
+        """Build ordered unique page IDs from answer-path context chunks.
+
+        Args:
+            context_chunks: Ranked answer-path chunks.
+            allowed_doc_ids: Document IDs allowed by sidecar scope.
+
+        Returns:
+            Ordered page IDs limited to the allowed doc scope.
+        """
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for chunk in context_chunks:
+            page_id = GroundingEvidenceSelector._chunk_id_to_page_id(chunk.chunk_id)
+            if not page_id or page_id in seen:
+                continue
+            if page_id.rpartition("_")[0] not in allowed_doc_ids:
+                continue
+            seen.add(page_id)
+            ordered.append(page_id)
+        return ordered
+
+    @staticmethod
+    def _page_ids_from_chunk_ids(
+        *,
+        chunk_ids: Sequence[str],
+        allowed_doc_ids: set[str],
+    ) -> list[str]:
+        """Build ordered unique page IDs from chunk IDs.
+
+        Args:
+            chunk_ids: Chunk IDs to convert.
+            allowed_doc_ids: Document IDs allowed by sidecar scope.
+
+        Returns:
+            Ordered page IDs limited to the allowed doc scope.
+        """
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for chunk_id in chunk_ids:
+            page_id = GroundingEvidenceSelector._chunk_id_to_page_id(chunk_id)
+            if not page_id or page_id in seen:
+                continue
+            if page_id.rpartition("_")[0] not in allowed_doc_ids:
+                continue
+            seen.add(page_id)
+            ordered.append(page_id)
+        return ordered
+
+    @staticmethod
+    def _chunk_id_to_page_id(chunk_id: str) -> str:
+        """Convert a starter-kit chunk ID into a page ID.
+
+        Args:
+            chunk_id: Starter-kit chunk ID.
+
+        Returns:
+            Competition page ID, or an empty string when conversion fails.
+        """
+        parts = str(chunk_id).split(":")
+        if len(parts) < 2:
+            return ""
+        doc_id = parts[0].strip()
+        page_idx = parts[1].strip()
+        if not doc_id or not page_idx.isdigit():
+            return ""
+        return f"{doc_id}_{int(page_idx) + 1}"
 
     def _select_doc_scope(
         self,
@@ -426,6 +522,113 @@ class GroundingEvidenceSelector:
                 scores[fact.page_id] += 0.5
 
         return dict(sorted(scores.items(), key=lambda kv: kv[1], reverse=True))
+
+    def _maybe_apply_trained_page_scorer(
+        self,
+        *,
+        query: str,
+        answer_type: str,
+        scope: QueryScopePrediction,
+        answer_value: str,
+        doc_ids: Sequence[str],
+        page_candidates: Sequence[RetrievedPage],
+        context_page_ids: Sequence[str],
+        legacy_used_page_ids: Sequence[str],
+        heuristic_scores: dict[str, float],
+        collector: TelemetryCollector | None,
+    ) -> dict[str, float]:
+        """Reorder heuristic scores with the trained runtime scorer when safe.
+
+        Args:
+            query: Raw user question.
+            answer_type: Normalized answer type.
+            scope: Query scope prediction.
+            answer_value: Normalized answer value.
+            doc_ids: Scoped document IDs.
+            page_candidates: Retrieved page candidates available to the sidecar.
+            context_page_ids: Ordered context page IDs from the answer path.
+            legacy_used_page_ids: Ordered legacy used page IDs.
+            heuristic_scores: Current heuristic page scores.
+            collector: Optional telemetry collector.
+
+        Returns:
+            Possibly reordered score mapping with the same page IDs.
+        """
+        scorer = self._trained_page_scorer
+        if scorer is None:
+            return heuristic_scores
+
+        fallback_reason = ""
+        rankable_candidate_ids: list[str] = []
+        if scope.scope_mode is ScopeMode.EXPLICIT_PAGE:
+            fallback_reason = "explicit_page_terminal"
+        elif len(page_candidates) < 2:
+            fallback_reason = "insufficient_page_candidates"
+        else:
+            candidate_page_ids = {page.page_id for page in page_candidates if page.page_id}
+            rankable_candidate_ids = ordered_rankable_candidate_page_ids(
+                heuristic_order=list(heuristic_scores),
+                candidate_page_ids=candidate_page_ids,
+            )
+            if len(rankable_candidate_ids) < 2:
+                fallback_reason = "insufficient_page_candidates"
+        if fallback_reason:
+            if collector is not None:
+                collector.set_trained_page_scorer_diagnostics(
+                    used=False,
+                    model_path=scorer.model_path,
+                    fallback_reason=fallback_reason,
+                )
+            return heuristic_scores
+
+        from rag_challenge.ml.page_scorer_runtime import RuntimePageScoringRequest
+
+        rankable_candidate_id_set = set(rankable_candidate_ids)
+        result = scorer.rank_pages(
+            RuntimePageScoringRequest(
+                query=query,
+                normalized_answer=answer_value,
+                answer_type=answer_type,
+                scope=scope,
+                doc_ids=doc_ids,
+                page_candidates=[page for page in page_candidates if page.page_id in rankable_candidate_id_set],
+                context_page_ids=context_page_ids,
+                legacy_used_page_ids=legacy_used_page_ids,
+                heuristic_scores=heuristic_scores,
+            )
+        )
+        if not result.used:
+            if collector is not None:
+                collector.set_trained_page_scorer_diagnostics(
+                    used=False,
+                    model_path=result.model_path,
+                    page_ids=result.ranked_page_ids,
+                    fallback_reason=result.fallback_reason,
+                )
+            return heuristic_scores
+
+        merged_page_ids = merge_ranked_candidate_subset(
+            heuristic_order=list(heuristic_scores),
+            ranked_candidate_page_ids=result.ranked_page_ids,
+            candidate_page_ids=rankable_candidate_ids,
+        )
+        if merged_page_ids is None:
+            if collector is not None:
+                collector.set_trained_page_scorer_diagnostics(
+                    used=False,
+                    model_path=result.model_path,
+                    page_ids=result.ranked_page_ids,
+                    fallback_reason="ranked_subset_mismatch",
+                )
+            return heuristic_scores
+        if collector is not None:
+            collector.set_trained_page_scorer_diagnostics(
+                used=True,
+                model_path=result.model_path,
+                page_ids=merged_page_ids,
+                fallback_reason="",
+            )
+        return {page_id: heuristic_scores[page_id] for page_id in merged_page_ids}
 
     def _select_minimal_pages(
         self,

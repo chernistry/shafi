@@ -268,6 +268,8 @@ class PipelineSettings(BaseSettings):
     shadow_retrieval_top_k: int = 24
     anchor_retrieval_top_k: int = 16
     enable_grounding_sidecar: bool = False
+    enable_trained_page_scorer: bool = False
+    trained_page_scorer_model_path: str = ""
     grounding_support_fact_top_k: int = 32
     grounding_page_top_k: int = 24
     grounding_page_budget_default: int = 2

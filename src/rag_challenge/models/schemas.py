@@ -323,6 +323,10 @@ class TelemetryPayload(BaseModel):
     malformed_tail_detected: bool = False
     retried: bool = False
     model_upgraded: bool = False
+    trained_page_scorer_used: bool = False
+    trained_page_scorer_model_path: str = ""
+    trained_page_scorer_page_ids: list[str] = Field(default_factory=list)
+    trained_page_scorer_fallback_reason: str = ""
 
 
 class RAGResponse(BaseModel):

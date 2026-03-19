@@ -861,6 +861,8 @@ class GenerationLogicMixin:
                     answer=answer,
                     answer_type=answer_type,
                     context_chunks=context_chunks,
+                    current_used_ids=current_used_ids,
+                    collector=collector,
                 )
                 if sidecar_page_ids is not None:
                     collector.set_used_ids(list(current_used_ids))
