@@ -374,6 +374,13 @@ def coerce_answer_type(answer: str | None, answer_type: str) -> SubmissionAnswer
     if kind == "date":
         normalized_date = normalize_date_answer(text)
         return text if normalized_date is None else normalized_date
+    if kind == "name":
+        cleaned = strip_inline_citations(text).strip()
+        cleaned = re.sub(r"[.!?]+$", "", cleaned).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        if not cleaned:
+            return None
+        return cleaned
     if kind == "names":
         names = coerce_names(text)
         return names if names else [text]

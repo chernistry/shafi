@@ -257,7 +257,7 @@ class PipelineSettings(BaseSettings):
     context_token_budget_free_text_simple: int = 1800
     context_token_budget_free_text_complex: int = 2400
     rerank_skip_on_single_doc_ref: bool = True
-    rerank_doc_max_chars: int = 1500
+    rerank_doc_max_chars: int = 2500
     use_fast_reranker_for_simple: bool = False
     enable_conflict_detection: bool = Field(
         default=False,

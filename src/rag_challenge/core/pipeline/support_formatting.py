@@ -20,6 +20,7 @@ from .constants import (
     _ISO_DATE_RE,
     _NUMBER_RE,
     _SLASH_DATE_RE,
+    _TEXTUAL_DATE_MONTH_FIRST_RE,
     _TEXTUAL_DATE_RE,
     _UNANSWERABLE_FREE_TEXT,
     _UNANSWERABLE_STRICT,
@@ -101,7 +102,7 @@ def coerce_strict_type_format(
         lowered = stripped_text.lower().lstrip()
         if lowered.startswith("yes"):
             return (f"Yes{suffix}".strip(), True)
-        if lowered.startswith("no"):
+        if re.match(r"no(?:\b|$)", lowered):
             return (f"No{suffix}".strip(), True)
         if "yes" in lowered and "no" not in lowered:
             return (f"Yes{suffix}".strip(), True)
@@ -118,11 +119,23 @@ def coerce_strict_type_format(
                 continue
             if re.search(r"(?:CA|CFI|ARB|SCT|TCD|ENF|DEC)\s*$", before, re.IGNORECASE):
                 continue
+            # Skip Article/Section/Schedule/etc. numbers — they are structural, not answer values.
+            if re.search(
+                r"(?:Article|Section|Schedule|Regulation|Rule|Part|Chapter|Clause)\s*$",
+                before,
+                re.IGNORECASE,
+            ):
+                continue
             return (f"{match.group(0)}{suffix}".strip(), True)
         return (pipeline.strict_type_fallback(kind, cited_ids), False)
 
     if kind == "date":
-        match = _ISO_DATE_RE.search(stripped_text) or _SLASH_DATE_RE.search(stripped_text) or _TEXTUAL_DATE_RE.search(stripped_text)
+        match = (
+            _ISO_DATE_RE.search(stripped_text)
+            or _SLASH_DATE_RE.search(stripped_text)
+            or _TEXTUAL_DATE_RE.search(stripped_text)
+            or _TEXTUAL_DATE_MONTH_FIRST_RE.search(stripped_text)
+        )
         if match is None:
             return (pipeline.strict_type_fallback(kind, cited_ids), False)
         return (f"{match.group(0)}{suffix}".strip(), True)
@@ -136,14 +149,28 @@ def coerce_strict_type_format(
             year = case_match.group(3)
             return (f"{prefix} {num:03d}/{year}{suffix}".strip(), True)
 
-        # Prefer full DIFC law titles that include the law number, e.g. "Strata Title Law, DIFC Law No. 5 of 2007".
+        # Prefer full DIFC law/regulations titles that include the law number,
+        # e.g. "Strata Title Law, DIFC Law No. 5 of 2007" or "Insolvency Regulations No 1 of 2022".
         law_title_match = re.search(
-            r"([A-Z][^\n]{0,180}?\b(?:DIFC\s+)?Law\s+No\.?\s*\d+\s+of\s+\d{4})",
+            r"([A-Z][^\n]{0,180}?\b(?:DIFC\s+)?(?:Law|Regulations?|Rules?|Order)\s+No\.?\s*\d+\s+of\s+\d{4})",
             stripped_text,
         )
         if law_title_match is not None and law_title_match.group(1).strip():
             candidate = re.sub(r"\s+", " ", law_title_match.group(1).strip())
-            candidate = re.sub(r"\bNo\.\s*", "No ", candidate)
+            # Strip common citation/introduction preamble before the actual title.
+            candidate = re.sub(
+                r"^.*?\b(?:cited|known|referred)\s+(?:to\s+)?as\s+(?:the\s+)?",
+                "",
+                candidate,
+                flags=re.IGNORECASE,
+            )
+            candidate = re.sub(
+                r"^.*?\b(?:instrument|legislation|law|regulation)\s+is\s+(?:the\s+)?",
+                "",
+                candidate,
+                flags=re.IGNORECASE,
+            )
+            candidate = re.sub(r"\bNo\.?\s*(?=\d)", "No. ", candidate)
             candidate = candidate.rstrip(" .;")
             return (f"{candidate}{suffix}".strip(), True)
 
@@ -191,6 +218,14 @@ def coerce_strict_type_format(
             flags=re.IGNORECASE,
         ).strip().rstrip(".")
         stripped = _CASE_REF_PREFIX_RE.sub("", stripped).strip()
+        # Normalize all DIFC case references (e.g. "CFI/7/2024" → "CFI 007/2024").
+        def _normalize_case_ref(m: re.Match[str]) -> str:
+            prefix = m.group(1).upper()
+            num = int(m.group(2))
+            year = m.group(3)
+            return f"{prefix} {num:03d}/{year}"
+
+        stripped = _DIFC_CASE_ID_RE.sub(_normalize_case_ref, stripped)
         if not stripped:
             return (pipeline.strict_type_fallback(kind, cited_ids), False)
         return (f"{stripped}{suffix}".strip(), True)

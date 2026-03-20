@@ -12,6 +12,8 @@ _SLASH_DATE_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b")
 
 _TEXTUAL_DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b")
 
+_TEXTUAL_DATE_MONTH_FIRST_RE = re.compile(r"\b[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}\b")
+
 _YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 
 _CITE_RE = re.compile(r"\(cite:\s*([^)]+)\)")
@@ -21,7 +23,7 @@ _CASE_REF_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
-_DIFC_CASE_ID_RE = re.compile(r"\b(CFI|CA|SCT|ENF|DEC|TCD|ARB)\s*0*(\d{1,4})\s*[/-]\s*(\d{4})\b", re.IGNORECASE)
+_DIFC_CASE_ID_RE = re.compile(r"\b(CFI|CA|SCT|ENF|DEC|TCD|ARB)\s*[/-]?\s*0*(\d{1,4})\s*[/-]\s*(\d{4})\b", re.IGNORECASE)
 
 _TITLE_REF_RE = re.compile(
     r"\b((?:[A-Z][A-Za-z0-9]*(?:\s+(?:of|the|in|on|and|for|to|by|Non|Incorporated|Limited|General|Data|Protection|Application|Civil|Commercial|Strata|Title|Trust|Contract|Liability|Partnership|Profit|Organisations?|Operating|Companies|Insolvency|Foundations?|Employment|Arbitration|Securities|Investment|Personal|Property|Obligations|Netting|Courts|Court|Common|Reporting|Standard|Dematerialised|Investments?|Implied|Terms|Unfair|Amendment|DIFC|DFSA))*\s+(?:Law|Regulations?)))\b(?:\s+(\d{4}))?\b",
