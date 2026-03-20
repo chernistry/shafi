@@ -207,7 +207,10 @@ async def test_retrieve_with_doc_refs_adds_citation_filter_and_soft_case_law_fil
     assert isinstance(must, list)
     keys = {getattr(cond, "key", "") for cond in must}
     assert "doc_type" in keys
-    should = first_filter.should
+    # Ticket 2005: doc-ref filter is now nested as Filter(should=...) inside must
+    nested_filters = [c for c in must if isinstance(c, models.Filter)]
+    assert len(nested_filters) == 1
+    should = nested_filters[0].should
     assert isinstance(should, list)
     assert any(getattr(cond, "key", "") == "citations" for cond in should)
 
@@ -222,7 +225,12 @@ def test_build_filter_adds_doc_title_should_for_title_year_refs():
     )
 
     assert isinstance(where, models.Filter)
-    should = where.should
+    # Ticket 2005: doc-ref filter is nested as Filter(should=...) inside must
+    must = where.must
+    assert isinstance(must, list)
+    nested_filters = [c for c in must if isinstance(c, models.Filter)]
+    assert len(nested_filters) == 1
+    should = nested_filters[0].should
     assert isinstance(should, list)
     assert len(should) == 2
     citations_condition = should[0]

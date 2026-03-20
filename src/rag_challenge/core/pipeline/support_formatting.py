@@ -177,8 +177,8 @@ def coerce_strict_type_format(
             if sep in stripped:
                 stripped = stripped.split(sep, 1)[0].strip()
         words = stripped.split()
-        if len(words) > 12:
-            stripped = " ".join(words[:12]).strip()
+        if len(words) > 20:
+            stripped = " ".join(words[:20]).strip()
         if not stripped:
             return (pipeline.strict_type_fallback(kind, cited_ids), False)
         return (f"{stripped}{suffix}".strip(), True)

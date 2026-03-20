@@ -26,6 +26,7 @@ from rag_challenge.eval.sources import (
     build_sources_text,
     select_used_pages,
 )
+from rag_challenge.submission.common import coerce_answer_type
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -675,6 +676,7 @@ async def run_evaluation(
                         "stage_ms": {key: round(value, 1) for key, value in stage_values.items()},
                         "question": case.question,
                         "answer": token_text.strip(),
+                        "submission_answer": coerce_answer_type(token_text.strip(), case.answer_type),
                         "failure": failure,
                         "telemetry": payload,
                     }

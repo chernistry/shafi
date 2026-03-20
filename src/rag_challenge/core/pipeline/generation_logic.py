@@ -374,10 +374,13 @@ class GenerationLogicMixin:
             if not answer:
                 answer = self._strict_type_fallback(answer_type, tuple(context_chunk_ids[:1]))
 
-            # Coerce strict formats (parse-safe; citations handled via telemetry "used pages").
+            # Skip coercion when strict_answerer already validated the answer with confidence.
             cited_ids_raw = strict_cited_ids or list(context_chunk_ids)
-            coerced, extracted_ok = self._coerce_strict_type_format(answer, answer_type, cited_ids_raw)
-            answer = coerced.strip()
+            if extracted:
+                extracted_ok = True
+            else:
+                coerced, extracted_ok = self._coerce_strict_type_format(answer, answer_type, cited_ids_raw)
+                answer = coerced.strip()
 
             # Rare second-pass "repair" if the first LLM output was not parseable.
             if (
