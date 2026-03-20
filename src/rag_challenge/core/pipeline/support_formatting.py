@@ -46,6 +46,7 @@ def raw_ranked(chunks: list[RetrievedChunk], *, top_n: int) -> list[RankedChunk]
             doc_family=getattr(chunk, "doc_family", ""),
             chunk_type=getattr(chunk, "chunk_type", ""),
             amount_roles=list(getattr(chunk, "amount_roles", []) or []),
+            normalized_refs=list(getattr(chunk, "normalized_refs", []) or []),
         )
         for chunk in sorted_chunks[: max(0, int(top_n))]
     ]

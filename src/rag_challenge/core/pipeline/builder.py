@@ -1108,10 +1108,20 @@ class RAGPipelineBuilder(OrchestrationLogicMixin, RetrievalLogicMixin, SupportLo
                     rerank_model = model_obj
         collector.set_models(rerank=rerank_model)
         max_score = reranked[0].rerank_score if reranked else 0.0
+        min_score = reranked[-1].rerank_score if reranked else 0.0
         logger.info(
-            "Reranked %d chunks (max score %.3f)",
+            "RERANK_DEBUG qid=%s rerank_enabled=%s model=%s input=%d output=%d top_n=%d "
+            "max_score=%.4f min_score=%.4f doc_refs=%d must_include=%d",
+            state.get("question_id", ""),
+            rerank_enabled,
+            rerank_model,
+            len(retrieved),
             len(reranked),
+            top_n,
             max_score,
+            min_score,
+            doc_ref_count,
+            len(must_include),
             extra={"request_id": state.get("request_id"), "question_id": state.get("question_id")},
         )
         return {

@@ -380,6 +380,14 @@ class GenerationLogicMixin:
                 extracted_ok = True
             else:
                 coerced, extracted_ok = self._coerce_strict_type_format(answer, answer_type, cited_ids_raw)
+                logger.info(
+                    "COERCE_DEBUG qid=%s type=%s extracted_ok=%s raw=%s coerced=%s",
+                    state.get("question_id", ""),
+                    answer_type,
+                    extracted_ok,
+                    repr(answer[:80]),
+                    repr(coerced[:80]),
+                )
                 answer = coerced.strip()
 
             # Rare second-pass "repair" if the first LLM output was not parseable.
@@ -682,10 +690,19 @@ class GenerationLogicMixin:
                     answer = cleaned_obj.strip()
             cleanup_final_answer = getattr(self._generator, "cleanup_final_answer", None)
             if callable(cleanup_final_answer):
+                pre_cleanup = answer
                 cleaned_obj = cleanup_final_answer(answer)
                 if isinstance(cleaned_obj, str) and cleaned_obj.strip():
                     if cleaned_obj.strip() != answer.strip():
                         collector.set_llm_diagnostics(malformed_tail_detected=True)
+                        logger.info(
+                            "CLEANUP_DEBUG qid=%s tail_trimmed raw_len=%d cleaned_len=%d "
+                            "trimmed=%s",
+                            state.get("question_id", ""),
+                            len(pre_cleanup),
+                            len(cleaned_obj.strip()),
+                            repr(pre_cleanup[len(cleaned_obj.strip()):80]) if len(pre_cleanup) > len(cleaned_obj.strip()) else "none",
+                        )
                     answer = cleaned_obj.strip()
 
             citations = self._generator.extract_citations(answer, context_chunks)
@@ -1085,6 +1102,49 @@ class GenerationLogicMixin:
         telemetry = collector.finalize()
         writer = self._get_stream_writer_or_noop()
         writer({"type": "telemetry", "payload": telemetry.model_dump()})
+
+        # --- Debug diagnostics per question ---
+        try:
+            answer = str(state.get("answer") or "")
+            query = str(state.get("query") or "")
+            answer_type = str(state.get("answer_type") or "free_text")
+            ranked = state.get("ranked_chunks", [])
+            context = state.get("context_chunks", [])
+            top3_rerank = [(getattr(c, "chunk_id", "?"), round(getattr(c, "rerank_score", 0), 4)) for c in (ranked or [])[:3]]
+            top3_retrieval = [(getattr(c, "chunk_id", "?"), round(getattr(c, "retrieval_score", 0), 4)) for c in (ranked or [])[:3]]
+            doc_refs = state.get("doc_refs", [])
+            complexity = state.get("complexity", "")
+            model = state.get("model", "")
+
+            logger.info(
+                "PIPELINE_DEBUG question_id=%s answer_type=%s complexity=%s model=%s "
+                "doc_refs=%s retrieved=%d context=%d ranked=%d "
+                "top3_rerank=%s "
+                "used_pages=%s cited_pages=%s "
+                "embed_ms=%d qdrant_ms=%d rerank_ms=%d llm_ms=%d total_ms=%d "
+                "answer_preview=%s query_preview=%s",
+                telemetry.question_id,
+                answer_type,
+                complexity,
+                model,
+                doc_refs,
+                len(telemetry.retrieved_chunk_ids),
+                len(telemetry.context_chunk_ids),
+                len(ranked or []),
+                top3_rerank,
+                telemetry.used_page_ids[:5],
+                telemetry.cited_page_ids[:5],
+                telemetry.embed_ms,
+                telemetry.qdrant_ms,
+                telemetry.rerank_ms,
+                telemetry.llm_ms,
+                telemetry.total_ms,
+                repr(answer[:120]),
+                repr(query[:80]),
+            )
+        except Exception:
+            logger.debug("Failed to emit pipeline debug diagnostics", exc_info=True)
+
         return {"telemetry": telemetry}
     @staticmethod
     def _get_stream_writer_or_noop() -> Callable[[dict[str, object]], None]:
