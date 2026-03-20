@@ -50,8 +50,12 @@ def _chunk_ids_to_page_ids(ids: list[str]) -> list[str]:
 def select_used_pages(payload: dict[str, object], *, max_pages: int) -> list[str]:
     """Select competition-aligned "used pages" from telemetry payload.
 
-    Per organizer guidance: include only pages actually used.
-    Prefer explicit used/cited pages; fall back to legacy cited+context merge for older artifacts.
+    Mirrors the submission-side logic in ``select_submission_used_pages``
+    (submission/common.py) so that local eval scores match platform scores.
+
+    Fallback chain: used_page_ids → used_chunk_ids → cited_page_ids →
+    cited_chunk_ids → [] (empty).  Context pages are intentionally excluded
+    because the platform submission code never includes them.
     """
     caps = max(0, int(max_pages))
 
@@ -66,24 +70,10 @@ def select_used_pages(payload: dict[str, object], *, max_pages: int) -> list[str
     if not cited_pages:
         cited_chunk_ids = _coerce_str_list(payload.get("cited_chunk_ids"))
         cited_pages = _chunk_ids_to_page_ids(cited_chunk_ids) if cited_chunk_ids else []
+    if cited_pages:
+        return cited_pages[:caps] if caps > 0 else cited_pages
 
-    context_pages = _coerce_str_list(payload.get("context_page_ids"))
-    if not context_pages:
-        context_chunk_ids = _coerce_str_list(payload.get("context_chunk_ids"))
-        context_pages = _chunk_ids_to_page_ids(context_chunk_ids) if context_chunk_ids else []
-
-    seen: set[str] = set()
-    merged: list[str] = []
-    for page_id in [*cited_pages, *context_pages]:
-        pid = page_id.strip()
-        if not pid or pid in seen:
-            continue
-        seen.add(pid)
-        merged.append(pid)
-
-    if caps <= 0:
-        return merged
-    return merged[:caps]
+    return []
 
 
 def _parse_page_id(page_id: str) -> tuple[str, int] | None:

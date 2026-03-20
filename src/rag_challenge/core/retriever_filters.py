@@ -152,7 +152,7 @@ def build_filter(
                     match=models.MatchAny(any=title_refs),
                 )
             )
-        return models.Filter(must=conditions, should=ref_conditions)
+        return models.Filter(must=[*conditions, models.Filter(should=ref_conditions)])
     return models.Filter(must=conditions) if conditions else None
 
 

@@ -86,7 +86,13 @@ def looks_like_truncated_tail(text: str) -> bool:
         return False
     if stripped.count("(") > stripped.count(")"):
         return True
-    return bool(re.search(r"\b(?:of|and|the|law\s+no\.?)\s*$", stripped, re.IGNORECASE))
+    # Only flag as truncated if the tail is very short (likely mid-phrase fragment).
+    # Legal text often legitimately ends with "of", "and", "the" in titles like
+    # "Law on the Application of Civil and Commercial Laws in the DIFC".
+    word_count = len(stripped.split())
+    if word_count > 6:
+        return False
+    return bool(re.search(r"\b(?:of|and|the)\s*$", stripped, re.IGNORECASE))
 
 
 def cleanup_truncated_answer(answer: str) -> str:
@@ -134,7 +140,9 @@ def cleanup_truncated_answer(answer: str) -> str:
             if "(cite:" in trailing_fragment.casefold():
                 break
             if trailing_fragment and not (
-                TRAILING_NEGATIVE_RE.search(trailing_fragment) or looks_like_truncated_tail(trailing_fragment)
+                TRAILING_NEGATIVE_RE.search(trailing_fragment)
+                or NEGATIVE_SUBCLAIM_RE.search(f"\n{trailing_fragment}\n")
+                or looks_like_truncated_tail(trailing_fragment)
             ):
                 break
             cleaned = cleaned[: last_boundary.start()].rstrip()

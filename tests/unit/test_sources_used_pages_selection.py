@@ -10,17 +10,19 @@ def test_select_used_pages_prefers_cited_page_ids() -> None:
     assert select_used_pages(payload, max_pages=6) == ["abc123_2"]
 
 
-def test_select_used_pages_falls_back_to_legacy_merge_when_used_pages_missing() -> None:
+def test_select_used_pages_falls_back_to_cited_only_when_used_pages_missing() -> None:
+    # Ticket 2004: context_page_ids no longer included — mirrors submission-side logic
     payload = {
         "cited_page_ids": ["abc123_3"],
         "context_page_ids": ["abc123_3", "abc123_7"],
     }
-    assert select_used_pages(payload, max_pages=6) == ["abc123_3", "abc123_7"]
+    assert select_used_pages(payload, max_pages=6) == ["abc123_3"]
 
 
-def test_select_used_pages_falls_back_to_context_pages() -> None:
+def test_select_used_pages_returns_empty_when_only_context_pages() -> None:
+    # Ticket 2004: context_page_ids alone no longer qualify as used pages
     payload = {"context_page_ids": ["abc123_2", "abc123_5"]}
-    assert select_used_pages(payload, max_pages=6) == ["abc123_2", "abc123_5"]
+    assert select_used_pages(payload, max_pages=6) == []
 
 
 def test_select_used_pages_falls_back_to_chunk_to_page_mapping() -> None:
