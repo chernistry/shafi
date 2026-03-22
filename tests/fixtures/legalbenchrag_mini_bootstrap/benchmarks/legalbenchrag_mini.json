@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "query": "According to Article 16(1) of the Operating Law, what must be filed with the Registrar?",
+      "snippets": [
+        {
+          "file_path": "operating_law.txt",
+          "span": [
+            0,
+            58
+          ]
+        }
+      ],
+      "tags": [
+        "operating_law",
+        "article_provision"
+      ]
+    },
+    {
+      "query": "Does Article 11(2)(b) of the Employment Law prohibit dismissing an employee without notice?",
+      "snippets": [
+        {
+          "file_path": "employment_law.txt",
+          "span": [
+            0,
+            65
+          ]
+        }
+      ],
+      "tags": [
+        "employment_law",
+        "article_provision"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "positive": [
+    {
+      "feature": "doc_rank",
+      "weight": 135.0
+    },
+    {
+      "feature": "sidecar_rank_normalized",
+      "weight": 133.0
+    },
+    {
+      "feature": "query_content_jaccard",
+      "weight": 119.0
+    },
+    {
+      "feature": "sidecar_retrieved_rank",
+      "weight": 83.0
+    },
+    {
+      "feature": "page_position_ratio",
+      "weight": 77.0
+    },
+    {
+      "feature": "page_num",
+      "weight": 60.0
+    },
+    {
+      "feature": "doc_pages_in_candidates",
+      "weight": 49.0
+    },
+    {
+      "feature": "query_token_count",
+      "weight": 39.0
+    },
+    {
+      "feature": "is_first_page",
+      "weight": 36.0
+    },
+    {
+      "feature": "page_candidate_count",
+      "weight": 35.0
+    },
+    {
+      "feature": "answer_char_count",
+      "weight": 31.0
+    },
+    {
+      "feature": "legacy_context_rank",
+      "weight": 31.0
+    }
+  ],
+  "negative": []
+}

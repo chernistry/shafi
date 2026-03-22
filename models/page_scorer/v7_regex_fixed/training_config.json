@@ -1,0 +1,12 @@
+{
+  "train_jsonl": "data/derived/grounding_ml/v2_reviewed/train_muffy_augmented.jsonl",
+  "dev_jsonl": "data/derived/grounding_ml/v2_reviewed/dev_muffy_augmented.jsonl",
+  "seed": 610,
+  "model_type": "lgbm",
+  "label_mode": "reviewed_weighted",
+  "feature_policy": "runtime_safe_r3",
+  "max_train_rows": 0,
+  "max_dev_rows": 0,
+  "top_feature_count": 12,
+  "cv_folds": 5
+}

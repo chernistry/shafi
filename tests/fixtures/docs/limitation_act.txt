@@ -1,0 +1,17 @@
+# Limitation Act 2020
+
+## Section 1 - Short Title
+This Act may be cited as the Limitation Act 2020.
+
+## Section 2 - Interpretation
+In this Act, "action" means any proceedings in a court of law.
+"Prescribed period" means the period of limitation prescribed by this Act.
+
+## Section 3 - General Period of Limitation
+Subject to the provisions of this Act, the prescribed period for any action shall be six (6) years from the date on which the cause of action accrued.
+
+## Section 4 - Actions in Tort
+The prescribed period for actions in tort shall be three (3) years from the date on which the cause of action accrued, or from the date on which the plaintiff first had knowledge of the cause of action, whichever is later.
+
+## Section 5 - Actions on Contracts
+The prescribed period for actions founded on simple contract shall be six (6) years from the date of the breach.

@@ -1,0 +1,1615 @@
+# pyright: reportMissingTypeStubs=false, reportMissingTypeArgument=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportTypedDictNotRequiredAccess=false, reportPrivateUsage=false, reportUnusedImport=false, reportAttributeAccessIssue=false, reportUnknownArgumentType=false
+from __future__ import annotations
+
+import logging
+import re
+from typing import TYPE_CHECKING, cast
+
+from shafi.core.claim_graph import ClaimGraphBuilder
+from shafi.core.premise_guard import check_query_premise
+from shafi.core.proof_answerer import ProofCarryingCompiler, ProofCompilerConfig
+from shafi.models import Citation, QueryComplexity
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from shafi.models import RankedChunk
+    from shafi.telemetry import TelemetryCollector
+
+from .constants import _STRICT_REPAIR_HINT_TEMPLATE
+from .query_rules import (
+    _extract_question_title_refs,
+    _is_broad_enumeration_query,
+    _is_citation_title_query,
+    _is_common_elements_query,
+    _is_enumeration_query,
+    _is_multi_criteria_enumeration_query,
+    _is_named_amendment_query,
+    _is_named_commencement_query,
+    _is_named_multi_title_lookup_query,
+    _is_registrar_enumeration_query,
+    _is_ruler_enactment_query,
+)
+from .state import RAGState  # noqa: TC001
+
+logger = logging.getLogger(__name__)
+
+
+_PREDICTED_OUTPUT_BY_TYPE: dict[str, str] = {
+    "boolean": "Yes",
+    # "null" predictions for number/date/name/names REMOVED — they cause
+    # speculative decoding to accept "null" as the answer without computing
+    # the actual value, producing false nulls on answerable questions.
+    # See VICTOR regression alert: 5 answerable Qs returned null in V10.
+}
+
+
+def _build_prediction(answer_type: str) -> dict[str, str] | None:
+    """Build OpenAI Predicted Output for deterministic answer types.
+
+    Args:
+        answer_type: The question answer type (boolean, number, date, name, names).
+
+    Returns:
+        Prediction dict for the OpenAI API, or None if no prediction applies.
+    """
+    content = _PREDICTED_OUTPUT_BY_TYPE.get(answer_type)
+    if content is None:
+        return None
+    return {"type": "content", "content": content}
+
+
+class GenerationLogicMixin:
+    async def _generate(self, state: RAGState) -> dict[str, object]:
+        collector = state["collector"]
+        writer = self._get_stream_writer_or_noop()
+        collector.set_models(llm=state["model"])
+
+        answer_type = str(state.get("answer_type") or "free_text").strip().lower()
+        proof_compiler_enabled = bool(getattr(self._settings.pipeline, "proof_compiler_enabled", False))
+        strict_types = {"boolean", "number", "date", "name", "names"}
+        strict_non_stream_types = {"boolean", "number", "date", "name", "names"}
+        prompt_hint = str(state.get("conflict_prompt_context") or "").strip()
+        strict_repair_enabled = bool(getattr(self._settings.pipeline, "strict_repair_enabled", True))
+        predicted_outputs_enabled = bool(getattr(self._settings.pipeline, "enable_predicted_outputs", False))
+
+        # Pre-generation anti-hallucination guardrails for free_text.
+        if answer_type == "free_text":
+            context_for_guard = state.get("context_chunks", [])
+            entity_scope_hint = self._build_entity_scope(context_for_guard)
+            if entity_scope_hint:
+                prompt_hint = f"{prompt_hint}\n\n{entity_scope_hint}".strip() if prompt_hint else entity_scope_hint
+            query_text = str(state["query"] or "")
+            query_lower = query_text.lower()
+            common_elements_query = _is_common_elements_query(query_text)
+            if common_elements_query:
+                common_elements_hint = (
+                    "For common-elements questions, answer concisely without IRAC or Issue/Rule/Application/"
+                    "Conclusion headings. Every claimed common element must be supported by at least one citation "
+                    "from every referenced document in the question; each numbered common element must cite that "
+                    "support in the same item; if you cannot cite every referenced document for an element, omit "
+                    "that element. Output ONLY a numbered list of common elements; do not add an explanatory "
+                    "preamble, postscript, or cross-document caveat outside the numbered list. Each numbered "
+                    "item must end with one parenthetical citation that includes at least one chunk ID from "
+                    "every referenced document, for example (cite: id_a, id_b, id_c). Keep the list compact "
+                    "and merge closely related interpretative rules into one item when they belong to the same "
+                    "clause family. A structural "
+                    "overlap counts as a valid common element "
+                    "when each referenced document explicitly states the same structure, such as that Schedule 1 "
+                    "contains interpretative provisions or a list of defined terms. List a more specific sub-item "
+                    "only if that same sub-item is explicitly shown in every referenced document. If one "
+                    "referenced document only shows the Schedule 1 structure but does not quote the substantive "
+                    "interpretative rules, do not infer those sub-items as common from the other documents. "
+                    "Do not end with "
+                    '"There is no information on this question." if you have already identified one or more '
+                    "supported common elements. If no explicit common element remains after this check, say "
+                    'exactly: "There is no information on this question."'
+                )
+                prompt_hint = (
+                    f"{prompt_hint}\n\n{common_elements_hint}".strip() if prompt_hint else common_elements_hint
+                )
+                named_docs = [ref for ref in (state.get("doc_refs") or []) if str(ref).strip()]
+                if len(named_docs) >= 2:
+                    docs_hint = (
+                        "The referenced documents for this common-elements question are: "
+                        f"{'; '.join(named_docs)}. If a claimed element is not explicitly supported in each of "
+                        "those referenced documents, omit it."
+                    )
+                    prompt_hint = f"{prompt_hint}\n\n{docs_hint}".strip() if prompt_hint else docs_hint
+            if _is_broad_enumeration_query(query_text):
+                source_block_count = len(
+                    [chunk for chunk in context_for_guard if getattr(chunk, "chunk_id", "").strip()]
+                )
+                enumeration_hint = (
+                    "For this broad enumeration question, answer as a compact numbered list. Each item should "
+                    "start with the exact matching law or document title supported by the sources. Use the "
+                    "minimum number of citations needed to support each item. If separate source blocks are "
+                    "needed to prove all criteria for the same law or to supply the exact citation title "
+                    "requested, cite each needed block in that same item. Inspect every source block provided "
+                    f"({source_block_count} total) before stopping. Output ONLY the numbered list items; do "
+                    "not add caveats, comparative commentary, or summary text after the list. "
+                    "HARD LIMIT: 280 characters total excluding citations. Keep each item to law title + key fact only (≤40 chars per item)."
+                )
+                prompt_hint = f"{prompt_hint}\n\n{enumeration_hint}".strip() if prompt_hint else enumeration_hint
+                if (
+                    query_lower.startswith("which laws")
+                    and not _is_citation_title_query(query_text)
+                    and not _is_registrar_enumeration_query(query_text)
+                ):
+                    titles_only_hint = (
+                        "This question asks only which laws match. Each numbered item should mainly give the "
+                        "law title itself. Do not add article-level, schedule-level, or explanatory detail "
+                        "unless the question explicitly asks for that detail."
+                    )
+                    prompt_hint = f"{prompt_hint}\n\n{titles_only_hint}".strip() if prompt_hint else titles_only_hint
+                if _is_multi_criteria_enumeration_query(query_text):
+                    multi_criteria_hint = (
+                        "Review every source block before stopping. When multiple source blocks clearly refer to "
+                        "the same law title, you may combine those blocks for that law only. Deduplicate by law "
+                        "title, but do not stop after the first few matches if later blocks also satisfy all criteria. "
+                        "List a law only if the source block or combined source blocks for that same law explicitly "
+                        "support every criterion in the question; if one criterion is missing for that law, exclude it. "
+                        "Each listed item's citations must collectively support every criterion for that same law."
+                    )
+                    prompt_hint = (
+                        f"{prompt_hint}\n\n{multi_criteria_hint}".strip() if prompt_hint else multi_criteria_hint
+                    )
+                if _is_multi_criteria_enumeration_query(query_text) and re.search(r"\b(19|20)\d{2}\b", query_text):
+                    year_hint = (
+                        "Use the exact year shown in each source block, such as in a law title like "
+                        '"DIFC Law No. 4 of 2018" or "Limited Partnership Law 2006". Do not infer the '
+                        "year from consolidated-version dates or amendment dates, and check every source block "
+                        "before you finish the list. If the year/title evidence and the substantive matching "
+                        "criterion appear in different source blocks for the same law, cite both blocks in that "
+                        "same item."
+                    )
+                    prompt_hint = f"{prompt_hint}\n\n{year_hint}".strip() if prompt_hint else year_hint
+                if "administered by the registrar" in query_lower:
+                    registrar_hint = (
+                        "For this question, include a law only if the source block or combined source blocks for "
+                        "that law explicitly state that the law is administered by the Registrar. A title, "
+                        "enactment reference, or year alone is not enough. A definitional passage in another "
+                        "document about 'legislation administered by the Registrar' or 'Prescribed Laws' does "
+                        "NOT make that current document itself a match unless that same document explicitly "
+                        "says this law is administered by the Registrar. Use one separate numbered item per "
+                        "matching law, and do not merge two different laws into the same numbered item even if "
+                        "their supporting clauses are similar."
+                    )
+                    prompt_hint = f"{prompt_hint}\n\n{registrar_hint}".strip() if prompt_hint else registrar_hint
+                if _is_citation_title_query(query_text):
+                    citation_title_hint = (
+                        "For each listed law, state the exact citation title as written in the source, usually "
+                        'from a clause like "This Law may be cited as ...". Do not paraphrase, shorten, or '
+                        "replace it with generic uppercase document headers. If the title clause and another "
+                        "matching criterion appear in different source blocks for the same law, cite both blocks "
+                        "in that same item."
+                    )
+                    prompt_hint = (
+                        f"{prompt_hint}\n\n{citation_title_hint}".strip() if prompt_hint else citation_title_hint
+                    )
+                question_title_refs = _extract_question_title_refs(query_text)
+                if len(question_title_refs) >= 2 and any(
+                    term in query_lower for term in ("mention", "mentions", "reference", "references")
+                ):
+                    named_refs_hint = (
+                        "The named law references in this question are: "
+                        f"{'; '.join(question_title_refs)}. List a document only if that same document explicitly "
+                        "mentions every named law reference above. If a document mentions only one of them, "
+                        "exclude it silently. If multiple documents in the sources satisfy all named references, "
+                        "list all of them before stopping."
+                    )
+                    prompt_hint = f"{prompt_hint}\n\n{named_refs_hint}".strip() if prompt_hint else named_refs_hint
+                if _is_ruler_enactment_query(query_text):
+                    enactment_hint = (
+                        "For this question, a law matches if the Enactment Notice itself states both that the "
+                        "Ruler of Dubai enacted the law and when it comes into force. A commencement rule written "
+                        "as a relative period, such as 'on the 5th business day after enactment' or '90 days after "
+                        "enactment', still counts as the commencement being specified in the Enactment Notice. "
+                        "Do not exclude a law only because the notice gives a relative commencement period instead "
+                        "of a calendar date."
+                    )
+                    prompt_hint = f"{prompt_hint}\n\n{enactment_hint}".strip() if prompt_hint else enactment_hint
+
+        streamed = False
+        streamed_raw = ""
+        answer = ""
+        extracted = False
+        strict_cited_ids: list[str] = []
+        context_chunks = list(state.get("context_chunks", []))
+        if answer_type in strict_types:
+            context_chunks, strict_context_augmented = self._augment_strict_context_chunks(
+                query=state["query"],
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                retrieved=list(state.get("retrieved", [])),
+            )
+            if strict_context_augmented:
+                collector.set_context_ids([chunk.chunk_id for chunk in context_chunks])
+        context_chunk_ids = [c.chunk_id for c in context_chunks]
+        retrieved_chunks = list(state.get("retrieved", []))
+        if retrieved_chunks:
+            collector.set_retrieved_ids([chunk.chunk_id for chunk in retrieved_chunks])
+            collector.set_chunk_snippets(self._build_chunk_snippet_map(retrieved_chunks))
+            collector.set_chunk_page_hints(self._build_chunk_page_hint_map(retrieved_chunks))
+        if context_chunks:
+            collector.set_chunk_snippets(self._build_chunk_snippet_map(context_chunks))
+            collector.set_chunk_page_hints(self._build_chunk_page_hint_map(context_chunks))
+        collector.set_context_ids(context_chunk_ids)
+        get_context_debug_stats = getattr(self._generator, "get_context_debug_stats", None)
+        if callable(get_context_debug_stats):
+            context_stats_obj = get_context_debug_stats(
+                question=state["query"],
+                chunks=context_chunks,
+                complexity=state.get("complexity", QueryComplexity.SIMPLE),
+                answer_type=answer_type,
+            )
+            if isinstance(context_stats_obj, tuple):
+                context_stats_items = cast("tuple[object, ...]", context_stats_obj)
+                if len(context_stats_items) != 2:
+                    context_stats_items = ()
+            else:
+                context_stats_items = ()
+            if len(context_stats_items) == 2:
+                chunk_count_obj, budget_obj = context_stats_items
+                if isinstance(chunk_count_obj, int) and isinstance(budget_obj, int):
+                    collector.set_context_stats(chunk_count=chunk_count_obj, budget_tokens=budget_obj)
+        if answer_type == "free_text" and not context_chunks:
+            answer = self._insufficient_sources_answer(())
+            collector.set_generation_mode("single_shot")
+            collector.set_models(llm="insufficient-sources")
+            logger.info(
+                "free_text_no_context_fallback",
+                extra={"request_id": state.get("request_id"), "question_id": state.get("question_id")},
+            )
+        if answer_type == "free_text" and bool(getattr(self._settings.pipeline, "premise_guard_enabled", True)):
+            terms_obj = getattr(self._settings.pipeline, "premise_guard_terms", [])
+            disallowed_terms: list[str] = []
+            if isinstance(terms_obj, list):
+                terms = cast("list[object]", terms_obj)
+                disallowed_terms = [text for term in terms if (text := str(term).strip())]
+            guard = check_query_premise(
+                query=state["query"],
+                context_chunks=context_chunks,
+                disallowed_terms=disallowed_terms,
+            )
+            if guard.triggered:
+                answer = self._insufficient_sources_answer(tuple(context_chunk_ids[:1]))
+                collector.set_generation_mode("single_shot")
+                collector.set_models(llm="premise-guard")
+                logger.warning(
+                    "premise_guard_triggered",
+                    extra={
+                        "request_id": state.get("request_id"),
+                        "question_id": state.get("question_id"),
+                        "term": guard.term,
+                        "answer_type": answer_type,
+                    },
+                )
+        context_chunks = self._prune_boolean_context_for_single_doc_article(
+            query=state["query"],
+            answer_type=answer_type,
+            doc_refs=state.get("doc_refs"),
+            context_chunks=context_chunks,
+        )
+        context_chunks = self._boost_family_context_chunks(
+            query=state["query"],
+            answer_type=answer_type,
+            context_chunks=context_chunks,
+        )
+        # Isaacus EQA: for name/number/date, try extraction BEFORE deterministic rules.
+        # Feature-flagged: PIPELINE_ENABLE_EXTRACTIVE_QA=true. Requires ISAACUS_API_KEY.
+        # Expected: +5-10 Det — EQA span extraction > heuristic regex for exact-match types.
+        # If EQA returns used=True: skip strict_answerer and LLM entirely.
+        # If inextractable or API error: fall through to strict_answerer then LLM.
+        # ORDERING FIX (EYAL-56a): EQA must run before strict_answerer, not after.
+        # strict_answerer sets answer on confident extraction — EQA's `not answer` check
+        # was always False, so EQA never ran. Correct order: EQA → strict → LLM.
+        _eqa_target_types = {"name", "number", "date"}
+        if answer_type in _eqa_target_types and bool(getattr(self._settings.pipeline, "enable_extractive_qa", False)):
+            from shafi.core.isaacus_eqa import call_isaacus_eqa
+
+            _eqa_top_n = int(getattr(self._settings.pipeline, "extractive_qa_context_top_n", 3))
+            _eqa_texts = [chunk.text for chunk in context_chunks[:_eqa_top_n] if chunk.text]
+            # Use embedding.api_key (always ISAACUS_API_KEY, required, no default) so EQA
+            # works regardless of which reranker is active (zerank-2 vs Isaacus reranker).
+            _eqa_embed = getattr(self._settings, "embedding", None)
+            _eqa_api_key = ""
+            if _eqa_embed is not None:
+                _eqa_key = getattr(_eqa_embed, "api_key", None)
+                if _eqa_key is not None:
+                    _eqa_api_key = _eqa_key.get_secret_value()
+            _eqa_result = await call_isaacus_eqa(
+                question=state["query"],
+                texts=_eqa_texts,
+                api_key=_eqa_api_key,
+                api_url=str(getattr(self._settings.pipeline, "extractive_qa_url", "")),
+                model=str(getattr(self._settings.pipeline, "extractive_qa_model", "kanon-answer-extractor")),
+                inextractability_threshold=float(
+                    getattr(self._settings.pipeline, "extractive_qa_inextractability_threshold", 0.5)
+                ),
+            )
+            if _eqa_result is not None and _eqa_result.used:
+                answer = _eqa_result.answer
+                # NOTE: do NOT set extracted=True here. EQA returns raw extracted text
+                # that needs coerce_strict_type_format normalization (ISO date, number
+                # extraction, name cleanup). strict-extractor sets extracted=True because
+                # it already validates format internally; EQA does not.
+                _eqa_idx = _eqa_result.passage_index
+                if 0 <= _eqa_idx < len(context_chunks[:_eqa_top_n]):
+                    strict_cited_ids = [context_chunks[_eqa_idx].chunk_id]
+                collector.set_generation_mode("single_shot")
+                collector.set_models(llm="isaacus-eqa")
+
+        # Deterministic strict extraction: runs only when EQA did not produce an answer.
+        # Handles all strict types (boolean + name/number/date EQA fallback).
+        if (
+            not answer
+            and answer_type in strict_types
+            and bool(getattr(self._settings.pipeline, "strict_types_extraction_enabled", True))
+        ):
+            strict_result = self._strict_answerer.answer(
+                answer_type=answer_type,
+                query=state["query"],
+                context_chunks=context_chunks,
+                max_chunks=int(getattr(self._settings.pipeline, "strict_types_extraction_max_chunks", 4)),
+            )
+            if strict_result is not None and strict_result.confident:
+                answer = strict_result.answer.strip()
+                extracted = True
+                strict_cited_ids = list(strict_result.cited_chunk_ids)
+                collector.set_generation_mode("single_shot")
+                collector.set_models(llm="strict-extractor")
+
+        if answer_type in strict_non_stream_types:
+            if not answer:
+                collector.set_generation_mode("single_shot")
+                # Strict-types path: stream internally to mark TTFT on first token.
+                # Tokens are buffered; client emission still happens in _emit().
+                # This records ttft_ms at LLM first-token rather than full-response,
+                # without changing the single-shot client experience.
+                _strict_parts: list[str] = []
+                _strict_first_token = True
+                _primary_prediction = _build_prediction(answer_type) if predicted_outputs_enabled else None
+                with collector.timed("llm"):
+                    async for _strict_token in self._generator.generate_stream(
+                        state["query"],
+                        context_chunks,
+                        model=state["model"],
+                        max_tokens=int(state["max_tokens"]),
+                        collector=collector,
+                        complexity=state.get("complexity", QueryComplexity.SIMPLE),
+                        answer_type=answer_type,
+                        prompt_hint=prompt_hint,
+                        prediction=_primary_prediction,
+                    ):
+                        if _strict_first_token:
+                            collector.mark_first_token()
+                            _strict_first_token = False
+                        _strict_parts.append(_strict_token)
+                answer = "".join(_strict_parts).strip()
+        else:
+            if not answer and not proof_compiler_enabled:
+                build_structured_answer = getattr(self._generator, "build_structured_free_text_answer", None)
+                if callable(build_structured_answer):
+                    built_obj = build_structured_answer(
+                        question=state["query"],
+                        chunks=context_chunks,
+                        doc_refs=state.get("doc_refs"),
+                    )
+                    if isinstance(built_obj, str) and built_obj.strip():
+                        answer = built_obj.strip()
+                        collector.set_generation_mode("single_shot")
+                        collector.set_models(llm="structured-extractor")
+                        collector.mark_first_token()
+                        writer({"type": "token", "text": answer})
+            if not answer:
+                collector.set_generation_mode("single_shot")
+                # Proof-carried answers must remain fully settled before emission.
+                if proof_compiler_enabled:
+                    effective_max_tokens = int(state["max_tokens"])
+                    doc_ref_count = len([r for r in (state.get("doc_refs") or []) if str(r).strip()])
+                    if doc_ref_count >= 2:
+                        effective_max_tokens = min(int(effective_max_tokens * 1.5), 1800)
+                    with collector.timed("llm"):
+                        generated_text, _citations = await self._generator.generate(
+                            state["query"],
+                            context_chunks,
+                            model=state["model"],
+                            max_tokens=effective_max_tokens,
+                            collector=collector,
+                            complexity=state.get("complexity", QueryComplexity.SIMPLE),
+                            answer_type=answer_type,
+                            prompt_hint=prompt_hint,
+                        )
+                    answer = generated_text.strip()
+                else:
+                    collector.set_generation_mode("stream")
+                    answer_parts: list[str] = []
+                    first_token = True
+                    # Adaptive max_tokens: boost for multi-entity queries to prevent truncation.
+                    effective_max_tokens = int(state["max_tokens"])
+                    doc_ref_count = len([r for r in (state.get("doc_refs") or []) if str(r).strip()])
+                    if doc_ref_count >= 2:
+                        effective_max_tokens = min(int(effective_max_tokens * 1.5), 1800)
+                    with collector.timed("llm"):
+                        async for token in self._generator.generate_stream(
+                            state["query"],
+                            context_chunks,
+                            model=state["model"],
+                            max_tokens=effective_max_tokens,
+                            collector=collector,
+                            complexity=state.get("complexity", QueryComplexity.SIMPLE),
+                            answer_type=answer_type,
+                            prompt_hint=prompt_hint,
+                        ):
+                            if first_token:
+                                collector.mark_first_token()
+                            if first_token:
+                                first_token = False
+                            writer({"type": "token", "text": token})
+                            answer_parts.append(token)
+                    streamed = True
+                    answer = "".join(answer_parts).strip()
+                    if answer:
+                        streamed_raw = answer
+                        cleanup_obj = getattr(self._generator, "cleanup_truncated_answer", None)
+                        if callable(cleanup_obj):
+                            cleaned_obj = cleanup_obj(answer)
+                            if isinstance(cleaned_obj, str):
+                                malformed_tail_detected = cleaned_obj.strip() != answer.strip()
+                                if malformed_tail_detected:
+                                    collector.set_llm_diagnostics(malformed_tail_detected=True)
+                            if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                                answer = cleaned_obj.strip()
+                        strip_neg = getattr(self._generator, "strip_negative_subclaims", None)
+                        should_strip_neg = answer_type == "free_text" and (
+                            _is_broad_enumeration_query(state["query"]) or _is_common_elements_query(state["query"])
+                        )
+                        if callable(strip_neg) and should_strip_neg:
+                            stripped_obj = strip_neg(answer)
+                            if isinstance(stripped_obj, str) and stripped_obj.strip():
+                                answer = stripped_obj.strip()
+                        if streamed_raw and not answer.strip():
+                            answer = streamed_raw
+                    else:
+                        # Rare provider anomaly: stream completes without tokens. Fall back once to non-stream generation.
+                        collector.set_generation_mode("single_shot")
+                        with collector.timed("llm"):
+                            generated_text, _citations = await self._generator.generate(
+                                state["query"],
+                                context_chunks,
+                                model=state["model"],
+                                max_tokens=effective_max_tokens,
+                                collector=collector,
+                                complexity=state.get("complexity", QueryComplexity.SIMPLE),
+                                answer_type=answer_type,
+                                prompt_hint=prompt_hint,
+                            )
+                        answer = generated_text.strip()
+
+        if answer_type in strict_types:
+            if not answer:
+                answer = self._strict_type_fallback(answer_type, tuple(context_chunk_ids[:1]))
+
+            # Skip coercion when strict_answerer already validated the answer with confidence.
+            cited_ids_raw = strict_cited_ids or list(context_chunk_ids)
+            if extracted:
+                extracted_ok = True
+            else:
+                coerced, extracted_ok = self._coerce_strict_type_format(answer, answer_type, cited_ids_raw)
+                logger.info(
+                    "COERCE_DEBUG qid=%s type=%s extracted_ok=%s raw=%s coerced=%s",
+                    state.get("question_id", ""),
+                    answer_type,
+                    extracted_ok,
+                    repr(answer[:80]),
+                    repr(coerced[:80]),
+                )
+                answer = coerced.strip()
+
+            # Rare second-pass "repair" if the first LLM output was not parseable.
+            if (
+                not extracted_ok
+                and strict_repair_enabled
+                and not extracted
+                and not self._is_unanswerable_strict_answer(answer)
+                and answer_type in {"boolean", "number", "date", "name", "names"}
+            ):
+                repair_hint = _STRICT_REPAIR_HINT_TEMPLATE.format(answer_type=answer_type)
+                repair_prediction = _build_prediction(answer_type) if predicted_outputs_enabled else None
+                with collector.timed("llm"):
+                    repaired_text, _ = await self._generator.generate(
+                        state["query"],
+                        context_chunks,
+                        model=state["model"],
+                        max_tokens=min(int(state["max_tokens"]), 64),
+                        collector=collector,
+                        complexity=QueryComplexity.SIMPLE,
+                        answer_type=answer_type,
+                        prompt_hint=repair_hint,
+                        prediction=repair_prediction,
+                    )
+                repaired, extracted_ok_2 = self._coerce_strict_type_format(repaired_text, answer_type, cited_ids_raw)
+                if extracted_ok_2:
+                    answer = repaired.strip()
+                    logger.info(
+                        "strict_repair_succeeded",
+                        extra={"request_id": state.get("request_id"), "question_id": state.get("question_id")},
+                    )
+                else:
+                    logger.warning(
+                        "strict_repair_failed",
+                        extra={"request_id": state.get("request_id"), "question_id": state.get("question_id")},
+                    )
+
+            # --- Answer quality gate: post-coercion validation ---
+            from shafi.core.pipeline.answer_quality_gate import (
+                run_answer_quality_gate,
+                should_run_consensus,
+            )
+
+            answer, _quality_report = run_answer_quality_gate(
+                question=state["query"],
+                answer=answer,
+                answer_type=answer_type,
+                source_chunks=[c.text for c in context_chunks],
+                settings=self._settings.pipeline,
+                extracted=extracted,
+            )
+
+            # --- Self-consistency consensus voting ---
+            if should_run_consensus(
+                answer_type=answer_type,
+                extracted=extracted,
+                settings=self._settings.pipeline,
+                validation_result=_quality_report.validation,
+            ):
+                from shafi.core.pipeline.answer_consensus import AnswerConsensus
+
+                _consensus = AnswerConsensus(self._generator)
+                _consensus_result = await _consensus.vote(
+                    question=state["query"],
+                    answer_type=answer_type,
+                    chunks=context_chunks,
+                    model=state["model"],
+                    collector=collector,
+                )
+                if _consensus_result.confidence in ("high", "medium") and _consensus_result.answer:
+                    logger.info(
+                        "consensus_override qid=%s: %r -> %r (confidence=%s, votes=%d/%d)",
+                        state.get("question_id", ""),
+                        answer[:40],
+                        _consensus_result.answer[:40],
+                        _consensus_result.confidence,
+                        _consensus_result.vote_count,
+                        _consensus_result.total_votes,
+                    )
+                    answer = _consensus_result.answer
+
+            if not answer:
+                answer = self._strict_type_fallback(answer_type, tuple(context_chunk_ids[:1]))
+
+            if self._is_unanswerable_strict_answer(answer):
+                used_ids = []
+                cited_ids = []
+            else:
+                cited_ids = (
+                    list(strict_cited_ids)
+                    if (extracted and strict_cited_ids)
+                    else self._localize_strict_support_chunk_ids(
+                        answer_type=answer_type,
+                        answer=answer,
+                        query=state["query"],
+                        context_chunks=context_chunks,
+                    )
+                )
+                used_ids = self._expand_page_spanning_support_chunk_ids(
+                    chunk_ids=cited_ids,
+                    context_chunks=context_chunks,
+                )
+                if not cited_ids:
+                    if context_chunk_ids:
+                        # Strict answers (boolean/name/number) often have no localizable
+                        # substring.  Cite top context pages directly: they are the output
+                        # of the full retrieval+rerank pipeline, already optimized for this
+                        # query.  Scorer/Jaccard fallbacks introduce systematic bias —
+                        # scorer is globally trained (not question-specific), Jaccard fails
+                        # on short/boolean questions.  F-beta=2.5 weights recall 6.25x:
+                        # citing top-N context pages maximises recall at low precision cost.
+                        _strict_page_budget = int(getattr(self._settings.pipeline, "strict_types_context_top_n", 5))
+                        cited_ids = list(context_chunk_ids[:_strict_page_budget])
+                    else:
+                        logger.warning(
+                            "strict_support_localization_failed",
+                            extra={
+                                "request_id": state.get("request_id"),
+                                "question_id": state.get("question_id"),
+                                "answer_type": answer_type,
+                            },
+                        )
+            shaped_used_ids, support_shape_flags = self._apply_support_shape_policy(
+                answer_type=answer_type,
+                answer=answer,
+                query=state["query"],
+                context_chunks=context_chunks,
+                cited_ids=cited_ids,
+                support_ids=[],
+            )
+            if support_shape_flags:
+                logger.warning(
+                    "support_shape_flags_detected",
+                    extra={
+                        "request_id": state.get("request_id"),
+                        "question_id": state.get("question_id"),
+                        "answer_type": answer_type,
+                        "flags": support_shape_flags,
+                    },
+                )
+            collector.set_cited_ids(cited_ids)
+            _q_lower_fam = re.sub(r"\s+", " ", str(state["query"] or "").strip()).lower()
+            _family_recall_priority = (
+                self._ENACTMENT_QUERY_RE.search(_q_lower_fam)
+                or self._ADMIN_QUERY_RE.search(_q_lower_fam)
+                or self._OUTCOME_QUERY_RE.search(_q_lower_fam)
+                or _is_broad_enumeration_query(state["query"])
+                or _is_named_commencement_query(state["query"])
+                or _is_named_multi_title_lookup_query(state["query"])
+            )
+            if _family_recall_priority:
+                final_used_ids = list(shaped_used_ids if shaped_used_ids else used_ids)
+            else:
+                final_used_ids = self._rerank_support_pages_within_selected_docs(
+                    query=state["query"],
+                    answer_type=answer_type,
+                    context_chunks=context_chunks,
+                    used_ids=shaped_used_ids if shaped_used_ids else used_ids,
+                )
+            # Early emission for strict types: send answer to client before the
+            # grounding sidecar runs (which can take 1000-2000ms).  The answer is
+            # fully finalized at this point (coerce + repair + quality gate done).
+            # mark_first_token is idempotent — no-op if LLM streaming already set it.
+            if answer.strip() and not self._is_unanswerable_strict_answer(answer):
+                _early_writer = self._get_stream_writer_or_noop()
+                collector.mark_first_token()
+                _early_writer({"type": "token", "text": answer})
+                _early_writer({"type": "answer_final", "text": answer})
+                streamed = True
+            await self._set_final_used_pages(
+                collector=collector,
+                query=state["query"],
+                answer=answer,
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_used_ids=final_used_ids,
+            )
+            # Reconcile cited_ids with used_ids: when the sidecar selected
+            # different pages than the LLM's citations, align them.  This prevents
+            # grounding on wrong pages when the sidecar correctly identified gold pages.
+            if final_used_ids and cited_ids:
+                used_set = set(final_used_ids)
+                if not (set(cited_ids) & used_set):
+                    # Citations don't overlap with used chunks — override with ALL sidecar pages.
+                    # F-beta 2.5: missing gold page costs 46% G; extra wrong page costs 6.5%.
+                    # Citing all sidecar-selected pages maximizes recall at low precision cost.
+                    cited_ids = list(final_used_ids)
+                    # CRITICAL: also update collector so telemetry.cited_page_ids reflects
+                    # the reconciled pages (submission scoring uses telemetry, not state).
+                    collector.set_cited_ids(cited_ids)
+            citations: list[Citation] = []
+            cited_ids = list(cited_ids)
+        else:
+            # Sanitize citations: remove any chunk IDs not present in context
+            sanitize_citations = getattr(self._generator, "sanitize_citations", None)
+            if callable(sanitize_citations):
+                sanitized_obj = sanitize_citations(answer, context_chunk_ids)
+                if isinstance(sanitized_obj, str):
+                    answer = sanitized_obj
+            cleanup_list_preamble = getattr(self._generator, "cleanup_list_answer_preamble", None)
+            if callable(cleanup_list_preamble) and (
+                _is_broad_enumeration_query(state["query"]) or _is_common_elements_query(state["query"])
+            ):
+                cleaned_obj = cleanup_list_preamble(answer)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_list_items = getattr(self._generator, "cleanup_numbered_list_items", None)
+            if callable(cleanup_list_items) and (
+                _is_broad_enumeration_query(state["query"]) or _is_common_elements_query(state["query"])
+            ):
+                cleaned_obj = cleanup_list_items(
+                    answer,
+                    question=state["query"],
+                    common_elements=_is_common_elements_query(state["query"]),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_titles_only = getattr(self._generator, "cleanup_broad_enumeration_titles_only", None)
+            query_title_refs = _extract_question_title_refs(state["query"])
+            named_ref_query = len(query_title_refs) >= 2 and any(
+                term in str(state["query"]).lower() for term in ("mention", "mentions", "reference", "references")
+            )
+            if (
+                callable(cleanup_titles_only)
+                and _is_broad_enumeration_query(state["query"])
+                and not _is_registrar_enumeration_query(state["query"])
+                and not named_ref_query
+            ):
+                cleaned_obj = cleanup_titles_only(answer, question=state["query"], chunks=context_chunks)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_interpretative_items = getattr(
+                self._generator, "cleanup_interpretative_provisions_enumeration_items", None
+            )
+            if (
+                callable(cleanup_interpretative_items)
+                and _is_broad_enumeration_query(state["query"])
+                and "interpretative provisions" in str(state["query"]).lower()
+            ):
+                cleaned_obj = cleanup_interpretative_items(answer, chunks=context_chunks)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_ref_items = getattr(self._generator, "cleanup_named_ref_enumeration_items", None)
+            if callable(cleanup_named_ref_items) and named_ref_query and _is_broad_enumeration_query(state["query"]):
+                cleaned_obj = cleanup_named_ref_items(answer, question=state["query"], chunks=context_chunks)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_ruler_enactment_items = getattr(self._generator, "cleanup_ruler_enactment_enumeration_items", None)
+            if callable(cleanup_ruler_enactment_items) and _is_ruler_enactment_query(state["query"]):
+                cleaned_obj = cleanup_ruler_enactment_items(answer, chunks=context_chunks)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_registrar_items = getattr(self._generator, "cleanup_registrar_enumeration_items", None)
+            if callable(cleanup_registrar_items) and (
+                _is_registrar_enumeration_query(state["query"])
+                or (_is_citation_title_query(state["query"]) and _is_enumeration_query(state["query"]))
+            ):
+                cleaned_obj = cleanup_registrar_items(answer, chunks=context_chunks)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_list_postamble = getattr(self._generator, "cleanup_list_answer_postamble", None)
+            if callable(cleanup_list_postamble) and (
+                _is_broad_enumeration_query(state["query"]) or _is_common_elements_query(state["query"])
+            ):
+                cleaned_obj = cleanup_list_postamble(answer)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            strip_neg = getattr(self._generator, "strip_negative_subclaims", None)
+            if callable(strip_neg) and _is_common_elements_query(state["query"]):
+                stripped_obj = strip_neg(answer)
+                if isinstance(stripped_obj, str) and stripped_obj.strip():
+                    answer = stripped_obj.strip()
+            cleanup_common_elements_answer = getattr(self._generator, "cleanup_common_elements_canonical_answer", None)
+            if callable(cleanup_common_elements_answer) and _is_common_elements_query(state["query"]):
+                cleaned_obj = cleanup_common_elements_answer(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_commencement = getattr(self._generator, "cleanup_named_commencement_answer", None)
+            if callable(cleanup_named_commencement):
+                cleaned_obj = cleanup_named_commencement(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_administration = getattr(self._generator, "cleanup_named_administration_answer", None)
+            if callable(cleanup_named_administration):
+                cleaned_obj = cleanup_named_administration(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_penalty = getattr(self._generator, "cleanup_named_penalty_answer", None)
+            if callable(cleanup_named_penalty):
+                cleaned_obj = cleanup_named_penalty(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_multi_title_lookup = getattr(self._generator, "cleanup_named_multi_title_lookup_answer", None)
+            if callable(cleanup_named_multi_title_lookup):
+                cleaned_obj = cleanup_named_multi_title_lookup(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_amendment = getattr(self._generator, "cleanup_named_amendment_answer", None)
+            if callable(cleanup_named_amendment):
+                cleaned_obj = cleanup_named_amendment(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_enactment_date = getattr(self._generator, "cleanup_named_enactment_date_answer", None)
+            if callable(cleanup_named_enactment_date):
+                cleaned_obj = cleanup_named_enactment_date(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_made_by = getattr(self._generator, "cleanup_named_made_by_answer", None)
+            if callable(cleanup_named_made_by):
+                cleaned_obj = cleanup_named_made_by(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_registrar_authority = getattr(
+                self._generator, "cleanup_named_registrar_authority_answer", None
+            )
+            if callable(cleanup_named_registrar_authority):
+                cleaned_obj = cleanup_named_registrar_authority(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_named_translation_requirement = getattr(
+                self._generator, "cleanup_named_translation_requirement_answer", None
+            )
+            if callable(cleanup_named_translation_requirement):
+                cleaned_obj = cleanup_named_translation_requirement(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_account_effective_dates = getattr(self._generator, "cleanup_account_effective_dates_answer", None)
+            if callable(cleanup_account_effective_dates):
+                cleaned_obj = cleanup_account_effective_dates(
+                    answer,
+                    question=state["query"],
+                    chunks=context_chunks,
+                    doc_refs=state.get("doc_refs"),
+                )
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    answer = cleaned_obj.strip()
+            cleanup_final_answer = getattr(self._generator, "cleanup_final_answer", None)
+            if callable(cleanup_final_answer):
+                pre_cleanup = answer
+                cleaned_obj = cleanup_final_answer(answer)
+                if isinstance(cleaned_obj, str) and cleaned_obj.strip():
+                    if cleaned_obj.strip() != answer.strip():
+                        collector.set_llm_diagnostics(malformed_tail_detected=True)
+                        logger.info(
+                            "CLEANUP_DEBUG qid=%s tail_trimmed raw_len=%d cleaned_len=%d trimmed=%s",
+                            state.get("question_id", ""),
+                            len(pre_cleanup),
+                            len(cleaned_obj.strip()),
+                            repr(pre_cleanup[len(cleaned_obj.strip()) : 80])
+                            if len(pre_cleanup) > len(cleaned_obj.strip())
+                            else "none",
+                        )
+                    answer = cleaned_obj.strip()
+
+            citations = self._generator.extract_citations(answer, context_chunks)
+            cited_ids = self._generator.extract_cited_chunk_ids(answer)
+            is_unanswerable_free_text = self._is_unanswerable_free_text_answer(answer)
+            support_ids: list[str] = []
+            prefer_citation_trace = _is_named_multi_title_lookup_query(state["query"]) or _is_named_amendment_query(
+                state["query"]
+            )
+            if not cited_ids and not is_unanswerable_free_text:
+                support_ids = self._localize_free_text_support_chunk_ids(
+                    answer=answer,
+                    query=state["query"],
+                    context_chunks=context_chunks,
+                )
+                cited_ids = list(support_ids)
+                if support_ids and not citations:
+                    citations = self._citations_from_chunk_ids(
+                        chunk_ids=support_ids,
+                        context_chunks=context_chunks,
+                    )
+                elif not support_ids:
+                    logger.warning(
+                        "free_text_support_localization_failed",
+                        extra={
+                            "request_id": state.get("request_id"),
+                            "question_id": state.get("question_id"),
+                            "answer_type": answer_type,
+                        },
+                    )
+            elif not is_unanswerable_free_text and not prefer_citation_trace:
+                support_ids = self._localize_free_text_support_chunk_ids(
+                    answer=answer,
+                    query=state["query"],
+                    context_chunks=context_chunks,
+                )
+            if is_unanswerable_free_text:
+                citations = []
+                cited_ids = []
+                support_ids = []
+                collector.set_retrieved_ids([])
+                collector.set_context_ids([])
+            elif support_ids:
+                support_ids = self._suppress_named_administration_family_orphan_support_ids(
+                    query=state["query"],
+                    cited_ids=cited_ids,
+                    support_ids=support_ids,
+                    context_chunks=context_chunks,
+                )
+            # Post-hoc citation verification: drop cited pages not supporting the answer.
+            # Runs AFTER answer streaming — zero TTFT impact. Only for free_text answers.
+            # Safety guard in verify_citations(): never drops all citations.
+            if (
+                bool(getattr(self._settings.pipeline, "enable_citation_verification", False))
+                and answer
+                and cited_ids
+                and answer_type == "free_text"
+                and not is_unanswerable_free_text
+            ):
+                from shafi.core.citation_verifier import verify_citations
+
+                _cited_chunks = [c for c in context_chunks if c.chunk_id in set(cited_ids)]
+                _verify_api_key = self._settings.llm.resolved_api_key().get_secret_value()
+                _verify_base_url: str | None = self._settings.llm.base_url or None
+                _verify_model = str(getattr(self._settings.pipeline, "citation_verification_model", "gpt-4.1-mini"))
+                with collector.timed("verify"):
+                    _verified_chunks = await verify_citations(
+                        answer=answer,
+                        cited_chunks=_cited_chunks,
+                        api_key=_verify_api_key,
+                        base_url=_verify_base_url,
+                        model=_verify_model,
+                    )
+                cited_ids = [c.chunk_id for c in _verified_chunks]
+            collector.set_cited_ids(cited_ids)
+            shaped_used_ids, support_shape_flags = self._apply_support_shape_policy(
+                answer_type=answer_type,
+                answer=answer,
+                query=state["query"],
+                context_chunks=context_chunks,
+                cited_ids=cited_ids,
+                support_ids=support_ids,
+            )
+            if support_shape_flags:
+                logger.warning(
+                    "support_shape_flags_detected",
+                    extra={
+                        "request_id": state.get("request_id"),
+                        "question_id": state.get("question_id"),
+                        "answer_type": answer_type,
+                        "flags": support_shape_flags,
+                    },
+                )
+            _q_lower_fam2 = re.sub(r"\s+", " ", str(state["query"] or "").strip()).lower()
+            _family_recall_priority2 = (
+                self._ENACTMENT_QUERY_RE.search(_q_lower_fam2)
+                or self._ADMIN_QUERY_RE.search(_q_lower_fam2)
+                or self._OUTCOME_QUERY_RE.search(_q_lower_fam2)
+                or _is_broad_enumeration_query(state["query"])
+                or _is_named_commencement_query(state["query"])
+                or _is_named_multi_title_lookup_query(state["query"])
+            )
+            if _family_recall_priority2:
+                final_used_ids = list(shaped_used_ids)
+            else:
+                final_used_ids = self._rerank_support_pages_within_selected_docs(
+                    query=state["query"],
+                    answer_type=answer_type,
+                    context_chunks=context_chunks,
+                    used_ids=shaped_used_ids,
+                )
+            await self._set_final_used_pages(
+                collector=collector,
+                query=state["query"],
+                answer=answer,
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_used_ids=final_used_ids,
+            )
+            if answer_type == "free_text" and streamed and answer.strip():
+                writer({"type": "answer_final", "text": answer})
+
+        logger.info(
+            "Generated answer %d chars with %d citations (strict_extracted=%s)",
+            len(answer),
+            len(citations),
+            extracted,
+            extra={"request_id": state.get("request_id"), "question_id": state.get("question_id")},
+        )
+        return {
+            "answer": answer,
+            "citations": citations,
+            "cited_chunk_ids": cited_ids,
+            "streamed": streamed,
+        }
+
+    async def _build_claim_graph(self, state: RAGState) -> dict[str, object]:
+        """Build a claim graph from the generated answer and support context."""
+
+        if not bool(getattr(self._settings.pipeline, "claim_graph_enabled", False)):
+            return {}
+        answer = str(state.get("answer") or "").strip()
+        context_chunks = list(state.get("context_chunks", []))
+        if not answer or not context_chunks:
+            return {}
+        query_contract = state.get("query_contract")
+        if query_contract is None:
+            return {}
+
+        claim_graph = ClaimGraphBuilder().build(
+            answer,
+            context_chunks,
+            [],
+            query_contract,
+        )
+        collector = state["collector"]
+        collector.set_claim_graph_diagnostics(
+            enabled=True,
+            claim_count=len(claim_graph.claims),
+            unsupported_claim_count=len(claim_graph.unsupported_claims),
+            support_coverage=claim_graph.support_coverage,
+        )
+        return {"claim_graph": claim_graph}
+
+    async def _proof_compile(self, state: RAGState) -> dict[str, object]:
+        """Optionally replace the answer with a proof-carrying compilation."""
+
+        if not bool(getattr(self._settings.pipeline, "proof_compiler_enabled", False)):
+            return {}
+        answer_type = str(state.get("answer_type") or "").strip().casefold()
+        collector = state["collector"]
+        if answer_type != "free_text":
+            collector.set_proof_compiler_diagnostics(
+                enabled=True,
+                used=False,
+                support_coverage=0.0,
+                verified_claim_count=0,
+                dropped_claim_count=0,
+                fallback_reason="non_free_text_answer_type",
+                is_fully_supported=False,
+            )
+            return {}
+        claim_graph = state.get("claim_graph")
+        if claim_graph is None:
+            return {}
+        query_contract = state.get("query_contract")
+        min_support_coverage = float(getattr(self._settings.pipeline, "proof_min_coverage", 0.5))
+        proof_config = ProofCompilerConfig(
+            min_support_coverage=min_support_coverage,
+            allow_partial_answers=bool(getattr(self._settings.pipeline, "proof_allow_partial_answers", True)),
+            fluency_pass_enabled=bool(getattr(self._settings.pipeline, "proof_fluency_pass_enabled", True)),
+        )
+        compiler = ProofCarryingCompiler(proof_config)
+        proof_answer = compiler.compile(claim_graph, query_contract)
+        runtime_fallback_reason = proof_answer.fallback_reason
+        should_use = bool(proof_answer.answer_text.strip()) and not runtime_fallback_reason
+        if should_use and float(proof_answer.support_coverage) < min_support_coverage:
+            runtime_fallback_reason = "coverage_below_runtime_threshold"
+            should_use = False
+        collector.set_proof_compiler_diagnostics(
+            enabled=True,
+            used=should_use,
+            support_coverage=proof_answer.support_coverage,
+            verified_claim_count=len(proof_answer.verified_claims),
+            dropped_claim_count=len(proof_answer.dropped_claims),
+            fallback_reason=runtime_fallback_reason,
+            is_fully_supported=proof_answer.is_fully_supported,
+        )
+        if not should_use:
+            return {"proof_answer": proof_answer}
+
+        answer = proof_answer.answer_text.strip()
+        context_chunks = list(state.get("context_chunks", []))
+        citations = self._generator.extract_citations(answer, context_chunks)
+        cited_ids = self._generator.extract_cited_chunk_ids(answer)
+        if not cited_ids:
+            cited_ids = []
+            for claim in proof_answer.verified_claims:
+                for span in claim.evidence_spans:
+                    chunk_id = str(getattr(span, "chunk_id", "") or "").strip()
+                    if chunk_id and chunk_id not in cited_ids:
+                        cited_ids.append(chunk_id)
+            if cited_ids and not citations:
+                citations = self._citations_from_chunk_ids(chunk_ids=cited_ids, context_chunks=context_chunks)
+        if answer == str(state.get("answer") or "").strip():
+            return {"proof_answer": proof_answer}
+        return {
+            "answer": answer,
+            "citations": citations,
+            "cited_chunk_ids": cited_ids,
+            "proof_answer": proof_answer,
+        }
+
+    def _get_grounding_selector(self) -> object | None:
+        """Lazily create grounding evidence selector if sidecar is enabled."""
+        if not bool(getattr(self._settings.pipeline, "enable_grounding_sidecar", False)):
+            return None
+        cached = getattr(self, "_grounding_selector_cached", None)
+        if cached is not None:
+            return cached
+        try:
+            from shafi.core.grounding.evidence_selector import GroundingEvidenceSelector
+
+            retriever = self._retriever
+            selector = GroundingEvidenceSelector(
+                retriever=retriever,
+                store=retriever._store,
+                embedder=retriever._embedder,
+                sparse_encoder=retriever._sparse_encoder,
+                pipeline_settings=self._settings.pipeline,
+                verifier_settings=self._settings.verifier,
+                llm_provider=self._generator._llm,
+            )
+            self._grounding_selector_cached = selector  # type: ignore[attr-defined]
+            return selector
+        except Exception:
+            logger.warning("Failed to create grounding selector", exc_info=True)
+            return None
+
+    async def _set_final_used_pages(
+        self,
+        *,
+        collector: TelemetryCollector,
+        query: str,
+        answer: str,
+        answer_type: str,
+        context_chunks: Sequence[RankedChunk],
+        current_used_ids: Sequence[str],
+    ) -> None:
+        """Finalize used-page telemetry with terminal anchor constraints.
+
+        When grounding sidecar is enabled, delegates page selection to the
+        evidence selector. Falls back to the legacy path if the selector
+        returns None or raises.
+
+        Args:
+            collector: Telemetry collector for the current request.
+            query: Raw user question.
+            answer: Final answer text.
+            answer_type: Normalized answer type.
+            context_chunks: Ranked context chunks used for answering.
+            current_used_ids: Support chunk IDs selected before late page shaping.
+        """
+        from shafi.core.grounding.evidence_selector import answer_requires_empty_grounding
+
+        if answer_requires_empty_grounding(answer):
+            collector.set_used_ids(list(current_used_ids))
+            collector.set_used_page_ids_override([])
+            return
+
+        # Try grounding sidecar first
+        selector = self._get_grounding_selector()
+        if selector is not None:
+            try:
+                from shafi.core.grounding.evidence_selector import GroundingEvidenceSelector
+
+                assert isinstance(selector, GroundingEvidenceSelector)
+                with collector.timed("grounding"):
+                    sidecar_page_ids = await selector.select_page_ids(
+                        query=query,
+                        answer=answer,
+                        answer_type=answer_type,
+                        context_chunks=context_chunks,
+                        current_used_ids=current_used_ids,
+                        collector=collector,
+                    )
+                if sidecar_page_ids is not None:
+                    collector.set_used_ids(list(current_used_ids))
+                    collector.set_used_page_ids_override(sidecar_page_ids)
+                    return
+            except Exception:
+                logger.warning("Grounding sidecar failed; falling back to legacy", exc_info=True)
+
+        # Legacy path
+        anchor_page_ids = self._explicit_anchor_page_ids(
+            query=query,
+            context_chunks=context_chunks,
+            preferred_chunk_ids=current_used_ids,
+        )
+        final_used_ids = list(current_used_ids)
+        if not anchor_page_ids:
+            final_used_ids = self._enhance_page_recall(
+                query=query,
+                answer_type=answer_type,
+                context_chunks=context_chunks,
+                current_used_ids=final_used_ids,
+            )
+        collector.set_used_ids(final_used_ids)
+
+        final_page_ids = self._chunk_ids_to_page_ids(
+            chunk_ids=final_used_ids,
+            context_chunks=context_chunks,
+        )
+        citation_pages = self._extract_citation_pages(
+            question=query,
+            answer=answer,
+            answer_type=answer_type,
+            context_chunks=context_chunks,
+        )
+        if citation_pages:
+            # Merge citation pages with existing pages (preserving order,
+            # deduplicating).  Previous code replaced all pages, destroying
+            # recall when citation extraction returned fewer pages.
+            seen = set(final_page_ids)
+            merged = list(final_page_ids)
+            for pid in citation_pages:
+                if pid not in seen:
+                    seen.add(pid)
+                    merged.append(pid)
+            final_page_ids = merged
+
+        if anchor_page_ids:
+            final_page_ids = self._constrain_page_ids_to_anchor(
+                page_ids=final_page_ids,
+                anchor_page_ids=anchor_page_ids,
+            )
+
+        trimmed = self._trim_to_article_page(
+            question=query,
+            answer_type=answer_type,
+            context_chunks=context_chunks,
+            current_page_ids=final_page_ids,
+        )
+        if trimmed:
+            # With beta=2.5, replacing all pages with a single article page
+            # is catastrophic if the gold set has 2+ pages.  Instead, prepend
+            # the best article page so it ranks first for precision while
+            # keeping all other pages for recall.
+            trimmed_set = set(trimmed)
+            remaining = [pid for pid in final_page_ids if pid not in trimmed_set]
+            merged_trimmed = trimmed + remaining
+            final_page_ids = (
+                self._constrain_page_ids_to_anchor(
+                    page_ids=merged_trimmed,
+                    anchor_page_ids=anchor_page_ids,
+                )
+                if anchor_page_ids
+                else merged_trimmed
+            )
+
+        # Context-page fallback: if after all processing we have fewer than 3
+        # pages, supplement from context chunks within the SAME documents.
+        # With F-beta 2.5, adding borderline-relevant same-doc pages is far
+        # cheaper than missing gold.  Skip when an explicit anchor constrains
+        # pages (the user asked about a specific page).
+        if len(final_page_ids) < 3 and context_chunks and not anchor_page_ids:
+            existing_docs = {pid.rpartition("_")[0] for pid in final_page_ids if "_" in pid}
+            seen_final = set(final_page_ids)
+            for chunk in context_chunks:
+                doc_id = str(getattr(chunk, "doc_id", "") or "").strip()
+                # When at least one doc is already selected, restrict to those docs.
+                # When no pages are selected yet (C1 case: correct answer, zero cites),
+                # existing_docs is empty — allow any doc so we always emit ≥1 citation.
+                if existing_docs and doc_id not in existing_docs:
+                    continue
+                pnum = self._page_num(str(getattr(chunk, "section_path", "") or ""))
+                if not doc_id or pnum <= 0:
+                    continue
+                pid = f"{doc_id}_{pnum}"
+                if pid not in seen_final:
+                    seen_final.add(pid)
+                    final_page_ids.append(pid)
+                if len(final_page_ids) >= 6:
+                    break
+
+        if final_page_ids:
+            collector.set_used_page_ids_override(final_page_ids)
+        else:
+            # F-beta 2.5 page citation floor: always emit at least top-1 page
+            # for answerable questions. Missing 1 gold page costs ~46% G;
+            # adding 1 wrong page costs only ~6.5%. The floor is net positive.
+            for chunk in context_chunks:
+                doc_id = getattr(chunk, "doc_id", None) or ""
+                pnum = self._page_num(str(getattr(chunk, "section_path", "") or ""))
+                if doc_id and pnum > 0:
+                    collector.set_used_page_ids_override([f"{doc_id}_{pnum}"])
+                    break
+
+    def _chunk_ids_to_page_ids(
+        self,
+        *,
+        chunk_ids: Sequence[str],
+        context_chunks: Sequence[RankedChunk],
+    ) -> list[str]:
+        """Convert support chunk IDs into ordered page IDs.
+
+        Args:
+            chunk_ids: Candidate support chunk IDs.
+            context_chunks: Ranked context chunks that define page identity.
+
+        Returns:
+            Ordered unique page IDs present in the provided context chunks.
+        """
+        context_by_id = {chunk.chunk_id: chunk for chunk in context_chunks}
+        page_ids: list[str] = []
+        seen_page_ids: set[str] = set()
+        for raw_chunk_id in chunk_ids:
+            chunk = context_by_id.get(str(raw_chunk_id).strip())
+            if chunk is None:
+                continue
+            doc_id = str(getattr(chunk, "doc_id", "") or "").strip()
+            page_num = self._page_num(str(getattr(chunk, "section_path", "") or ""))
+            if not doc_id or page_num <= 0:
+                continue
+            page_id = f"{doc_id}_{page_num}"
+            if page_id in seen_page_ids:
+                continue
+            seen_page_ids.add(page_id)
+            page_ids.append(page_id)
+        return page_ids
+
+    @staticmethod
+    def _select_best_citation_chunks(
+        *,
+        query: str,
+        context_chunks: Sequence[RankedChunk],
+        max_citations: int = 2,
+    ) -> list[str]:
+        """Select citation chunks with highest query-text overlap.
+
+        Uses word-level Jaccard similarity between the query and each chunk's
+        text to pick the chunks most likely to contain the gold page.
+
+        Args:
+            query: Raw user question.
+            context_chunks: Ranked context chunks from the answer path.
+            max_citations: Maximum number of citation chunk IDs to return.
+
+        Returns:
+            Chunk IDs ordered by query-text overlap, best first.
+        """
+        if not context_chunks or not query:
+            return [c.chunk_id for c in context_chunks[:max_citations] if c.chunk_id]
+
+        query_tokens = set(query.lower().split())
+        scored: list[tuple[float, int, str]] = []
+        for idx, chunk in enumerate(context_chunks):
+            text = (chunk.text or "").lower()
+            chunk_tokens = set(text.split())
+            if not chunk_tokens:
+                scored.append((0.0, idx, chunk.chunk_id))
+                continue
+            intersection = len(query_tokens & chunk_tokens)
+            union = len(query_tokens | chunk_tokens)
+            jaccard = intersection / union if union > 0 else 0.0
+            scored.append((jaccard, idx, chunk.chunk_id))
+
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [chunk_id for _, _, chunk_id in scored[:max_citations] if chunk_id]
+
+    @staticmethod
+    def _select_scorer_citation_chunks(
+        *,
+        scorer_page_ids: Sequence[str],
+        context_chunks: Sequence[RankedChunk],
+        max_citations: int = 2,
+    ) -> list[str]:
+        """Select citation chunks using trained page scorer ranking.
+
+        Maps scorer-ranked page IDs to chunk IDs present in context.
+        Preserves scorer confidence order: highest-confidence pages cited first.
+
+        Args:
+            scorer_page_ids: Page IDs ranked by trained scorer (best first).
+            context_chunks: Context chunks available for citation.
+            max_citations: Maximum chunk IDs to return.
+
+        Returns:
+            Chunk IDs for scorer's top-ranked pages that appear in context.
+        """
+        from shafi.submission.common import chunk_id_to_page_id
+
+        page_to_chunk: dict[str, str] = {}
+        for chunk in context_chunks:
+            page_id = chunk_id_to_page_id(chunk.chunk_id)
+            if page_id and page_id not in page_to_chunk:
+                page_to_chunk[page_id] = chunk.chunk_id
+
+        result: list[str] = []
+        for page_id in scorer_page_ids:
+            if page_id in page_to_chunk:
+                result.append(page_to_chunk[page_id])
+                if len(result) >= max_citations:
+                    break
+        return result
+
+    @staticmethod
+    def _constrain_page_ids_to_anchor(
+        *,
+        page_ids: Sequence[str],
+        anchor_page_ids: Sequence[str],
+    ) -> list[str]:
+        """Clamp used-page output to the explicit anchor set.
+
+        Args:
+            page_ids: Candidate used page IDs.
+            anchor_page_ids: Allowed page IDs derived from the explicit anchor.
+
+        Returns:
+            Ordered page IDs that stay within the anchor set.
+        """
+        ordered_anchor_page_ids = [str(page_id).strip() for page_id in anchor_page_ids if str(page_id).strip()]
+        if not ordered_anchor_page_ids:
+            return [str(page_id).strip() for page_id in page_ids if str(page_id).strip()]
+
+        allowed_page_ids = set(ordered_anchor_page_ids)
+        constrained = [
+            str(page_id).strip()
+            for page_id in page_ids
+            if str(page_id).strip() and str(page_id).strip() in allowed_page_ids
+        ]
+        return constrained or ordered_anchor_page_ids
+
+    async def _verify(self, state: RAGState) -> dict[str, object]:
+        verifier_settings = getattr(self._settings, "verifier", None)
+        if verifier_settings is not None and not bool(getattr(verifier_settings, "enabled", True)):
+            return {}
+        if self._verifier is None:
+            return {}
+
+        answer = str(state.get("answer") or "").strip()
+        cited_ids = list(state.get("cited_chunk_ids", []))
+
+        # Skip LLM verifier entirely for strict types — deterministic coerce already ran in _generate
+        answer_type = str(state.get("answer_type") or "free_text").strip().lower()
+        if answer_type in {"boolean", "number", "date", "name", "names"}:
+            return {}
+        should_verify = self._verifier.should_verify(answer, cited_ids, force=False)
+        if not should_verify:
+            return {}
+
+        collector = state["collector"]
+        context_chunks = state.get("context_chunks", [])
+        with collector.timed("verify"):
+            verification = await self._verifier.verify(
+                state["query"],
+                answer,
+                context_chunks,
+            )
+
+        # For free_text, verifier is audit-only (post-hoc revision cannot affect already-streamed output).
+        if answer_type == "free_text":
+            logger.info(
+                "Verifier audit grounded=%s unsupported_claims=%d",
+                verification.is_grounded,
+                len(verification.unsupported_claims),
+            )
+            return {}
+
+        next_answer = answer
+        if not verification.is_grounded:
+            if verification.revised_answer:
+                next_answer = verification.revised_answer.strip()
+                logger.info(
+                    "Verifier revised answer grounded=%s unsupported_claims=%d",
+                    verification.is_grounded,
+                    len(verification.unsupported_claims),
+                )
+            else:
+                # Fail-safe: keep strict-type output format deterministic even when sources are insufficient.
+                next_answer = self._strict_type_fallback(answer_type, cited_ids)
+
+        effective_cited_ids = self._generator.extract_cited_chunk_ids(next_answer) or cited_ids
+        next_answer, _ = self._coerce_strict_type_format(next_answer, answer_type, effective_cited_ids)
+        next_answer = next_answer.strip()
+
+        # Sanitize citations after coercion
+        context_chunk_ids = [c.chunk_id for c in context_chunks]
+        sanitize_citations = getattr(self._generator, "sanitize_citations", None)
+        if callable(sanitize_citations):
+            sanitized_obj = sanitize_citations(next_answer, context_chunk_ids)
+            if isinstance(sanitized_obj, str):
+                next_answer = sanitized_obj
+
+        if next_answer == answer:
+            return {}
+
+        citations = self._generator.extract_citations(next_answer, context_chunks)
+        next_cited_ids = self._generator.extract_cited_chunk_ids(next_answer)
+        if self._is_unanswerable_strict_answer(next_answer):
+            citations = []
+            next_cited_ids = []
+            collector.set_retrieved_ids([])
+            collector.set_context_ids([])
+        collector.set_cited_ids(next_cited_ids)
+        return {
+            "answer": next_answer,
+            "citations": citations,
+            "cited_chunk_ids": next_cited_ids,
+        }
+
+    async def _emit(self, state: RAGState) -> dict[str, object]:
+        """Emit answer tokens for strict-types flows that generated non-streaming output."""
+        if bool(state.get("streamed", False)):
+            return {}
+
+        answer = str(state.get("answer") or "")
+        if not answer.strip():
+            return {}
+
+        collector = state["collector"]
+        writer = self._get_stream_writer_or_noop()
+        collector.mark_first_token()
+        writer({"type": "token", "text": answer})
+        writer({"type": "answer_final", "text": answer})
+        return {"streamed": True}
+
+    async def _finalize(self, state: RAGState) -> dict[str, object]:
+        collector = state["collector"]
+        telemetry = collector.finalize()
+        writer = self._get_stream_writer_or_noop()
+        writer({"type": "telemetry", "payload": telemetry.model_dump()})
+
+        # --- Debug diagnostics per question ---
+        try:
+            answer = str(state.get("answer") or "")
+            query = str(state.get("query") or "")
+            answer_type = str(state.get("answer_type") or "free_text")
+            ranked = state.get("ranked_chunks", [])
+            top3_rerank = [
+                (getattr(c, "chunk_id", "?"), round(getattr(c, "rerank_score", 0), 4)) for c in (ranked or [])[:3]
+            ]
+            doc_refs = state.get("doc_refs", [])
+            complexity = state.get("complexity", "")
+            model = state.get("model", "")
+
+            logger.info(
+                "PIPELINE_DEBUG question_id=%s answer_type=%s complexity=%s model=%s "
+                "doc_refs=%s retrieved=%d context=%d ranked=%d "
+                "top3_rerank=%s "
+                "used_pages=%s cited_pages=%s "
+                "embed_ms=%d qdrant_ms=%d rerank_ms=%d llm_ms=%d total_ms=%d "
+                "answer_preview=%s query_preview=%s",
+                telemetry.question_id,
+                answer_type,
+                complexity,
+                model,
+                doc_refs,
+                len(telemetry.retrieved_chunk_ids),
+                len(telemetry.context_chunk_ids),
+                len(ranked or []),
+                top3_rerank,
+                telemetry.used_page_ids[:5],
+                telemetry.cited_page_ids[:5],
+                telemetry.embed_ms,
+                telemetry.qdrant_ms,
+                telemetry.rerank_ms,
+                telemetry.llm_ms,
+                telemetry.total_ms,
+                repr(answer[:120]),
+                repr(query[:80]),
+            )
+        except Exception:
+            logger.debug("Failed to emit pipeline debug diagnostics", exc_info=True)
+
+        return {"telemetry": telemetry}
+
+    @staticmethod
+    def _get_stream_writer_or_noop() -> Callable[[dict[str, object]], None]:
+        from shafi.core import pipeline as pipeline_module
+
+        try:
+            writer = pipeline_module.get_stream_writer()
+        except RuntimeError:
+            return lambda _: None
+        return cast("Callable[[dict[str, object]], None]", writer)

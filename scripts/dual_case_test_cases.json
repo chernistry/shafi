@@ -1,0 +1,264 @@
+{
+  "description": "Dual-case context budget test cases for OREV/EYAL. These 9 questions all require pages from 2+ different case documents but context budget currently drops one. Fix: detect 2+ case IDs in query via regex [A-Z]{2,3} \\d{3}/\\d{4} and guarantee 1 page per referenced case regardless of scorer rank.",
+  "detection_pattern": "[A-Z]{2,3} \\d{3}/\\d{4}",
+  "expected_total_gain": "+7-9 G-score points on 100 warmup questions => avg G rises from 46.8% to ~55%",
+  "category": "context_miss_dual_case",
+  "test_cases": [
+    {
+      "qid": "9f9fb4b9911d75c22f2c9a42bb852848ac45594179a7d0d126c8ef0ac8941b18d",
+      "qid_short": "9f9fb4b9",
+      "question": "Do cases CA 004/2025 and SCT 295/2025 involve any of the same legal entities or individuals as parties?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["CA 004/2025", "SCT 295/2025"],
+      "documents_required": [
+        {
+          "doc_hash": "78ffe994cdc61ce6a2a6937c79fc52751bb5d2b4eaa4019f088fbccf70569c26",
+          "page": 1,
+          "case": "CA 004/2025",
+          "reason": "Title page with party names for CA 004/2025"
+        },
+        {
+          "doc_hash": "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917",
+          "page": 11,
+          "case": "SCT 295/2025",
+          "reason": "Party page for SCT 295/2025"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "fix_required": "Guarantee both case title pages in context when query contains CA 004/2025 AND SCT 295/2025",
+      "test_assertion": "After fix: both doc hashes must appear in context_page_ids for this query"
+    },
+    {
+      "qid": "737940cf4c4cd4c7f6f6d3b8b30570e853538790e06d40583631acf017eb6029",
+      "qid_short": "737940cf",
+      "question": "Is there any main party that appeared in both cases CFI 010/2024 and ENF 053/2025 at any point?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["CFI 010/2024", "ENF 053/2025"],
+      "documents_required": [
+        {
+          "doc_hash": "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032",
+          "page": 2,
+          "case": "CFI 010/2024",
+          "reason": "Party/hearing page for CFI 010/2024"
+        },
+        {
+          "doc_hash": "c66b8374d326d16ec5ff48195825798c3ba696c787ad8a59c23a7a2908f34a0d",
+          "page": 1,
+          "case": "ENF 053/2025",
+          "reason": "Title/party page for ENF 053/2025"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "fix_required": "Guarantee both case pages in context when query contains CFI 010/2024 AND ENF 053/2025",
+      "test_assertion": "After fix: both doc hashes must appear in context_page_ids for this query"
+    },
+    {
+      "qid": "bfa089d55bda48890b3f84ec000ad2c3c682031ff7153cc8023efeeb8c1ff9e3",
+      "qid_short": "bfa089d5",
+      "question": "Was the same judge involved in both case CFI 010/2024 and case DEC 001/2025 at any point?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["CFI 010/2024", "DEC 001/2025"],
+      "documents_required": [
+        {
+          "doc_hash": "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e",
+          "page": 21,
+          "case": "DEC 001/2025",
+          "reason": "Judge information page for DEC 001/2025"
+        },
+        {
+          "doc_hash": "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032",
+          "page": 2,
+          "case": "CFI 010/2024",
+          "reason": "Judge information page for CFI 010/2024"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "fix_required": "Guarantee both case judge pages in context when query contains CFI 010/2024 AND DEC 001/2025",
+      "test_assertion": "After fix: both doc hashes must appear in context_page_ids for this query"
+    },
+    {
+      "qid": "fba6e86a3169728c19a02ccbad9cd87599344fdd0bfd0589e5ab7bf6e16a09b9",
+      "qid_short": "fba6e86a",
+      "question": "Did cases DEC 001/2025 and CFI 057/2025 have any judges in common at any point?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["DEC 001/2025", "CFI 057/2025"],
+      "documents_required": [
+        {
+          "doc_hash": "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e",
+          "page": 21,
+          "case": "DEC 001/2025",
+          "reason": "Judge page for DEC 001/2025"
+        },
+        {
+          "doc_hash": "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e",
+          "page": 20,
+          "case": "CFI 057/2025",
+          "reason": "Judge page for CFI 057/2025 (same doc hash, different page — same document covers both cases)"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "note": "SPECIAL: both gold pages come from same document hash but different pages. Issue is multi-page inclusion from same doc, not cross-doc. Context budget may need to guarantee TOP-2 pages from queried case docs, not just 1.",
+      "fix_required": "Guarantee pages 20 AND 21 of DEC 001/2025 doc are both included in context",
+      "test_assertion": "After fix: doc_hash 3f8a5ea0...21 AND 3f8a5ea0...20 both in context_page_ids"
+    },
+    {
+      "qid": "1e1121d0cc14259a4f345408302ef2ddf8e474cdb9ad60a34b060bd789b95298",
+      "qid_short": "1e1121d0",
+      "question": "Do cases DEC 001/2025 and SCT 514/2025 involve any of the same legal entities or individuals as main parties at any point?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["DEC 001/2025", "SCT 514/2025"],
+      "documents_required": [
+        {
+          "doc_hash": "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e",
+          "page": 19,
+          "case": "DEC 001/2025",
+          "reason": "Party page for DEC 001/2025"
+        },
+        {
+          "doc_hash": "6306079a16b1dec85690f75c715cdbd78b0685a3e19ee30250d481bc32f2e29a",
+          "page": 1,
+          "case": "SCT 514/2025",
+          "reason": "Title/party page for SCT 514/2025"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "fix_required": "Guarantee both case pages in context when query contains DEC 001/2025 AND SCT 514/2025",
+      "test_assertion": "After fix: both doc hashes must appear in context_page_ids for this query"
+    },
+    {
+      "qid": "3c19ecbe27fe9701f742589a927a11a5b701f064e49d35d631deef0d478aa99f",
+      "qid_short": "3c19ecbe",
+      "question": "Was the same judge involved in both case DEC 001/2025 and case TCD 001/2024 at any point?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["DEC 001/2025", "TCD 001/2024"],
+      "documents_required": [
+        {
+          "doc_hash": "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e",
+          "page": 21,
+          "case": "DEC 001/2025",
+          "reason": "Judge page for DEC 001/2025"
+        },
+        {
+          "doc_hash": "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54",
+          "page": 5,
+          "case": "TCD 001/2024",
+          "reason": "Judge page for TCD 001/2024"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "fix_required": "Guarantee both case judge pages in context when query contains DEC 001/2025 AND TCD 001/2024",
+      "test_assertion": "After fix: both doc hashes must appear in context_page_ids for this query"
+    },
+    {
+      "qid": "8e3b4683596d94dbc9a66f20104329939e0e8d4da1e1dbf6df5784247c2ea373",
+      "qid_short": "8e3b4683",
+      "question": "Was the same judge involved in both case CA 005/2025 and case TCD 001/2024 at any point?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["CA 005/2025", "TCD 001/2024"],
+      "documents_required": [
+        {
+          "doc_hash": "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54",
+          "page": 5,
+          "case": "TCD 001/2024",
+          "reason": "Judge page for TCD 001/2024"
+        },
+        {
+          "doc_hash": "437568a801115019fe8278385c0484bdf07ab86f9a499ecaba2b7969b37c764b",
+          "page": 7,
+          "case": "CA 005/2025",
+          "reason": "Judge page for CA 005/2025"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "fix_required": "Guarantee both case judge pages in context when query contains CA 005/2025 AND TCD 001/2024",
+      "test_assertion": "After fix: both doc hashes must appear in context_page_ids for this query"
+    },
+    {
+      "qid": "46927f372acef1888a11ef8de5f7a1dff5588a85efc12eaafe7c7f59c5fbf14f",
+      "qid_short": "46927f37",
+      "question": "Does the term 'Law' in the Strata Title Regulations refer to the same law number as the 'Employment Law' mentioned in the Employment Regulations?",
+      "answer_type": "boolean",
+      "case_ids_in_query": [],
+      "note": "No case IDs — this is a cross-regulation comparison, different fix path. Requires both Strata Title Regulations AND Employment Regulations to be in context simultaneously.",
+      "documents_required": [
+        {
+          "doc_hash": "b486db089615010a9b45bc71411b5a238a0a0b9aaf074d875f98f5b934f75079",
+          "page": 3,
+          "doc": "Strata Title Regulations",
+          "reason": "Definition of 'Law' in Strata Title Regulations"
+        },
+        {
+          "doc_hash": "69ecacbd263a1e75765e4f12caaf73a08012b1c2e11e5c14bff43bf6331f3003",
+          "page": 4,
+          "doc": "Employment Regulations",
+          "reason": "Definition of 'Employment Law' in Employment Regulations"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "context_miss",
+      "fix_required": "Cross-regulation comparison: guarantee both regulation docs in context. Detect 'Strata Title Regulations' AND 'Employment Regulations' in query → include title pages of both.",
+      "test_assertion": "After fix: both doc hashes must appear in context_page_ids for this query"
+    },
+    {
+      "qid": "54d56331536ad42544a97a57c5d700cf82d9b5b46dc2e6a08a31992d5b755fb0",
+      "qid_short": "54d56331",
+      "question": "Is there any party (claimant or defendant) common to both case TCD 001/2024 and case CFI 016/2025 at any point?",
+      "answer_type": "boolean",
+      "case_ids_in_query": ["TCD 001/2024", "CFI 016/2025"],
+      "documents_required": [
+        {
+          "doc_hash": "6248961b681ea0deb189f354be0c8286f35974dcdb211c13c921c3dd0e566a6e",
+          "page": 4,
+          "case": "CFI 016/2025",
+          "reason": "Party page for CFI 016/2025"
+        },
+        {
+          "doc_hash": "62930da32fa3172edf2f2bbf3da268455bd99a7b5fab34d72358730d8cd5da30",
+          "page": 2,
+          "case": "TCD 001/2024",
+          "reason": "Party page for TCD 001/2024"
+        }
+      ],
+      "current_g_score": 0.0,
+      "expected_g_after_fix": 0.9,
+      "expected_g_gain": 0.9,
+      "fix_classification": "retrieval_miss",
+      "note": "RETRIEVAL miss, not just context miss — gold page not even in retrieved_page_ids. Fix requires either: (1) retrieval expansion, or (2) dedicated retrieval for each case ID detected in query.",
+      "fix_required": "For each case ID in query, run a targeted retrieval for that case's title page. CFI 016/2025 title page (6248961b...4) currently not retrieved.",
+      "test_assertion": "After fix: both doc hashes must appear in retrieved_page_ids AND context_page_ids"
+    }
+  ],
+  "summary": {
+    "pure_context_miss_dual_case": 7,
+    "context_miss_same_doc_multipage": 1,
+    "retrieval_miss_dual_case": 1,
+    "total_test_cases": 9,
+    "total_expected_g_gain_points": 8.1,
+    "detection_rule": "regex match [A-Z]{2,3} \\d{3}/\\d{4} in query → count matches → if 2+ distinct case IDs found, activate dual-case context guarantee",
+    "implementation_note": "fba6e86a is a special case: both gold pages are from the SAME document (DEC 001/2025 doc) but different pages (20 and 21). The fix for this one is not cross-doc but cross-page within same doc — guarantee top-2 pages from each detected case document.",
+    "regression_risk": "Low. This is an additive routing rule. No existing correct answers are affected — only questions with 2+ case IDs get expanded context budget. Worst case: slightly higher latency from expanded context for ~15-20% of questions."
+  }
+}

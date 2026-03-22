@@ -1,0 +1,162 @@
+[
+  {
+    "ts": "2026-03-23T03:00Z",
+    "note": "KEREN (03:00): ФИНАЛЬНЫЙ СТАТУС. V2 ГОТОВ: null=3, nopg=3, 10109 страниц, F=1.032. 103+ коррекций применено. Агенты выключаются — остались только OREV (бугхант) и KESHET (стража). REDBUTTON.md переведён на русский. Дашборд обновлён. Репо чистится (удаление .sdd из git, .DS_Store). Всё готово к сабмиту. Саша, жми кнопку.",
+    "author": "mommy"
+  },
+  {
+    "ts": "2026-03-23T00:45Z",
+    "note": "LIRON (02:45): V2 ГОТОВ! data/private_submission_V2.json — null=3, nopg=3, 10109 страниц (+209%!), T=50/F=143, all gates PASS. Это наш главный сабмит. FINAL_SUBMISSION — запасной. Все тикеты закрыты кроме 5009 (OREV, бует-хант). Доки синхронизированы: REDBUTTON, OREF, KB, README, CHECKLIST — все указывают на V2. Архив code_archive_final.zip (836KB) — тот же для обоих.",
+    "author": "penny"
+  },
+  {
+    "ts": "2026-03-22T11:22Z",
+    "note": "NOAM (13:21): TAMAR ВКАТИЛА 12 CORRECTIONS! Registry-verified, +0.0096 Total (+0.96%!). KESHET прогнал V2 sanity: null=3 nopg=3 over280=0 — PASS! Файл обновлён 13:20 до 512KB. LIRON закрыла 5014. До дедлайна 3ч 38м. Каждая поправка приближает нас к топу, хоть и не к победе (мы всё ещё сосём хуй, но меньше).",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-23T00:30Z",
+    "note": "LIRON (02:30): V2 билд активен. Открытые тикеты: 5000 (TZUF — 12 исправлений registry), 5001 (OREV — page enrichment), 5006 (TZUF — сборка), 5007 (DAGAN — координация), 5008 (KESHET — smoke test), 5013 (NOGA — санити). 5003/5005/5012 закрыты (0 contradictions, booleans проверены, 49 hardcodes найдено). Submit #1 готов: FINAL_SUBMISSION.json (null=1, nopg=4, T=50/F=143). Доки синхронизированы.",
+    "author": "penny"
+  },
+  {
+    "ts": "2026-03-22T11:18Z",
+    "note": "NOAM (13:18): TAMAR закрыла boolean audit (True=50 False=143) — все булевые проверены! EYAL завершил comparison audit: 0 ПРОТИВОРЕЧИЙ в 49 вопросах, 41 верифицировано. LIRON синхронизирует доки, V2 build в процессе. DAGAN раздал 3 новых TAMAR tasks. Файл 512KB стабилен. До дедлайна 3ч 41м. Качество растёт!",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T11:15Z",
+    "note": "NOAM (13:15): OREV ЁБНУЛ ПАТЧ! NOINFO_GROUNDING_PATCH — вычищает 20 general-knowledge noinfo grounding pages, ΔG≈+0.022! Это может дать нам +2.2% к Total блядь! V18 на 780/900 (null=8 nopg=26 F=1.032 G=0.966). DAGAN закрыл цикл 16, T=51/F=142 authoritative. Файл 512KB. До дедлайна 3ч 44м. Это может быть прорыв!",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T11:12Z",
+    "note": "NOAM (13:12): TAMAR ВКАТИЛА 2 ФИКСА! Boolean corrections (True→False): Leasing Regs 5.2 + Article 9(2) RPL. Файл обновлён до 512KB (13:11). SHAI верифицировал FINAL T=51/F=142. Все агенты на позициях, CODE FREEZE активен. До дедлайна 3ч 47м. Файл готов к сабмиту.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T11:10Z",
+    "note": "NOAM (13:09): Тишина после бури. V18 полностью завершён (null=9 nopg=41 TTFT=1111ms) — FINAL_SUBMISSION лучше. LIRON обновила REDBUTTON.md. Агенты на дежурстве. Файл 512KB стабилен с 13:04. До дедлайна 3ч 50м. Ждём команды Саши на сабмит.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T11:07Z",
+    "note": "NOAM (13:06): Submit #2 ОТМЕНЁН БЛЯДЬ! LIRON официально отменила второй сабмит — V18 провалился (nopg=41 vs FINAL=4, null=9 vs FINAL=1). TZUF ре-верифицировал FINAL_SUBMISSION (T=52/F=141). Мы идём с одним сабмитом. Файл 512KB стабилен. До дедлайна 3ч 53м. Всё ставим на FINAL_SUBMISSION.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T11:03Z",
+    "note": "NOAM (13:03): V18 ПРОВАЛИЛСЯ НАХУЙ! OREV закончил eval: V18 null=9/nopg=41 против FINAL_SUBMISSION null=1/nopg=4. Это РЕГРЕССИЯ ПИЗДЕЦ! FINAL_SUBMISSION остаётся нашим боевым конём. V18 в мусорку. LIRON обновила KB (+1.11pp Det от TAMAR boolfix). TZUF починил build_private_submission.py. Файл 512KB стабилен. До дедлайна 3ч 56м.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T11:00Z",
+    "note": "NOAM (13:00): ПРОСНУЛСЯ БЛЯДЬ! За 10 минут ДВИЖУХА: KEREN создала скрипт Submit V2 (one command build from V18 + ALL corrections), LIRON обновила метрики T=55/F=138 (103+ corrections), TZUF мониторит V18 eval, KESHET включил CODE FREEZE. Файл 512KB стабилен. Команда готовит второй сабмит. До дедлайна 3ч 59м. Погнали дальше!",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T23:30Z",
+    "note": "LIRON (23:30): Финальный статус верифицирован. FINAL_SUBMISSION: null=1, nopg=4, T=55/F=138, over280=0 — 103+ правок. TAMAR добавила 10 булевых фиксов (ENF/ARB ложные True→False, +1.11pp Det). Доки обновлены. АРХИВ: code_archive_final.zip (836KB, без .env, без API ключей). v2 и FINAL архивы — НЕ САБМИТИТЬ (.env с API ключами). V18 eval в процессе (~22%, nopg=38 проецируется) — нужен hybrid build для Submit #2.",
+    "author": "penny"
+  },
+  {
+    "ts": "2026-03-22T23:20Z",
+    "note": "LIRON (23:20): ⛔ КРИТИЧНО: code_archive_final_v2.zip содержит ЖИВЫЕ API ключи в .env (OpenAI, OpenRouter, Cohere, Isaacus, ZeroEntropy). НЕ САБМИТИТЬ! ✅ Правильный архив: code_archive_final.zip (817KB, перестроен TZUF 12:49Z, чистый, без ключей, 180 файлов). Все доки обновлены: HANDOFF, OREF, DEADLINE_CHECKLIST — везде правильный архив. FINAL_SUBMISSION: null=1, nopg=4, T=60/F=133, 98+ правок. Саш, используй code_archive_final.zip!",
+    "author": "penny"
+  },
+  {
+    "ts": "2026-03-22T10:52Z",
+    "note": "NOAM (12:50): Тихая работа. TZUF обновил KNOWLEDGE_BASE и DEADLINE_CHECKLIST (фикс инфы про архив). TAMAR исправила 5 ENF/ARB булевых (True→False), PDF-верифицировано. Файл стабилен 512KB. BULLETIN пустой. V18 eval продолжается в фоне. До дедлайна 4ч 9м. Команда на автопилоте.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:49Z",
+    "note": "NOAM (12:47): EYAL нашёл БАГЛУ в V18! Документ d00c6ebcbae1 (date=2019-05-30) имеет 0 pages — это даёт G=0 для вопроса, пиздец. V18 на 8% (77/900): 2 nulls (известные регрессии). KESHET закоммитил TAMAR/RESUME. Файл стабилен 512KB. V18 eval продолжается, но уже видны проблемы. До дедлайна 4ч 12м.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:48Z",
+    "note": "SUBMIT #1 ГОТОВ: FINAL_SUBMISSION.json (null=1, nopg=4, F=1.032, TTFT=1089ms). 76 коррекций дат из PDF + 20 boolean party-overlap фиксов. 171 warmup doc_id удалены → T с 0.986 до 0.999. Архив кода: 2.1MB (чистый, без .sdd и .env.local). V18 eval запущен для Submit #2. Реальный лидер на приватном скорее всего 0.94-0.97, а не 0.982 (warmup).",
+    "author": "mommy"
+  },
+  {
+    "ts": "2026-03-22T10:45Z",
+    "note": "NOAM (12:44): Файл вернулся к 512KB — значит 835KB был какой-то промежуточный пиздец. KEREN запустила V18 eval для Submit #2 (page_scorer fix + doc_title_boost) — это попытка улучшить скор. TAMAR исправила 5 булевых (True→False) на party+judge overlap. LIRON обновила доки. Команда готовит второй сабмит. До дедлайна 4ч 15м.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:45Z",
+    "note": "KEREN (10:45): SUBMIT #1 ГОТОВ. FINAL_SUBMISSION: 900 ответов, null=1, 76 DOI-коррекций, 171 warmup doc_id удалены (T: 0.986→0.999). V18 eval запущен для Submit #2 (page_scorer fix + doc_title_boost). Архив кода почищен: 2.1MB вместо 42MB (убрали .sdd, .env.local, дампы данных).",
+    "author": "mommy"
+  },
+  {
+    "ts": "2026-03-22T23:05Z",
+    "note": "LIRON (23:05): Волна 8 закрыта. 8 тикетов выполнено (7800-7807). ИТОГИ: README обновлён (88+ правок), 47 старых JSON + 3 старых код-архива убраны в archive/. HANDOFF.md написан для Саши. KB обновлена — Known Bugs 1-3 FIXED. scripts_index обновлён. ВАЖНО: code_archive_final.zip = 2.1MB/8.3MB unzip, 809 файлов (только git-tracked файлы, без мусора). .env.local в архиве НЕТ. Сабмит готов. Жмите кнопку, Саша.",
+    "author": "penny"
+  },
+  {
+    "ts": "2026-03-22T10:42Z",
+    "note": "NOAM (12:41): ФАЙЛ ЁБНУЛСЯ ДО 835KB! Было 512KB, стало 835KB за 3 минуты — это +323KB нахуй! OREV закрыл волну-8 (0 ошибок), TZUF закрыл волну-7 (7200-7207, архив пересобран), SHAI применил 3 data fixes. Что за пиздец с размером файла? Проверяю че там напихали...",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:39Z",
+    "note": "NOAM (12:38): ОХУЕТЬ НАХУЙ! KEREN СПАСЛА НАС ОТ ПИЗДЕЦА! Нашла 171 warmup doc_id в 123 ответах — это бы обнулило T-коэффициент на платформе! Вычистила всё: T: 0.986→0.999 (+1.3% Total). FINAL_SUBMISSION теперь 512KB (12:38). OREV закрыл 6 тикетов, нашёл 8 wrong-doc citations (оказались multi-doc, норм). Файл КРИТИЧЕСКИ обновлён, старая версия убила бы нас!",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:36Z",
+    "note": "NOAM (12:35): ЁБАНЫЙ В РОТ! Посчитал шансы на победу — НОЛЬ БЛЯДЬ. Лидер 0.982, наш МАКСИМУМ даже с идеальным Det=1.0 и Asst=0.80 это 0.820. Разрыв 16pp. Математически победа невозможна. Добавил красную рамку на дашборд 'МЫ СОСЁМ ХУЙ'. Но работаем дальше — может хоть топ-5 возьмём, пиздец.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:34Z",
+    "note": "NOAM (12:33): Починил CSS дашборда! Длинные сообщения типа 'Closed 7300-7307: TTFT profile...' теперь переносятся нормально, а не вылезают за границы. Добавил word-break и overflow-wrap для .agent-task, .log-msg и .data-table td. Дашборд теперь читабельный.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:32Z",
+    "note": "NOAM (12:30): Тишина. Никаких коммитов за 3 минуты. Агенты работают над волной 7 (79 тикетов). FINAL_SUBMISSION 501KB не менялся с 12:21. BULLETIN пустой. Это нормально — идёт глубокая работа. До дедлайна 4ч 29м. Жду результатов.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:28Z",
+    "note": "NOAM (12:27): KESHET РАЗГРОМИЛ волну 7! Закрыл все 8 тикетов (7600-7607): regression report готов, smoke 6/6 OK. KEREN обновила DIRECTIVE — теперь 79 тикетов, у всех по 8+. LIRON закрыла все свои (5100-5102, 6080). OREV и TZUF на непрерывной охоте. FINAL_SUBMISSION стабилен 501KB. До дедлайна 4ч 32м. Темп бешеный!",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:25Z",
+    "note": "NOAM (12:24): KEREN ВЗОРВАЛА БОМБУ! Волна 7 — 72 тикета (по 8 на каждого агента). Это финальная верификация + полировка. KESHET закрыл 5110 (post-TAMAR sanity PASS: null=1 nopg=3 over280=0). FINAL_SUBMISSION 501KB стабилен. Команда получила массивное задание на финальный спринт. До дедлайна 4ч 35м. Все на позициях!",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:22Z",
+    "note": "NOAM (12:21): Активность зашкаливает! LIRON верифицировала FINAL_SUBMISSION (null=1 nopg=3 noinfo=26), SHAI нашёл и починил truncation в файле, KESHET закрыл 5103+5104 (smoke PASS, сервер здоров), DAGAN раздал 5 новых тикетов. Файл 501KB (12:21) — стабилен. Все агенты в работе. До дедлайна 4ч 38м. Команда на пике формы!",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:19Z",
+    "note": "NOAM (12:17): Движуха! TAMAR починила looks_like_truncated_tail (пропущенные предлоги+точки). LIRON обновила scripts_index. KEREN раздала 16 финальных тикетов всем агентам (волна 6). FINAL_SUBMISSION вырос до 502KB (12:13) — значит патчи вкатываются. OREV, TZUF, KESHET на непрерывной охоте за багами. BULLETIN пустой. До дедлайна 4ч 42м.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T22:00Z",
+    "note": "LIRON (22:00): ИТОГОВЫЙ СТАТУС КОМАНДЫ. FINAL_SUBMISSION.json — ГОТОВ К САБМИТУ: null=1, nopg=3, noinfo=26, F=128. Код-архив 44MB, без API-ключей. АГЕНТЫ: SHAI — нашёл+починил truncation в FINAL (54103603), охотится дальше. OREV — все тикеты закрыты, 15+ файлов проверены, 0 багов, DOI верифицированы. TZUF — 1384 теста зелёные, все тикеты закрыты. NOGA — 12 файлов проаудировано. KESHET — 264 smoke-цикла, сервер UP. NOAM — дашборд стабилен. TAMAR/KEREN — мониторинг. EYAL — TTFT profiling закрыт. DINO/JASPER — не запускались. Репо вычищен: sanity_report вынесены в архив. Саш, жмём кнопку.",
+    "author": "penny"
+  },
+  {
+    "ts": "2026-03-22T10:15Z",
+    "note": "NOAM (12:14): ДАШБОРД ПОЧИНЕН! Был баг в parse_score_state — кто-то (я?) стёр код и оставил комментарий '# ... rest of the function ...'. Восстановил из git (коммит 1730319). API /api/team/scores теперь работает, фронт загружается. До дедлайна 4ч 44м. FINAL_SUBMISSION 501KB готов. Все агенты живы.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:11Z",
+    "note": "NOAM (12:11): Всё живое. FINAL_SUBMISSION 501KB обновлён 12:10 — свежак! Последние коммиты: TAMAR вкатила 6 апгрейдов V17 (параграфы, точность), LIRON закрыла 3 дубликата тикетов. Все 9 агентов пашут: OREV охотится за багами, KESHET гоняет smoke-тесты, TZUF на непрерывной охоте. BULLETIN пустой — значит всё спокойно. Файл готов к сабмиту, жду команды.",
+    "author": "iggy"
+  },
+  {
+    "ts": "2026-03-22T10:07Z",
+    "note": "NOAM (12:07): Я на вахте. Дашборд активен. FINAL_SUBMISSION.json (501KB, обновлён 12:07) — наш боевой конь. Метрики: null=1, nopg=3, noinfo=26, F=1.032. Все 9 агентов в строю: OREV, EYAL, SHAI, TZUF, NOGA, DAGAN, KESHET, LIRON, TAMAR. Последний коммит: LIRON (5082+5083+5084 — archive safe, booleans plausible). До дедлайна ~5 часов. Сабмишн готов к отправке. Жду команды Саши.",
+    "author": "iggy"
+  }
+]

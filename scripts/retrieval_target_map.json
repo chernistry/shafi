@@ -1,0 +1,1373 @@
+[
+  {
+    "question_id": "fcabd6aa14e2df4b7ca00fa516a70eba6de58b74dfde30270e3fe3eec6d1da7a",
+    "question": "Which specific DIFC Laws were amended by DIFC Law No. 2 of 2022?",
+    "answer_type": "free_text",
+    "failure_category": "multi_doc_recall_miss",
+    "retrieval_gap_type": "prefetch_depth_exceeded",
+    "verified_gold_pages": [
+      "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_1"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 55,
+    "used_pages": [
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_1",
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_3",
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_49",
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_1",
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_4",
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_14",
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_11"
+    ],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": [
+      {
+        "doc_hash": "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434",
+        "page": 1,
+        "doc_title": "FOUNDATIONS LAW"
+      }
+    ]
+  },
+  {
+    "question_id": "89fd4fbcdcf5c17ba256395ee64378a3f2125b081394a9568964defb28fdef75",
+    "question": "Which laws mention 'interpretative provisions' in their schedules?",
+    "answer_type": "free_text",
+    "failure_category": "multi_doc_recall_miss",
+    "retrieval_gap_type": "prefetch_depth_exceeded",
+    "verified_gold_pages": [
+      "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_4",
+      "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_4",
+      "f3ef6ad7f5231c706997189baa89e8199fe5c7bd43cb0d6c84ef1f6a884be79b_4",
+      "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_4",
+      "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_5",
+      "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4",
+      "65e069c97a1a51601f44a9e318191b3f714e4f754e3ecff47d030a46fe848db8_2",
+      "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_3",
+      "735fd64cb8caa16a5ebd7bb58631cd8b40080ffb13fc91c1598341de01c63cda_3",
+      "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_8",
+      "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_8",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_5"
+    ],
+    "gold_docs_count": 12,
+    "retrieved_pages_count": 59,
+    "used_pages": [
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_7",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_8",
+      "3ce5e93d520a3651d156fc6d88ce767b0ee8816da205feb9b720c2c02c195017_6",
+      "ff746f7b583490a80ba104361c0a82a1ebbf7ed9097cd03dc49d744cb5057761_6",
+      "ff746f7b583490a80ba104361c0a82a1ebbf7ed9097cd03dc49d744cb5057761_7",
+      "3ce5e93d520a3651d156fc6d88ce767b0ee8816da205feb9b720c2c02c195017_7",
+      "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434_41",
+      "4e387152960c1029b3711cacb05b287b13c977bc61f2558059a62b7b427a62eb_50",
+      "6f7b339b6759620ad7d44a10ee5f4891c1b16fec4e56c1045c6b98cdb194c70d_50",
+      "709720c8dbdec5b25dee24c384f0cae7d2b94e3704c44f57c5a98ddf87b94f54_24",
+      "f3ef6ad7f5231c706997189baa89e8199fe5c7bd43cb0d6c84ef1f6a884be79b_17",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_37"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425",
+        "page": 4,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86",
+        "page": 4,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "f3ef6ad7f5231c706997189baa89e8199fe5c7bd43cb0d6c84ef1f6a884be79b",
+        "page": 4,
+        "doc_title": "THE IMPLIED TERMS IN CONTRACTS"
+      },
+      {
+        "doc_hash": "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434",
+        "page": 4,
+        "doc_title": "FOUNDATIONS LAW"
+      },
+      {
+        "doc_hash": "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221",
+        "page": 5,
+        "doc_title": "TRUST LAW"
+      },
+      {
+        "doc_hash": "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7",
+        "page": 4,
+        "doc_title": "LIMITED LIABILITY PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "65e069c97a1a51601f44a9e318191b3f714e4f754e3ecff47d030a46fe848db8",
+        "page": 2,
+        "doc_title": "ARBITRATION LAW AMENDMENT LAW"
+      },
+      {
+        "doc_hash": "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a",
+        "page": 3,
+        "doc_title": "NON PROFIT INCORPORATED"
+      },
+      {
+        "doc_hash": "735fd64cb8caa16a5ebd7bb58631cd8b40080ffb13fc91c1598341de01c63cda",
+        "page": 3,
+        "doc_title": "NON PROFIT INCORPORATED"
+      },
+      {
+        "doc_hash": "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3",
+        "page": 8,
+        "doc_title": "REAL PROPERTY LAW"
+      },
+      {
+        "doc_hash": "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5",
+        "page": 8,
+        "doc_title": "REAL PROPERTY LAW"
+      },
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 5,
+        "doc_title": "EMPLOYMENT LAW"
+      }
+    ]
+  },
+  {
+    "question_id": "4aa0f4e28b151c9fb03acbccd37d724bb0f9fae137c8fdc268c6c03cd6c7c7ac",
+    "question": "Which laws mention the 'Ruler of Dubai' as the legislative authority and also specify that the law comes into force on the date specified in the Enactment Notice?",
+    "answer_type": "free_text",
+    "failure_category": "multi_doc_recall_miss",
+    "retrieval_gap_type": "prefetch_depth_exceeded",
+    "verified_gold_pages": [
+      "ace28d887202e102b4a45ee48840b538f90e21c5d989a9cef767f58ba22ef999_4",
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_3",
+      "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533_4",
+      "709720c8dbdec5b25dee24c384f0cae7d2b94e3704c44f57c5a98ddf87b94f54_4",
+      "44526eeeb977304793a333fd1851448f5f6d2e75ac0979cc265b03d819be99c5_6",
+      "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_2",
+      "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54_3",
+      "c94f011cc2ece6e5f8f45479a21a1ef18764e6616ac0d50ab9055e2a99383af9_3",
+      "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f_3",
+      "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_4",
+      "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_4"
+    ],
+    "gold_docs_count": 11,
+    "retrieved_pages_count": 43,
+    "used_pages": [
+      "a3ac668ff1a2630ae4826e239487862831558f29e896186631f72ab30a713ac4_1",
+      "e822a7554e725938959c53b53e5e3680c9db959151292423277bd48f6b404cd1_1",
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_1",
+      "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_1",
+      "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_1",
+      "3efee4fe904cb89605ab5baee9f20a97242c4e40e9a496c682448f91c9515497_1",
+      "5c9d86f9661b03024861c781332d81f275b34fc894d2d5bc11f9e0e1cfbb4b93_1",
+      "a3ac668ff1a2630ae4826e239487862831558f29e896186631f72ab30a713ac4_2",
+      "e822a7554e725938959c53b53e5e3680c9db959151292423277bd48f6b404cd1_2",
+      "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_2",
+      "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_2",
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_2",
+      "3efee4fe904cb89605ab5baee9f20a97242c4e40e9a496c682448f91c9515497_2",
+      "5c9d86f9661b03024861c781332d81f275b34fc894d2d5bc11f9e0e1cfbb4b93_2"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "ace28d887202e102b4a45ee48840b538f90e21c5d989a9cef767f58ba22ef999",
+        "page": 4,
+        "doc_title": "LAW OF DAMAGES AND REMEDIES"
+      },
+      {
+        "doc_hash": "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7",
+        "page": 3,
+        "doc_title": "DIFC AMENDMENT LAW"
+      },
+      {
+        "doc_hash": "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533",
+        "page": 4,
+        "doc_title": "LIMITED PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "709720c8dbdec5b25dee24c384f0cae7d2b94e3704c44f57c5a98ddf87b94f54",
+        "page": 4,
+        "doc_title": "LIMITED PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "44526eeeb977304793a333fd1851448f5f6d2e75ac0979cc265b03d819be99c5",
+        "page": 6,
+        "doc_title": "CONTRACT LAW"
+      },
+      {
+        "doc_hash": "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3",
+        "page": 2,
+        "doc_title": "GENERAL PARTNERSHIP LAW AMENDMENT LAW"
+      },
+      {
+        "doc_hash": "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54",
+        "page": 3,
+        "doc_title": "In this document underlining indicates new text and striking through indicates deleted text"
+      },
+      {
+        "doc_hash": "c94f011cc2ece6e5f8f45479a21a1ef18764e6616ac0d50ab9055e2a99383af9",
+        "page": 3,
+        "doc_title": "PERSONAL PROPERTY LAW"
+      },
+      {
+        "doc_hash": "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f",
+        "page": 3,
+        "doc_title": "PERSONAL PROPERTY LAW"
+      },
+      {
+        "doc_hash": "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425",
+        "page": 4,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86",
+        "page": 4,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      }
+    ]
+  },
+  {
+    "question_id": "115a9bca032550a20271240b8785b922d35a7117f7f1760250eba1c34345be9e",
+    "question": "Which laws mention the Ruler of Dubai as the legislative authority and were enacted in 2018?",
+    "answer_type": "free_text",
+    "failure_category": "multi_doc_recall_miss",
+    "retrieval_gap_type": "prefetch_depth_exceeded",
+    "verified_gold_pages": [
+      "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_1",
+      "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d_1"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 63,
+    "used_pages": [
+      "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d_1",
+      "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_1",
+      "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_1",
+      "bee43bdc6ca06c2a04f4126d4b94fa4be3d47a62e8b3bdd8d0ddce986dff25a6_4",
+      "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_1",
+      "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_2",
+      "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_2",
+      "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_2",
+      "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d_2"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "fe81efddb24f01f4455fc6b16fc0867615e840b0d36e7abfd1441e5c2eaed92d",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      }
+    ]
+  },
+  {
+    "question_id": "2180c75894515d7db767c477c26326e97f1cd69c17c4f1746706e859f2d0e10d",
+    "question": "Which laws explicitly mention the Companies Law 2018 and the Insolvency Law 2009 in their regulations concerning company structures?",
+    "answer_type": "free_text",
+    "failure_category": "multi_doc_recall_miss",
+    "retrieval_gap_type": "prefetch_depth_exceeded",
+    "verified_gold_pages": [
+      "406365706456d37cf871ccb1cfc4618bca6af7d838fbefca08b4a87a3cbe583d_3",
+      "e431a7be5d2271f185d4a8469c7927de116be1343291e4be4aae83366edc1b65_3"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 46,
+    "used_pages": [
+      "406365706456d37cf871ccb1cfc4618bca6af7d838fbefca08b4a87a3cbe583d_4",
+      "406365706456d37cf871ccb1cfc4618bca6af7d838fbefca08b4a87a3cbe583d_1",
+      "406365706456d37cf871ccb1cfc4618bca6af7d838fbefca08b4a87a3cbe583d_3",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_97",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_96",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_98"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "406365706456d37cf871ccb1cfc4618bca6af7d838fbefca08b4a87a3cbe583d",
+        "page": 3,
+        "doc_title": "INCORPORATED CELL COMPANY (ICC)"
+      },
+      {
+        "doc_hash": "e431a7be5d2271f185d4a8469c7927de116be1343291e4be4aae83366edc1b65",
+        "page": 3,
+        "doc_title": "INVESTMENT COMPANIES (IC)"
+      }
+    ]
+  },
+  {
+    "question_id": "b909797db886eacd0f6264bf87649f2ada41f9b7d6c02bc12fe7ea21a02a7418",
+    "question": "Which laws are administered by the Registrar and what are their respective citation titles?",
+    "answer_type": "free_text",
+    "failure_category": "multi_doc_recall_miss",
+    "retrieval_gap_type": "prefetch_depth_exceeded",
+    "verified_gold_pages": [
+      "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_6",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_8"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 47,
+    "used_pages": [
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_8",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_9"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7",
+        "page": 4,
+        "doc_title": "LIMITED LIABILITY PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a",
+        "page": 6,
+        "doc_title": "COMPANIES LAW"
+      },
+      {
+        "doc_hash": "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a",
+        "page": 8,
+        "doc_title": "COMPANIES LAW"
+      }
+    ]
+  },
+  {
+    "question_id": "6e8d0c41f3e5b8a5383db8964a64254de33aec88f0c7abea793c37ecf4c4db43",
+    "question": "Which laws were made by the Ruler of Dubai and their commencement date is specified in an Enactment Notice?",
+    "answer_type": "free_text",
+    "failure_category": "multi_doc_recall_miss",
+    "retrieval_gap_type": "prefetch_depth_exceeded",
+    "verified_gold_pages": [
+      "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32_1",
+      "849bf95cdc57e206fdab9597da97c15e608252902252e4ac6ac3c7cb1db89aa8_1",
+      "c850b3f04668abe265441e338a92d3ec1c547948b895cf1c27e4a7f2506bb130_1",
+      "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_1",
+      "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704_1",
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_1",
+      "96853cbb2873718b7613b42de18dcf417aac607e7fd3e143cab9db7f40622263_1",
+      "5c9d86f9661b03024861c781332d81f275b34fc894d2d5bc11f9e0e1cfbb4b93_1",
+      "3efee4fe904cb89605ab5baee9f20a97242c4e40e9a496c682448f91c9515497_1",
+      "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_1",
+      "bac066005f21591dbcff19a56cdef279bd4f32482e3758925a38c478e75b81a8_1",
+      "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_1"
+    ],
+    "gold_docs_count": 12,
+    "retrieved_pages_count": 43,
+    "used_pages": [
+      "a3ac668ff1a2630ae4826e239487862831558f29e896186631f72ab30a713ac4_1",
+      "e822a7554e725938959c53b53e5e3680c9db959151292423277bd48f6b404cd1_1",
+      "849bf95cdc57e206fdab9597da97c15e608252902252e4ac6ac3c7cb1db89aa8_1",
+      "c850b3f04668abe265441e338a92d3ec1c547948b895cf1c27e4a7f2506bb130_1",
+      "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_1",
+      "3efee4fe904cb89605ab5baee9f20a97242c4e40e9a496c682448f91c9515497_1",
+      "5c9d86f9661b03024861c781332d81f275b34fc894d2d5bc11f9e0e1cfbb4b93_1",
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_1",
+      "a3ac668ff1a2630ae4826e239487862831558f29e896186631f72ab30a713ac4_2",
+      "e822a7554e725938959c53b53e5e3680c9db959151292423277bd48f6b404cd1_2",
+      "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9_2",
+      "849bf95cdc57e206fdab9597da97c15e608252902252e4ac6ac3c7cb1db89aa8_2",
+      "c850b3f04668abe265441e338a92d3ec1c547948b895cf1c27e4a7f2506bb130_2",
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_2",
+      "3efee4fe904cb89605ab5baee9f20a97242c4e40e9a496c682448f91c9515497_2",
+      "5c9d86f9661b03024861c781332d81f275b34fc894d2d5bc11f9e0e1cfbb4b93_2"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "849bf95cdc57e206fdab9597da97c15e608252902252e4ac6ac3c7cb1db89aa8",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "c850b3f04668abe265441e338a92d3ec1c547948b895cf1c27e4a7f2506bb130",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "f513711cc3a06447b41a1b798acb1fae36a82ea4d95a0aa3977d4a71ea79d704",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "96853cbb2873718b7613b42de18dcf417aac607e7fd3e143cab9db7f40622263",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "5c9d86f9661b03024861c781332d81f275b34fc894d2d5bc11f9e0e1cfbb4b93",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "3efee4fe904cb89605ab5baee9f20a97242c4e40e9a496c682448f91c9515497",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "d1a939b689b84a9dd683e3dfc93ccb238e310476f9c3249492cf09868852ebd9",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "bac066005f21591dbcff19a56cdef279bd4f32482e3758925a38c478e75b81a8",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      }
+    ]
+  },
+  {
+    "question_id": "bd8d0befc731315ee2a477221feb950b44e68d9596823a90c47f78fc04870870",
+    "question": "Was the Employment Law enacted in the same year as the Intellectual Property Law?",
+    "answer_type": "boolean",
+    "failure_category": "page_1_title_miss",
+    "retrieval_gap_type": "early_page_low_embedding_score",
+    "verified_gold_pages": [
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_4",
+      "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 18,
+    "used_pages": [
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_4",
+      "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_4",
+      "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869_5",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_5"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 4,
+        "doc_title": "EMPLOYMENT LAW"
+      },
+      {
+        "doc_hash": "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869",
+        "page": 4,
+        "doc_title": "INTELLECTUAL PROPERTY LAW"
+      }
+    ]
+  },
+  {
+    "question_id": "bb67fc19f45527933d0c7319a2c96b4bf5e782f83018254b6a0d34685b219ec5",
+    "question": "Was the Intellectual Property Law enacted earlier in the year than the Employment Law?",
+    "answer_type": "boolean",
+    "failure_category": "page_1_title_miss",
+    "retrieval_gap_type": "early_page_low_embedding_score",
+    "verified_gold_pages": [
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_1",
+      "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_1"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 13,
+    "used_pages": [
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_1",
+      "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_1",
+      "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867_2",
+      "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c_2"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      }
+    ]
+  },
+  {
+    "question_id": "3c19ecbe27fe9701f742589a927a11a5b701f064e49d35d631deef0d478aa99f",
+    "question": "Was the same judge involved in both case DEC 001/2025 and case TCD 001/2024 at any point?",
+    "answer_type": "boolean",
+    "failure_category": "page_1_title_miss",
+    "retrieval_gap_type": "early_page_low_embedding_score",
+    "verified_gold_pages": [
+      "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_21",
+      "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54_5"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 27,
+    "used_pages": [
+      "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e_3",
+      "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54_2"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e",
+        "page": 21,
+        "doc_title": "DEC 001/2025 Techteryx Ltd v (1) Aria Commodities DMCC (2)"
+      },
+      {
+        "doc_hash": "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54",
+        "page": 5,
+        "doc_title": "TCD 001/2024 Architeriors Interior Design (L.L.C) V Emirates"
+      }
+    ]
+  },
+  {
+    "question_id": "1107e2844571d4c05755c1607e1a847a54fc023777f8b4f87e2ac50d5256c3d8",
+    "question": "What is the commencement date for the Data Protection Law 2020 and the Employment Law 2019?",
+    "answer_type": "free_text",
+    "failure_category": "page_1_title_miss",
+    "retrieval_gap_type": "early_page_low_embedding_score",
+    "verified_gold_pages": [
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_4"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 45,
+    "used_pages": [
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_3",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_5",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_4",
+      "ef59bbc482cdca0268be35906d6274916740cb92a17c5d5d914b0f09807154f7_4",
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_4",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_2",
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_2",
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_5",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_3",
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_3"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a",
+        "page": 4,
+        "doc_title": "."
+      }
+    ]
+  },
+  {
+    "question_id": "f378457dc4e9f78aa2ce25dde7449a5400b853217f8ebda07a8654a015b15021",
+    "question": "What is the law number of the Data Protection Law?",
+    "answer_type": "number",
+    "failure_category": "page_1_title_miss",
+    "retrieval_gap_type": "early_page_low_embedding_score",
+    "verified_gold_pages": [
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_50"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 13,
+    "used_pages": [
+      "6aa239fca4bc0ec592bbbc83f8e342684ffe4aff1b3da65429633fc35e478802_4",
+      "6aa239fca4bc0ec592bbbc83f8e342684ffe4aff1b3da65429633fc35e478802_5",
+      "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a_5"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a",
+        "page": 50,
+        "doc_title": "."
+      }
+    ]
+  },
+  {
+    "question_id": "4ced374a0c805f11161598ee003019f841de3c03da4f478c1b7cea81d58bc4bc",
+    "question": "Does the enactment notice specify a precise calendar date for the law to come into force?",
+    "answer_type": "boolean",
+    "failure_category": "page_1_title_miss",
+    "retrieval_gap_type": "early_page_low_embedding_score",
+    "verified_gold_pages": [
+      "0ee112f26f9b33c272a4fad301c52e7309c98236d627ad2451202ca6f5f0cdc7_1",
+      "e822a7554e725938959c53b53e5e3680c9db959151292423277bd48f6b404cd1_1"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 2,
+    "used_pages": [
+      "0ee112f26f9b33c272a4fad301c52e7309c98236d627ad2451202ca6f5f0cdc7_1",
+      "324b44750e9690ebf3204312bec975c1b1bca887c0c9d28666722d066e6ae114_1"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "0ee112f26f9b33c272a4fad301c52e7309c98236d627ad2451202ca6f5f0cdc7",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      },
+      {
+        "doc_hash": "e822a7554e725938959c53b53e5e3680c9db959151292423277bd48f6b404cd1",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      }
+    ]
+  },
+  {
+    "question_id": "146567e3d096312584103b24983e3ff8e904e4ec5dea993d9774d24fef15fce7",
+    "question": "According to Article 14(2)(b) of the General Partnership Law 2004, how many years must a Recognised Partnership's Accounting Records be preserved?",
+    "answer_type": "number",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_4"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 18,
+    "used_pages": [
+      "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_4",
+      "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_5",
+      "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_6"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3",
+        "page": 4,
+        "doc_title": "GENERAL PARTNERSHIP LAW AMENDMENT LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 4,
+      "retrieval_window": "p3-p6",
+      "nearest_retrieved_below": 3,
+      "nearest_retrieved_above": 5,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        4,
+        5
+      ]
+    }
+  },
+  {
+    "question_id": "322674cd65809bde505d9f50edb1bf7e1674f7e118a8179617732a3942b52d74",
+    "question": "According to Article 19(4) of the General Partnership Law 2004, how many months after the end of the financial year must the accounts for that year be prepared and approved by the Partners?",
+    "answer_type": "number",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": null,
+    "verified_gold_pages": [],
+    "gold_docs_count": 0,
+    "retrieved_pages_count": 15,
+    "used_pages": [
+      "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_8",
+      "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3_5",
+      "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_8"
+    ],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": []
+  },
+  {
+    "question_id": "47cb314acde5887a03dc25c4f36992ad801e5fa7565d8288af88491f60c53fd5",
+    "question": "According to Article 34(1) of the General Partnership Law 2004, is a person admitted as a Partner into an existing General Partnership liable to creditors for anything done before they became a Partner?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_11",
+      "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_11"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 10,
+    "used_pages": [
+      "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_10",
+      "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_11"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86",
+        "page": 11,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425",
+        "page": 11,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 11,
+      "retrieval_window": "p2-p16",
+      "nearest_retrieved_below": 10,
+      "nearest_retrieved_above": 16,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        11
+      ]
+    }
+  },
+  {
+    "question_id": "117267649104e2ac88d57b64c615721dc2b3f0631b7d4914f6f85323651e8cb4",
+    "question": "Under Article 23 of the Personal Property Law 2005, is a restriction on transfer of a security imposed by the issuer effective against a person who had actual knowledge of such third party property interest, if the security is uncertificated and the registered owner has been notified of the restriction?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f_10"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 10,
+    "used_pages": [
+      "c94f011cc2ece6e5f8f45479a21a1ef18764e6616ac0d50ab9055e2a99383af9_10",
+      "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f_10"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f",
+        "page": 10,
+        "doc_title": "PERSONAL PROPERTY LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 10,
+      "retrieval_window": "p6-p13",
+      "nearest_retrieved_below": 8,
+      "nearest_retrieved_above": 13,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        10
+      ]
+    }
+  },
+  {
+    "question_id": "75bf397c92fcaee5bf25f9e869454c21c77972e8280c746e33635612ecddda33",
+    "question": "According to Article 10 of the Real Property Law 2018, does freehold ownership of Real Property carry the same rights and obligations as ownership of an estate in fee simple under English common law and equity?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_8",
+      "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_8"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 9,
+    "used_pages": [
+      "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_9"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5",
+        "page": 8,
+        "doc_title": "REAL PROPERTY LAW"
+      },
+      {
+        "doc_hash": "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3",
+        "page": 8,
+        "doc_title": "REAL PROPERTY LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 8,
+      "retrieval_window": "p2-p27",
+      "nearest_retrieved_below": 2,
+      "nearest_retrieved_above": 27,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        9
+      ]
+    }
+  },
+  {
+    "question_id": "613217268c14e7aa3f190f7d8b43610f2ffdae2cf15a4f8d7a3acfa52cefeedb",
+    "question": "Under Article 12 of the Real Property Law 2018, what is the term for the office created as a corporation sole?",
+    "answer_type": "name",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_9",
+      "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_9"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 17,
+    "used_pages": [
+      "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_9",
+      "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5_1",
+      "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_9"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5",
+        "page": 9,
+        "doc_title": "REAL PROPERTY LAW"
+      },
+      {
+        "doc_hash": "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3",
+        "page": 9,
+        "doc_title": "REAL PROPERTY LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 9,
+      "retrieval_window": "p1-p69",
+      "nearest_retrieved_below": 2,
+      "nearest_retrieved_above": 10,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        9,
+        1
+      ]
+    }
+  },
+  {
+    "question_id": "5b78eff477f6545504892d039a34a82fcba94b79584e925a1e231875f6892a5b",
+    "question": "If a Body Corporate grants an Exclusive Use Right with respect to a part of the Common Property to an Owner, as per Article 16(2) of the Strata Title Law DIFC Law No. 5 of 2007, who are the Body Corporate's rights and liabilities with respect to that part of the Common Property vested in while the Exclusive Use Right continues?",
+    "answer_type": "name",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_42"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 11,
+    "used_pages": [
+      "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3_43"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3",
+        "page": 42,
+        "doc_title": "STRATA TITLE LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 42,
+      "retrieval_window": "p12-p69",
+      "nearest_retrieved_below": 39,
+      "nearest_retrieved_above": 43,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        43
+      ]
+    }
+  },
+  {
+    "question_id": "30ab0e56ee0c43b5bf94fd9657c7f7ac24f0e7be29ced2933437f7a234713cd7",
+    "question": "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct business in or from the DIFC without being incorporated, registered, or continued under a Prescribed Law or other Legislation administered by the Registrar?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "bee43bdc6ca06c2a04f4126d4b94fa4be3d47a62e8b3bdd8d0ddce986dff25a6_8",
+      "72ea171147bf30326fe6fd2e6798f607c7cef4bf9d43761dbccd2f1b6a356849_8"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 16,
+    "used_pages": [
+      "72ea171147bf30326fe6fd2e6798f607c7cef4bf9d43761dbccd2f1b6a356849_8",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_8",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_9"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "bee43bdc6ca06c2a04f4126d4b94fa4be3d47a62e8b3bdd8d0ddce986dff25a6",
+        "page": 8,
+        "doc_title": "OPERATING LAW"
+      },
+      {
+        "doc_hash": "72ea171147bf30326fe6fd2e6798f607c7cef4bf9d43761dbccd2f1b6a356849",
+        "page": 8,
+        "doc_title": "OPERATING LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 8,
+      "retrieval_window": "p2-p41",
+      "nearest_retrieved_below": 6,
+      "nearest_retrieved_above": 19,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": []
+    }
+  },
+  {
+    "question_id": "73510f45df2f1b3f268f4fabc89e1b98690777acb78579beabb20801b34e3fc4",
+    "question": "According to the DIFC Non Profit Incorporated Organisations Law 2012, can an Incorporated Organisation undertake Financial Services as prescribed in the General Module of the DFSA Rulebook?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_4",
+      "735fd64cb8caa16a5ebd7bb58631cd8b40080ffb13fc91c1598341de01c63cda_4"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 10,
+    "used_pages": [
+      "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_15",
+      "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a_4"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a",
+        "page": 4,
+        "doc_title": "NON PROFIT INCORPORATED"
+      },
+      {
+        "doc_hash": "735fd64cb8caa16a5ebd7bb58631cd8b40080ffb13fc91c1598341de01c63cda",
+        "page": 4,
+        "doc_title": "NON PROFIT INCORPORATED"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 4,
+      "retrieval_window": "p2-p15",
+      "nearest_retrieved_below": 3,
+      "nearest_retrieved_above": 14,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        15,
+        4
+      ]
+    }
+  },
+  {
+    "question_id": "b31a702f36e2c43e845e13f160ebc35d3d6ea27eb66a351561a94f0ce56b8667",
+    "question": "According to Article 13 of the Employment Law 2019, can an Employer employ a child who is under sixteen years of age?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_7",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 9,
+    "used_pages": [
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_8",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_8"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16",
+        "page": 7,
+        "doc_title": "EMPLOYMENT LAW"
+      },
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 7,
+        "doc_title": "EMPLOYMENT LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 7,
+      "retrieval_window": "p5-p44",
+      "nearest_retrieved_below": 5,
+      "nearest_retrieved_above": 24,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        8
+      ]
+    }
+  },
+  {
+    "question_id": "e59a0dc49c291402ead91342b065bc4e9ded0043d126f73dd00ba6045aae46b7",
+    "question": "Under Article 14(1) of the Employment Law 2019, how many days does an Employer have to provide an Employee with a written Employment Contract after the commencement of employment?",
+    "answer_type": "number",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_7",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 13,
+    "used_pages": [
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_8",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_8",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_7"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16",
+        "page": 7,
+        "doc_title": "EMPLOYMENT LAW"
+      },
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 7,
+        "doc_title": "EMPLOYMENT LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 7,
+      "retrieval_window": "p7-p32",
+      "nearest_retrieved_below": null,
+      "nearest_retrieved_above": 8,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        8,
+        7
+      ]
+    }
+  },
+  {
+    "question_id": "be09fbfe4d36f6d9d97d997aa516b7ee5b4dc9ba988258d2310debcb1d2e320a",
+    "question": "According to Article 14(2)(l) of the Employment Law 2019, what is the maximum probation period for an Employee, except in specific fixed-term contract circumstances?",
+    "answer_type": "number",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_8",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_8"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 14,
+    "used_pages": [
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_8",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_32",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_9",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_9"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16",
+        "page": 8,
+        "doc_title": "EMPLOYMENT LAW"
+      },
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 8,
+        "doc_title": "EMPLOYMENT LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 8,
+      "retrieval_window": "p8-p41",
+      "nearest_retrieved_below": null,
+      "nearest_retrieved_above": 10,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        8,
+        32,
+        9
+      ]
+    }
+  },
+  {
+    "question_id": "cd0c8f3606da668fbc82f446657caa9cf1018f395bb15fa64b059d4809f69c88",
+    "question": "Under Article 16(1)(c) of the Employment Law 2019, what type of remuneration (gross or net) must an Employer keep records of, where applicable?",
+    "answer_type": "name",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_8",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_8"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 12,
+    "used_pages": [
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_8",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_9"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16",
+        "page": 8,
+        "doc_title": "EMPLOYMENT LAW"
+      },
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 8,
+        "doc_title": "EMPLOYMENT LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 8,
+      "retrieval_window": "p8-p39",
+      "nearest_retrieved_below": null,
+      "nearest_retrieved_above": 9,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": []
+    }
+  },
+  {
+    "question_id": "e153746c20cc385a520728ac381151f424c9eee10e4c582904fee70afe9af243",
+    "question": "According to Article 10 of the Employment Law 2019, how many months after the Termination Date must a claim under this Law be presented to the Court, unless otherwise specified?",
+    "answer_type": "number",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_6",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_6"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 15,
+    "used_pages": [
+      "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917_4",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_6",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_7"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16",
+        "page": 6,
+        "doc_title": "EMPLOYMENT LAW"
+      },
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 6,
+        "doc_title": "EMPLOYMENT LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 6,
+      "retrieval_window": "p6-p33",
+      "nearest_retrieved_below": null,
+      "nearest_retrieved_above": 12,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        7
+      ]
+    }
+  },
+  {
+    "question_id": "0149374f1699ab209f6169cffcdd94f45072fca07fbf7a580720760f5c32f658",
+    "question": "Under Article 11(2)(b) of the Employment Law 2019, can an Employee waive any right under this Law by entering into a written agreement with their Employer to terminate employment, provided they were given an opportunity to receive independent legal advice or took part in mediation?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 15,
+    "used_pages": [
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_7",
+      "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1_8",
+      "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16_8"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+        "page": 7,
+        "doc_title": "EMPLOYMENT LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 7,
+      "retrieval_window": "p7-p33",
+      "nearest_retrieved_below": null,
+      "nearest_retrieved_above": 16,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        7,
+        8
+      ]
+    }
+  },
+  {
+    "question_id": "32bb32856c65215eddb17d2b5b938f58b4bec525af96f8637686e33b0d696e89",
+    "question": "According to Article 28(4) of the DIFC Trust Law 2018, can an order made consequential to a declaration under Articles 24 to 27 prejudice a purchaser in good faith for value of trust property without notice of the voidable matters?",
+    "answer_type": "boolean",
+    "failure_category": "article_level_provision_miss",
+    "retrieval_gap_type": "gold_page_within_window_but_skipped",
+    "verified_gold_pages": [
+      "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_14",
+      "6f7b339b6759620ad7d44a10ee5f4891c1b16fec4e56c1045c6b98cdb194c70d_15"
+    ],
+    "gold_docs_count": 2,
+    "retrieved_pages_count": 8,
+    "used_pages": [
+      "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221_14"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "9ad89c8f1ca0b257e77e8bbc354e7aff4ec6bcce10d28f172b71e7918908c221",
+        "page": 14,
+        "doc_title": "TRUST LAW"
+      },
+      {
+        "doc_hash": "6f7b339b6759620ad7d44a10ee5f4891c1b16fec4e56c1045c6b98cdb194c70d",
+        "page": 15,
+        "doc_title": "TRUST LAW"
+      }
+    ],
+    "gap_detail": {
+      "gold_page": 14,
+      "retrieval_window": "p12-p39",
+      "nearest_retrieved_below": 13,
+      "nearest_retrieved_above": 38,
+      "gold_page_was_retrieved": true,
+      "used_pages_from_doc": [
+        14
+      ]
+    }
+  },
+  {
+    "question_id": "6351cfe2534da67df395e52e3370b7b5f724a1ac5d23e053b3d8ebc88a5f634c",
+    "question": "Which laws are administered by the Registrar and were enacted in 2004?",
+    "answer_type": "free_text",
+    "failure_category": "wrong_document_miss",
+    "retrieval_gap_type": "query_term_document_mismatch",
+    "verified_gold_pages": [
+      "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86_4",
+      "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425_4",
+      "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7_4"
+    ],
+    "gold_docs_count": 3,
+    "retrieved_pages_count": 54,
+    "used_pages": [
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_8",
+      "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a_9"
+    ],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": [
+      {
+        "doc_hash": "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86",
+        "page": 4,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425",
+        "page": 4,
+        "doc_title": "GENERAL PARTNERSHIP LAW"
+      },
+      {
+        "doc_hash": "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7",
+        "page": 4,
+        "doc_title": "LIMITED LIABILITY PARTNERSHIP LAW"
+      }
+    ]
+  },
+  {
+    "question_id": "d5bc744160e9f3690c91cd3ee29e601a00444ac66a53b0e8e4d7991e1bf7de20",
+    "question": "Was the Leasing Law enacted in the same year as the Real Property Law Amendment Law?",
+    "answer_type": "boolean",
+    "failure_category": "wrong_document_miss",
+    "retrieval_gap_type": "query_term_document_mismatch",
+    "verified_gold_pages": [],
+    "gold_docs_count": 0,
+    "retrieved_pages_count": 3,
+    "used_pages": [
+      "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_67",
+      "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3_20"
+    ],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": []
+  },
+  {
+    "question_id": "82664b585f15bcd8afa3bd6acf97c3fa415fcad7d60762d8ad80421418caf3f5",
+    "question": "What is the full title of the enacted law?",
+    "answer_type": "name",
+    "failure_category": "wrong_document_miss",
+    "retrieval_gap_type": "ambiguous_query_no_doc_match",
+    "verified_gold_pages": [
+      "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32_1"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 1,
+    "used_pages": [
+      "96853cbb2873718b7613b42de18dcf417aac607e7fd3e143cab9db7f40622263_1"
+    ],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": [
+      {
+        "doc_hash": "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32",
+        "page": 1,
+        "doc_title": "_______________________________________________"
+      }
+    ]
+  },
+  {
+    "question_id": "be535a44eec463ed7edfac6f145990d962ea6394f22877b7c991c6140433e056",
+    "question": "What is the latest DIFC Law number that amended the 'Law on the Application of Civil and Commercial Laws in the DIFC'?",
+    "answer_type": "number",
+    "failure_category": "wrong_document_miss",
+    "retrieval_gap_type": "query_term_document_mismatch",
+    "verified_gold_pages": [
+      "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54_3"
+    ],
+    "gold_docs_count": 1,
+    "retrieved_pages_count": 7,
+    "used_pages": [
+      "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54_1"
+    ],
+    "gold_doc_in_retrieved_set": true,
+    "gold_locations": [
+      {
+        "doc_hash": "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54",
+        "page": 3,
+        "doc_title": "In this document underlining indicates new text and striking through indicates deleted text"
+      }
+    ]
+  },
+  {
+    "question_id": "5bf060b3f9965c46f19e59c4d9afa555d6a1b04e9b9675ed35ef6b85249bb811",
+    "question": "What did the jury decide in case ENF 053/2025?",
+    "answer_type": "free_text",
+    "failure_category": "unsupported_trap",
+    "retrieval_gap_type": "no_relevant_document",
+    "verified_gold_pages": [],
+    "gold_docs_count": 0,
+    "retrieved_pages_count": 0,
+    "used_pages": [],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": []
+  },
+  {
+    "question_id": "84941458c4ade946dae84cf5ebc4abf362a6f6e6fec835ba5c43ad2d3b4b14d7",
+    "question": "Is there any information about parole hearings in case CFI 057/2025?",
+    "answer_type": "free_text",
+    "failure_category": "unsupported_trap",
+    "retrieval_gap_type": "no_relevant_document",
+    "verified_gold_pages": [],
+    "gold_docs_count": 0,
+    "retrieved_pages_count": 0,
+    "used_pages": [],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": []
+  },
+  {
+    "question_id": "89f4b2e86cf7e48e185b9d5775d67e7c8a51beccbb20abce8dac2a1b0e80b723",
+    "question": "Were the Miranda rights properly administered in case ENF 269/2023?",
+    "answer_type": "free_text",
+    "failure_category": "unsupported_trap",
+    "retrieval_gap_type": "no_relevant_document",
+    "verified_gold_pages": [],
+    "gold_docs_count": 0,
+    "retrieved_pages_count": 0,
+    "used_pages": [],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": []
+  },
+  {
+    "question_id": "cb9cb3ecb09af7477b20abee3d5f9567c09a99fb6f4840daf933da74680ef030",
+    "question": "What was the plea bargain in case ARB 032/2025?",
+    "answer_type": "free_text",
+    "failure_category": "unsupported_trap",
+    "retrieval_gap_type": "no_relevant_document",
+    "verified_gold_pages": [],
+    "gold_docs_count": 0,
+    "retrieved_pages_count": 0,
+    "used_pages": [],
+    "gold_doc_in_retrieved_set": false,
+    "gold_locations": []
+  }
+]
