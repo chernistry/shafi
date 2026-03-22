@@ -1,0 +1,53 @@
+{
+  "positive": [
+    {
+      "feature": "sidecar_retrieved_rank",
+      "weight": 49.0
+    },
+    {
+      "feature": "page_position_ratio",
+      "weight": 48.0
+    },
+    {
+      "feature": "query_content_jaccard",
+      "weight": 40.0
+    },
+    {
+      "feature": "sidecar_rank_normalized",
+      "weight": 40.0
+    },
+    {
+      "feature": "doc_rank",
+      "weight": 33.0
+    },
+    {
+      "feature": "doc_pages_in_candidates",
+      "weight": 30.0
+    },
+    {
+      "feature": "page_num",
+      "weight": 27.0
+    },
+    {
+      "feature": "legacy_cited_rank",
+      "weight": 23.0
+    },
+    {
+      "feature": "answer_char_count",
+      "weight": 19.0
+    },
+    {
+      "feature": "query_token_count",
+      "weight": 19.0
+    },
+    {
+      "feature": "legal_keyword_density",
+      "weight": 17.0
+    },
+    {
+      "feature": "from_legacy_cited",
+      "weight": 15.0
+    }
+  ],
+  "negative": []
+}

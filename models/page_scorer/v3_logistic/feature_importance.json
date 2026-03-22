@@ -1,0 +1,102 @@
+{
+  "positive": [
+    {
+      "feature": "query_content_jaccard",
+      "weight": 5.167129717143489
+    },
+    {
+      "feature": "from_sidecar_retrieved",
+      "weight": 2.620630852420861
+    },
+    {
+      "feature": "is_first_page",
+      "weight": 2.5637204243336633
+    },
+    {
+      "feature": "from_legacy_used",
+      "weight": 1.5203978344441655
+    },
+    {
+      "feature": "from_legacy_context",
+      "weight": 1.0805812970485513
+    },
+    {
+      "feature": "page_position_ratio",
+      "weight": 0.8582910736126814
+    },
+    {
+      "feature": "answer_type=date",
+      "weight": 0.7970238686919792
+    },
+    {
+      "feature": "from_legacy_cited",
+      "weight": 0.7150734077502128
+    },
+    {
+      "feature": "page_candidate_count",
+      "weight": 0.5100131952052762
+    },
+    {
+      "feature": "has_anchor_hit",
+      "weight": 0.36864007215623823
+    },
+    {
+      "feature": "legacy_cited_rank",
+      "weight": 0.3282488585433503
+    },
+    {
+      "feature": "is_strict_type",
+      "weight": 0.29693364301038433
+    }
+  ],
+  "negative": [
+    {
+      "feature": "sidecar_rank_normalized",
+      "weight": -2.106213418499638
+    },
+    {
+      "feature": "answer_type=free_text",
+      "weight": -1.782192950820593
+    },
+    {
+      "feature": "is_last_page",
+      "weight": -0.9864921767191271
+    },
+    {
+      "feature": "doc_selected_by_legacy",
+      "weight": -0.8743829741731926
+    },
+    {
+      "feature": "targets_title_cover",
+      "weight": -0.8621282902253767
+    },
+    {
+      "feature": "target_page_roles_count",
+      "weight": -0.7395910466938046
+    },
+    {
+      "feature": "scope_mode=broad_free_text",
+      "weight": -0.6275118327618497
+    },
+    {
+      "feature": "answer_type=boolean",
+      "weight": -0.5576362011876527
+    },
+    {
+      "feature": "sidecar_retrieved_page_count",
+      "weight": -0.5390629497566783
+    },
+    {
+      "feature": "is_compare_scope",
+      "weight": -0.48275887077045226
+    },
+    {
+      "feature": "scope_mode=compare_pair",
+      "weight": -0.48275887077045226
+    },
+    {
+      "feature": "scope_mode=single_field_single_doc",
+      "weight": -0.37498860427805925
+    }
+  ]
+}

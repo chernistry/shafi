@@ -1,0 +1,1166 @@
+{
+  "description": "Answer audit extension: difficulty categorization, answer type flags, and strategy change recommendations for all 100 warmup golden questions. Based on TAMAR Phase 2 full verification + competition_edge_analysis.md.",
+  "date": "2026-03-20",
+  "summary": {
+    "easy": 38,
+    "medium": 27,
+    "hard": 19,
+    "unanswerable": 8,
+    "wrong_type_flags": 3,
+    "strategy_change_flags": 12
+  },
+  "difficulty_legend": {
+    "easy": "Single doc, specific article/fact extraction. Single gold_chunk_id OR gold from same doc family. Deterministic answer expected.",
+    "medium": "2-3 pages, same or adjacent doc family. Needs reasoning or comparison but docs are co-retrieved. Most 2-law comparison questions fall here.",
+    "hard": "Cross-case/cross-doc, multi-law enumeration, or 4+ docs required. Context budget frequently insufficient. High risk of zero G.",
+    "unanswerable": "Empty gold_chunk_ids — correct answer is null/no-information."
+  },
+  "questions": [
+    {
+      "qid": "cdddeb6a",
+      "question": "Who were the claimants in case CFI 010/2024?",
+      "answer_type": "names",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": 0.7838,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "6618184e",
+      "question": "Summarize the court's final ruling in case CFI 010/2024.",
+      "answer_type": "free_text",
+      "gold_chunks": 3,
+      "difficulty": "medium",
+      "g_score": 0.3671,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "SAME-DOC MULTI-PAGE: all 3 gold pages from same doc but different pages. Context budget may only grab 1-2 pages. Guarantee top-3 pages from same case doc when summarizing."
+    },
+    {
+      "qid": "df0f24b2",
+      "question": "Was the main claim or application in case ARB 034/2025 approved or granted by the court?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": 1.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "d204a130",
+      "question": "What was the claim value referenced in the appeal judgment CA 005/2025?",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": 0.7838,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "c595f118",
+      "question": "Which articles of Law No. 12 of 2004 are explicitly superseded by Law No. 16 of 2011...",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.3718,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "eeae1069",
+      "question": "How does Law No. 1 of 2025 modify the application of the Data Protection Law 2020...",
+      "answer_type": "free_text",
+      "gold_chunks": 3,
+      "difficulty": "medium",
+      "g_score": 0.2613,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "LOW G despite correct answer: gold has 3 pages across 2 docs (DPL 2020 and amendment law). Context only grabs 1 page. Suggest multi-page context for amendment analysis questions."
+    },
+    {
+      "qid": "d64868",
+      "question": "List all respondents in case ARB 034/2025.",
+      "answer_type": "names",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": 0.7838,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "6f9c0b19",
+      "question": "Identify all claimants who appeared at any point in case TCD 001/2024.",
+      "answer_type": "names",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": 0.8788,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "fcabd6aa",
+      "question": "Which specific DIFC Laws were amended by DIFC Law No. 2 of 2022?",
+      "answer_type": "free_text",
+      "gold_chunks": 1,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "RETRIEVAL MISS: Pipeline retrieves DPL 2020 instead of the amendment law. Fix: cross-ref boost for explicit law number mentions in query → should surface correct amendment doc."
+    },
+    {
+      "qid": "89fd4fbc",
+      "question": "Which laws mention 'interpretative provisions' in their schedules?",
+      "answer_type": "free_text",
+      "gold_chunks": 12,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "MULTI-DOC ENUMERATION: Requires 12 pages across 12 docs. Even with prefetch=120, schedule pages may not surface. Consider doc-diversity expansion (v8 profile) + aggregation prompt for enumeration questions."
+    },
+    {
+      "qid": "fb1de34d",
+      "question": "Who has the authority to make the Dematerialised Investments Regulations (DIR)...",
+      "answer_type": "free_text",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": 0.5088,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "17022172",
+      "question": "What is the title of DIFC Law No. 5 of 2018 and DIFC Law No. 4 of 2019...",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": 0.7073,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "571f6013",
+      "question": "What are the titles of DIFC Law No. 6 of 2013 and DIFC Law No. 3 of 2013?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": 0.7436,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": "INCOMPLETE: Gets DIFC Law 6 of 2013 but misses No. 3 of 2013. Both title pages should be easy to retrieve by law number. Cross-ref boost should surface this."
+    },
+    {
+      "qid": "2b4df6b4",
+      "question": "Which laws were amended by DIFC Law No. 2 of 2022?",
+      "answer_type": "free_text",
+      "gold_chunks": 8,
+      "difficulty": "hard",
+      "g_score": 0.1151,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": "MULTI-DOC ENUMERATION: same pattern as fcabd6aa but 8 gold pages. Partial list retrieved. v8 doc-diversity could help."
+    },
+    {
+      "qid": "36a83376",
+      "question": "Which laws were amended by 'DIFC Law No. 2 of 2022'?",
+      "answer_type": "free_text",
+      "gold_chunks": 8,
+      "difficulty": "hard",
+      "g_score": 0.1133,
+      "verdict": "partially_correct",
+      "type_flag": "DUPLICATE: Nearly identical to 2b4df6b4 — same question with quote marks. Pipeline performance should be identical.",
+      "strategy_flag": "Dual submission: same question appears twice with slightly different phrasing. Ensure answer consistency between these two."
+    },
+    {
+      "qid": "d9c08834",
+      "question": "When was the DIFC Laws Amendment Law, DIFC Law No. 8 of 2018 enacted and what law did it amend?",
+      "answer_type": "free_text",
+      "gold_chunks": 3,
+      "difficulty": "medium",
+      "g_score": 0.2816,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "4aa0f4e2",
+      "question": "Which laws mention the 'Ruler of Dubai' as the legislative authority and also specify that the law comes into force on the date specified in the Enactment Notice?",
+      "answer_type": "free_text",
+      "gold_chunks": 11,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "WRONG DOC CATEGORY: Pipeline retrieves amendment laws (Real Property Amendment 2024) instead of original enacted laws. Need doc-category filter: exclude amendment/amendment_law docs when query asks about original laws 'made by the Ruler'. Consider negative filter or explicit prompt instruction."
+    },
+    {
+      "qid": "bd8d0bef",
+      "question": "Was the Employment Law enacted in the same year as the Intellectual Property Law?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.8788,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "bb67fc19",
+      "question": "Was the Intellectual Property Law enacted earlier in the year than the Employment Law?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.8788,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "LOGIC ERROR: Pipeline said 'Yes' (IP earlier), gold=false (Employment was earlier). Both laws enacted 2019. Pipeline likely got date comparison direction wrong. SHAI prompt may need: 'compare dates carefully, earlier year/month = came first'."
+    },
+    {
+      "qid": "96bccc8b",
+      "question": "Is the Intellectual Property Law No. 4 of 2019 administered by the same entity that administers the Trust Law No. 4 of 2018?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.4394,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "9f9fb4b9",
+      "question": "Do cases CA 004/2025 and SCT 295/2025 involve any of the same legal entities or individuals as parties?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.537,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE: Correct answer but partial grounding. See dual_case_test_cases.json. Context guarantee fix → G goes from 0.537 to ~0.9."
+    },
+    {
+      "qid": "737940cf",
+      "question": "Is there any main party that appeared in both cases CFI 010/2024 and ENF 053/2025 at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE: Correct answer (No) but G=0 — no pages cited. Context guarantee will fix grounding."
+    },
+    {
+      "qid": "bfa089d5",
+      "question": "Was the same judge involved in both case CFI 010/2024 and case DEC 001/2025 at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.5,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE: Correct answer but G=0.5 (only 1 of 2 case pages cited). Context guarantee → G from 0.5 to ~0.9."
+    },
+    {
+      "qid": "52a35cfa",
+      "question": "Did cases CA 004/2025 and ARB 034/2025 have any judges in common?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE GROUNDING MISS: Correct answer, G=0. Both pages in context but not cited. Probe compiler issue."
+    },
+    {
+      "qid": "54d56331",
+      "question": "Is there any party (claimant or defendant) common to both case TCD 001/2024 and case CFI 016/2025 at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.3494,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE RETRIEVAL MISS: Correct answer, partial G. CFI 016/2025 title page not retrieved. Fix via targeted per-case retrieval."
+    },
+    {
+      "qid": "fba6e86a",
+      "question": "Did cases DEC 001/2025 and CFI 057/2025 have any judges in common at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE: Both gold pages from same doc (DEC 001/2025 doc, pages 20+21). Fix: guarantee top-2 pages from each case doc in context."
+    },
+    {
+      "qid": "1e1121d0",
+      "question": "Do cases DEC 001/2025 and SCT 514/2025 involve any of the same legal entities or individuals as main parties at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE: Correct answer, G=0. Context guarantee fix."
+    },
+    {
+      "qid": "3c19ecbe",
+      "question": "Was the same judge involved in both case DEC 001/2025 and case TCD 001/2024 at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE: Correct answer, G=0. Context guarantee fix."
+    },
+    {
+      "qid": "2d436eb3",
+      "question": "Identify whether any person or company is a main party to both CA 005/2025 and CFI 067/2025 at any point.",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.3494,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "DUAL-CASE: Both gold pages from SAME DOC (CA 005/2025, pages 7+14). Multi-page same-doc issue. Partial G."
+    },
+    {
+      "qid": "acd3200d",
+      "question": "What are the common elements found in the interpretation sections of the Operating Law 2018, Trust Law 2018, and Common Reporting Standard Law 2018?",
+      "answer_type": "free_text",
+      "gold_chunks": 3,
+      "difficulty": "medium",
+      "g_score": 0.5225,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "4ce050c0",
+      "question": "What entity administers the Leasing Law 2020 and the Trust Law 2018?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": 0.3919,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "6351cfe2",
+      "question": "Which laws are administered by the Registrar and were enacted in 2004?",
+      "answer_type": "free_text",
+      "gold_chunks": 3,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "RETRIEVAL MISS: Retrieves Operating Law (2018) instead of 2004 laws. Fix: year-aware retrieval — when query specifies 'enacted in 2004', prioritize 2004 enactment date filtering."
+    },
+    {
+      "qid": "b4d8c1cc",
+      "question": "What are the common elements found in Schedule 1 of the Operating Law 2018 and the Trust Law 2018?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.3372,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "5d8fd833",
+      "question": "Which laws, enacted in 2018, include provisions relating to the application of the Arbitration Law in their Schedule 2?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.7838,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "8d481702",
+      "question": "What is the prescribed penalty for an offense against the Strata Title Law...",
+      "answer_type": "free_text",
+      "gold_chunks": 3,
+      "difficulty": "medium",
+      "g_score": 0.8131,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "WRONG DOC: Pipeline gives Strata Title Law penalty (1,000 USD) but gold asks for Leasing Regulations penalty (10,000 USD). Cross-regulation comparison — ensure BOTH regulation docs are in context."
+    },
+    {
+      "qid": "e14388d8",
+      "question": "What is the common commencement date for the DIFC Laws Amendment Law, DIFC Law No. 3 of 2024, and the Law of Security Law, DIFC Law No. 4 of 2024?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.3537,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "54103603",
+      "question": "How do the Limited Liability Partnership Law and the Non Profit Incorporated Organisations Law define their administration?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": 0.7073,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "115a9bca",
+      "question": "Which laws mention the Ruler of Dubai as the legislative authority and were enacted in 2018?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.6744,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": "YEAR FILTER: similar to 4aa0f4e2 but bounded to 2018. Better partial retrieval (0.674) but still misses some 2018 laws."
+    },
+    {
+      "qid": "2180c758",
+      "question": "Which laws explicitly mention the Companies Law 2018 and the Insolvency Law 2009 in their regulations concerning company structures?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.3919,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "GOLDEN LABEL ERROR (CONFIRMED): Gold says Dematerialised Investments Regulations; pipeline found ICC Regulations which actually cites Companies Law 2018 + Insolvency Law 2009 (verified by PDF). Gold incorrect. Pipeline is right. Flag to organizers."
+    },
+    {
+      "qid": "1107e284",
+      "question": "What is the commencement date for the Data Protection Law 2020 and the Employment Law 2019?",
+      "answer_type": "free_text",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": 0.4462,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "WRONG DOC: Pipeline retrieves Law No.1/2025 commencement instead of DPL 2020 commencement. Need to ground on named laws in query, not most recent amendment."
+    },
+    {
+      "qid": "b909797d",
+      "question": "Which laws are administered by the Registrar and what are their respective citation titles?",
+      "answer_type": "free_text",
+      "gold_chunks": 3,
+      "difficulty": "hard",
+      "g_score": 0.3494,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": "MULTI-DOC ENUMERATION: Gets some Registrar laws but misses 2004 corpus. Need wider doc coverage."
+    },
+    {
+      "qid": "f35f42eb",
+      "question": "What are the effective dates for pre-existing and new accounts under the Common Reporting Standard Law 2018, and what is the date of its enactment?",
+      "answer_type": "free_text",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.7838,
+      "verdict": "partially_correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "8e3b4683",
+      "question": "Was the same judge involved in both case CA 005/2025 and case TCD 001/2024 at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "CRITICAL: Dual-case AND wrong answer. Pipeline='No', gold=True (judge was involved in both). Both case pages needed AND correct answer logic needed. Highest priority fix: (1) get TCD 001/2024 judge page into context AND CA 005/2025 judge page, (2) answer must be 'Yes'. This is one of the 9 OREV dual-case fix targets."
+    },
+    {
+      "qid": "6e8d0c41",
+      "question": "Which laws were made by the Ruler of Dubai and their commencement date is specified in an Enactment Notice?",
+      "answer_type": "free_text",
+      "gold_chunks": 12,
+      "difficulty": "hard",
+      "g_score": 0.478,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "WRONG DOC CATEGORY (same as 4aa0f4e2): retrieves amendment laws instead of original laws. Same fix needed: filter for original enacted laws only."
+    },
+    {
+      "qid": "b9dc2dae",
+      "question": "Which case was decided earlier: CFI 016/2025 or ENF 269/2023?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.5,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "PARTIAL G despite correct answer: G=0.5 because only 1 of 2 case date pages retrieved. Dual-case context guarantee → full G."
+    },
+    {
+      "qid": "0f6e75bd",
+      "question": "Which case was decided earlier: ENF 269/2023 or SCT 169/2025?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "GROUNDING MISS: Correct answer (ENF 269/2023), G=0. Need both case date pages in context."
+    },
+    {
+      "qid": "d9d27c9c",
+      "question": "Between ARB 034/2025 and SCT 295/2025, which was issued first?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.537,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "PARTIAL G: G=0.537, correct answer. Dual-case context guarantee → full G."
+    },
+    {
+      "qid": "3dc92e33",
+      "question": "Which case has an earlier decision date: CFI 010/2024 or SCT 169/2025?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.537,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "WRONG ANSWER: Pipeline said CFI 010/2024, gold=SCT 169/2025. Date comparison logic error. Need both case date pages to compare correctly. Also SHAI date comparison prompt check."
+    },
+    {
+      "qid": "fbe661b9",
+      "question": "Which case was decided earlier: CA 004/2025 or SCT 295/2025?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.537,
+      "verdict": "partially_correct",
+      "type_flag": "FORMAT ERROR: Pipeline returned party names ('Mr Oran and Oaken v Oved') instead of case ID ('CA 004/2025'). Answer type is 'name' but should produce case ID, not party name.",
+      "strategy_flag": "PROMPT FIX: For 'which case was decided earlier' questions with answer_type=name, explicitly instruct: 'Return the case ID in format XXX NNN/YYYY, not party names'. SHAI prompt update."
+    },
+    {
+      "qid": "d4157e6a",
+      "question": "Which case was decided earlier: ENF 269/2023 or SCT 514/2025?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": 0.0,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": "GROUNDING MISS: Correct answer, G=0. Need both case date pages."
+    },
+    {
+      "qid": "8f104743",
+      "question": "Identify the case ID with the higher monetary amount: ARB 032/2025 or CFI 067/2025?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "46927f37",
+      "question": "Does the term 'Law' in the Strata Title Regulations refer to the same law number as the 'Employment Law' mentioned in the Employment Regulations?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "CROSS-REGULATION: Requires both Strata Title Regulations definition section AND Employment Regulations definition section. See dual_case_test_cases.json."
+    },
+    {
+      "qid": "b249b41b",
+      "question": "Was the Strata Title Law Amendment Law, DIFC Law No. 11 of 2018, enacted on the same day as the Financial Collateral Regulations came into force?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "d5bc7441",
+      "question": "Was the Leasing Law enacted in the same year as the Real Property Law Amendment Law?",
+      "answer_type": "boolean",
+      "gold_chunks": 0,
+      "difficulty": "unanswerable",
+      "g_score": null,
+      "verdict": "unanswerable_confirmed",
+      "type_flag": null,
+      "strategy_flag": "UNANSWERABLE TRAP: Empty gold — must return null. Risk: pipeline may hallucinate a yes/no from memory."
+    },
+    {
+      "qid": "af8d4690",
+      "question": "Did the DIFC Law Amendment Law (DIFC Law No. 1 of 2024) come into force on the same date as the Digital Assets Law (DIFC Law No. 2 of 2024)?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "7700103c",
+      "question": "What is the law number of the Employment Law Amendment Law?",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "4cbb1883",
+      "question": "In what year was the Employment Law Amendment Law enacted?",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "82664b58",
+      "question": "What is the full title of the enacted law?",
+      "answer_type": "name",
+      "gold_chunks": 1,
+      "difficulty": "hard",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": "AMBIGUOUS QUERY: No law specified. This is retrieval-ambiguous — 'the enacted law' is non-specific. Expected wrong or null answer.",
+      "strategy_flag": "AMBIGUOUS: Query gives no law name/number. Pipeline likely retrieves wrong doc. This may be intentionally hard/unanswerable. If private set has similar, treat as retrieval-miss and return best guess or null."
+    },
+    {
+      "qid": "dd97e6cd",
+      "question": "On what date was the Employment Law Amendment Law enacted?",
+      "answer_type": "date",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "correct",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "4ced374a",
+      "question": "Does the enactment notice specify a precise calendar date for the law to come into force?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": "AMBIGUOUS QUERY: 'the law' — no law specified. May be intentionally ambiguous.",
+      "strategy_flag": null
+    },
+    {
+      "qid": "9c07044a",
+      "question": "Is the common law (including the principles and rules of equity) supplementary to DIFC Statute?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "f0329296",
+      "question": "What is the law number for the 'Law on the Application of Civil and Commercial Laws in the DIFC'?",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "b52c749f",
+      "question": "Does this Law apply in the jurisdiction of the Dubai International Financial Centre?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": "AMBIGUOUS QUERY: 'This Law' — no law specified. Dangerous.",
+      "strategy_flag": null
+    },
+    {
+      "qid": "be535a44",
+      "question": "What is the latest DIFC Law number that amended the 'Law on the Application of Civil and Commercial Laws in the DIFC'?",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "GROUNDING MISS: Competition edge analysis shows amendment page in context but not cited. Trained page scorer should fix this."
+    },
+    {
+      "qid": "f378457d",
+      "question": "What is the law number of the Data Protection Law?",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "RETRIEVAL MISS: Gold is page 50 of DPL doc (enactment notice). Normal retrieval may not surface page 50. Need anchor retrieval for specific law number queries."
+    },
+    {
+      "qid": "146567e3",
+      "question": "According to Article 14(2)(b) of the General Partnership Law 2004, how many years must a Recognised Partnership's Accounting Records be preserved?",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "6976d6d2",
+      "question": "Under Article 17(b) of the General Partnership Law 2004, can a person become a Partner without the consent of all existing Partners...",
+      "answer_type": "boolean",
+      "gold_chunks": 0,
+      "difficulty": "unanswerable",
+      "g_score": null,
+      "verdict": "unanswerable_confirmed",
+      "type_flag": null,
+      "strategy_flag": "UNANSWERABLE TRAP: False premise in question — Article 17(b) GPL has no such residency requirement according to PDF. Empty gold is correct."
+    },
+    {
+      "qid": "322674cd",
+      "question": "According to Article 19(4) of the General Partnership Law 2004, how many months after the end of the financial year must the accounts for that year be prepared...",
+      "answer_type": "number",
+      "gold_chunks": 0,
+      "difficulty": "unanswerable",
+      "g_score": null,
+      "verdict": "unanswerable_confirmed",
+      "type_flag": null,
+      "strategy_flag": "UNANSWERABLE TRAP: Article 19(4) GPL may not contain this specific provision. Pipeline likely returns a hallucinated number."
+    },
+    {
+      "qid": "47cb314a",
+      "question": "According to Article 34(1) of the General Partnership Law 2004, is a person admitted as a Partner into an existing General Partnership liable to creditors...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "117267649",
+      "question": "Under Article 23 of the Personal Property Law 2005, is a restriction on transfer...",
+      "answer_type": "boolean",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "75bf397c",
+      "question": "According to Article 10 of the Real Property Law 2018, does freehold ownership of Real Property carry the same rights and obligations as ownership of an estate in fee simple...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "GROUNDING MISS: Competition edge analysis shows gold page in context but not cited. Both pages from different document versions of same law."
+    },
+    {
+      "qid": "613217268",
+      "question": "Under Article 12 of the Real Property Law 2018, what is the term for the office created as a corporation sole?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "6e3abab5",
+      "question": "Under the Common Reporting Standard Law 2018, is the Relevant Authority liable for acts or omissions in its performance of functions if the act or omission is shown to have been in bad faith?",
+      "answer_type": "boolean",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "3ab34896",
+      "question": "According to Article 12(4) of the Common Reporting Standard Law 2018, for how many years must records be retained by Reporting Financial Institutions...",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "e0798bd3",
+      "question": "If the Relevant Authority confirms a fine or action after an appeal under Article 21(5) of the Common Reporting Standard Law 2018, how many business days does the Reporting Financial Institution have to pay...",
+      "answer_type": "number",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "06034335",
+      "question": "Under Article 15(1) of the Strata Title Law DIFC Law No. 5 of 2007, what entity holds ownership of the Common Property in trust...",
+      "answer_type": "name",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "GROUNDING MISS: Competition edge analysis shows gold page in context but not cited."
+    },
+    {
+      "qid": "1e1238c6",
+      "question": "According to Article 17(1) of the Strata Title Law DIFC Law No. 5 of 2007, what type of resolution is required for a Body Corporate to sell or dispose of part of the Common Property...",
+      "answer_type": "name",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "GROUNDING MISS: Competition edge analysis shows gold page in context but not cited."
+    },
+    {
+      "qid": "5b78eff4",
+      "question": "If a Body Corporate grants an Exclusive Use Right with respect to a part of the Common Property to an Owner...",
+      "answer_type": "name",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "CONTEXT MISS: Gold page (93740190...42) is deep in the Strata Title Law doc. High page number may not be ranked highly by page scorer."
+    },
+    {
+      "qid": "b1d0245b",
+      "question": "Under the Operating Law 2018, can the Registrar be held liable for acts or omissions in performing their functions if the act or omission is shown to have been in bad faith...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "GROUNDING MISS: Two gold pages from same Operating Law (different versions), both in context but not both cited. Proof compiler needs to use both."
+    },
+    {
+      "qid": "7b31467f",
+      "question": "According to Article 9(9)(a) of the Operating Law 2018, how many months does a Licence typically have effect from its issue date...",
+      "answer_type": "number",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "ca8aebcc",
+      "question": "Under Article 10(3) of the Operating Law 2018, how many days does a Registered Person have to change its name...",
+      "answer_type": "number",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "30ab0e56",
+      "question": "Under Article 8(1) of the Operating Law 2018, is a person permitted to operate or conduct business in or from the DIFC without being incorporated...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "33060f26",
+      "question": "According to Article 16(1) of the Operating Law 2018, what document must every Registered Person file with the Registrar at the same time as applying for Licence renewal?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "f2ea23e9",
+      "question": "Under Article 22 of the Operating Law 2018, for how many years from the date the Registrar becomes aware of an act or omission...",
+      "answer_type": "number",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "b1350014",
+      "question": "According to Article 7(3)(j) of the Operating Law 2018, can the Registrar delegate its functions and powers to officers or employees of the DIFCA without the approval of the Board of Directors...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "860c44c7",
+      "question": "Under Article 11(1) of the Limited Partnership Law 2006, can a person be both a General Partner and a Limited Partner simultaneously in the same Limited Partnership?",
+      "answer_type": "boolean",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "NULL/MALFORMED: Competition edge analysis shows pipeline returned null for this question. Generation fallback fix required."
+    },
+    {
+      "qid": "73510f45",
+      "question": "According to the DIFC Non Profit Incorporated Organisations Law 2012, can an Incorporated Organisation undertake Financial Services...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "d6eb4a64",
+      "question": "Under Article 11(1) of the Employment Law 2019, is a provision in an agreement to waive minimum employment requirements void in all circumstances...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "wrong_label",
+      "type_flag": null,
+      "strategy_flag": "GOLDEN LABEL ERROR (CONFIRMED): Pipeline correct, gold wrong. Gold says False; Article 11(1) Employment Law says waiver provisions ARE void in all circumstances except as expressly permitted. Pipeline answer True is correct. Flag to organizers."
+    },
+    {
+      "qid": "b31a702f",
+      "question": "According to Article 13 of the Employment Law 2019, can an Employer employ a child who is under sixteen years of age?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "e59a0dc4",
+      "question": "Under Article 14(1) of the Employment Law 2019, how many days does an Employer have to provide an Employee with a written Employment Contract after the commencement of employment?",
+      "answer_type": "number",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "be09fbfe",
+      "question": "According to Article 14(2)(l) of the Employment Law 2019, what is the maximum probation period for an Employee...",
+      "answer_type": "number",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "cd0c8f36",
+      "question": "Under Article 16(1)(c) of the Employment Law 2019, what type of remuneration (gross or net) must an Employer keep records of, where applicable?",
+      "answer_type": "name",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": "GOLDEN LABEL SUSPECTED: TAMAR Phase 2 flagged gold may be wrong on this (Art 16(1)(c) is payroll records, not leave pay). Verify PDF carefully on private run."
+    },
+    {
+      "qid": "e153746c",
+      "question": "According to Article 10 of the Employment Law 2019, how many months after the Termination Date must a claim under this Law be presented to the Court...",
+      "answer_type": "number",
+      "gold_chunks": 2,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "0149374f",
+      "question": "Under Article 11(2)(b) of the Employment Law 2019, can an Employee waive any right under this Law...",
+      "answer_type": "boolean",
+      "gold_chunks": 1,
+      "difficulty": "easy",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "32bb3285",
+      "question": "According to Article 28(4) of the DIFC Trust Law 2018, can an order made consequential to a declaration under Articles 24 to 27 prejudice a purchaser in good faith...",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "medium",
+      "g_score": null,
+      "verdict": "unknown",
+      "type_flag": null,
+      "strategy_flag": null
+    },
+    {
+      "qid": "5bf060b3",
+      "question": "What did the jury decide in case ENF 053/2025?",
+      "answer_type": "free_text",
+      "gold_chunks": 0,
+      "difficulty": "unanswerable",
+      "g_score": null,
+      "verdict": "unanswerable_confirmed",
+      "type_flag": null,
+      "strategy_flag": "UNANSWERABLE TRAP: DIFC courts don't use juries. False premise. Return null/unavailable."
+    },
+    {
+      "qid": "84941458",
+      "question": "Is there any information about parole hearings in case CFI 057/2025?",
+      "answer_type": "free_text",
+      "gold_chunks": 0,
+      "difficulty": "unanswerable",
+      "g_score": null,
+      "verdict": "unanswerable_confirmed",
+      "type_flag": null,
+      "strategy_flag": "UNANSWERABLE TRAP: DIFC commercial courts don't have parole hearings. False premise. Return null/unavailable."
+    },
+    {
+      "qid": "89f4b2e8",
+      "question": "Were the Miranda rights properly administered in case ENF 269/2023?",
+      "answer_type": "free_text",
+      "gold_chunks": 0,
+      "difficulty": "unanswerable",
+      "g_score": null,
+      "verdict": "unanswerable_confirmed",
+      "type_flag": null,
+      "strategy_flag": "UNANSWERABLE TRAP: Miranda rights = US criminal law, not DIFC. Return null/unavailable."
+    },
+    {
+      "qid": "cb9cb3ec",
+      "question": "What was the plea bargain in case ARB 032/2025?",
+      "answer_type": "free_text",
+      "gold_chunks": 0,
+      "difficulty": "unanswerable",
+      "g_score": null,
+      "verdict": "unanswerable_confirmed",
+      "type_flag": null,
+      "strategy_flag": "UNANSWERABLE TRAP: Arbitration cases don't have plea bargains (criminal law concept). Return null/unavailable."
+    },
+    {
+      "qid": "8e3b4683",
+      "question": "Was the same judge involved in both case CA 005/2025 and case TCD 001/2024 at any point?",
+      "answer_type": "boolean",
+      "gold_chunks": 2,
+      "difficulty": "hard",
+      "g_score": 0.0,
+      "verdict": "wrong",
+      "type_flag": null,
+      "strategy_flag": "CRITICAL DUAL-CASE WRONG: See above entry. Pipeline='No', gold=True. Both case pages needed."
+    }
+  ],
+  "critical_findings": {
+    "confirmed_golden_label_errors": [
+      {
+        "qid": "d6eb4a64",
+        "issue": "Gold=False for Art 11(1) Employment Law waiver; correct answer=True per PDF. Pipeline was right.",
+        "status": "Flagged to organizers via TAMAR Phase 2 report"
+      },
+      {
+        "qid": "2180c758",
+        "issue": "Gold says Dematerialised Investments Regulations cites Companies Law 2018; ICC Regulations actually cites it. Pipeline answer is correct.",
+        "status": "Flagged to organizers via TAMAR Phase 2 report"
+      }
+    ],
+    "wrong_answer_type_flags": [
+      {
+        "qid": "fbe661b9",
+        "issue": "Answer type 'name' returns party names not case ID format. Need SHAI prompt to say: 'For cross-case comparison questions, return the case ID in format XXX NNN/YYYY'."
+      },
+      {
+        "qid": "82664b58",
+        "issue": "Ambiguous query 'full title of the enacted law' — no law specified. Answer type 'name' but retrieval will be wrong doc without disambiguation."
+      }
+    ],
+    "strategy_change_recommendations": [
+      {
+        "pattern": "cross-case comparison (Did X and Y share a judge/party?)",
+        "affected_qids": ["9f9fb4b9", "737940cf", "bfa089d5", "52a35cfa", "54d56331", "fba6e86a", "1e1121d0", "3c19ecbe", "2d436eb3", "8e3b4683"],
+        "recommendation": "Implement dual-case context budget guarantee (see dual_case_test_cases.json). Detect 2+ case IDs in query → guarantee title page of each case in context. Critical for 8e3b4683 which also has wrong answer."
+      },
+      {
+        "pattern": "which-laws-enumeration (Which laws mention/include/have X?)",
+        "affected_qids": ["89fd4fbc", "4aa0f4e2", "6e8d0c41", "2b4df6b4", "36a83376", "fcabd6aa", "6351cfe2", "b909797d"],
+        "recommendation": "These score near-zero without doc-diversity expansion. v8 profile helps but won't reach ceiling. Accept low G on these 8 questions and optimize elsewhere. Expected partial improvement: +3-5 pp avg G across these."
+      },
+      {
+        "pattern": "date comparison (Which case was decided earlier?)",
+        "affected_qids": ["b9dc2dae", "0f6e75bd", "d9d27c9c", "3dc92e33", "fbe661b9", "d4157e6a"],
+        "recommendation": "Dual-case context guarantee covers retrieval. SHAI prompt fix: for date comparison, always return case ID in format 'XXX NNN/YYYY', not party names. Check date comparison logic for 3dc92e33 wrong answer."
+      },
+      {
+        "pattern": "unanswerable-false-premise (non-DIFC legal concepts)",
+        "affected_qids": ["5bf060b3", "84941458", "89f4b2e8", "cb9cb3ec", "6976d6d2", "322674cd", "d5bc7441"],
+        "recommendation": "Pipeline correctly handles these (empty gold). NOGA's answer quality gate (PIPELINE_ENABLE_ANSWER_VALIDATION) adds robustness. Ensure classifier rejects non-DIFC legal concepts cleanly."
+      }
+    ]
+  }
+}

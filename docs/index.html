@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shafi — Evidence-First Legal QA</title>
+    <meta name="description" content="Shafi: evidence-first legal QA over DIFC regulations. Built in 13 days for the Agentic RAG Legal Challenge 2026. Final platform score: 0.480. 172 Python files, 12 AI agents, 1,595 commits. Infrastructure beat sophistication.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231A5F59'/%3E%3Cpath d='M18 44h28M24 22l8 8m0-8l-8 8m12-4h10' stroke='%23fff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-bg: #FAFBFD;
+            --color-surface: #F1F4F8;
+            --color-surface-alt: #E8EDF3;
+            --color-primary: #0F1419;
+            --color-secondary: #566171;
+            --color-accent: #1A5F59;
+            --color-accent-light: #267A72;
+            --color-accent-bg: rgba(26, 95, 89, 0.06);
+            --color-success: #1A6B44;
+            --color-success-bg: rgba(26, 107, 68, 0.06);
+            --color-warn: #8B5E28;
+            --color-warn-bg: rgba(139, 94, 40, 0.06);
+            --color-error: #9B2C2C;
+            --color-error-bg: rgba(155, 44, 44, 0.06);
+            --color-border: rgba(15, 20, 25, 0.08);
+            --color-card: rgba(255, 255, 255, 0.92);
+            --color-code-bg: #1A2332;
+            --color-code-text: #E2E8F0;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
+            --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.08);
+            --font: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-display: 'Instrument Serif', ui-serif, Georgia, serif;
+            --fs-hero: clamp(2.5rem, 5vw + 1rem, 4.5rem);
+            --fs-h2: clamp(1.75rem, 3vw + 0.5rem, 2.75rem);
+            --fs-h3: clamp(1.25rem, 1.5vw + 0.5rem, 1.5rem);
+            --fs-body: 1rem;
+            --fs-small: 0.875rem;
+            --fs-xs: 0.75rem;
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.5rem;
+            --space-6: 2rem;
+            --space-7: 3rem;
+            --space-8: 5rem;
+            --container: 1140px;
+            --radius: 10px;
+            --radius-lg: 14px;
+            --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+            --ease-entrance: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+            --dur-fast: 150ms;
+            --dur-normal: 250ms;
+            --transition: all var(--dur-normal) var(--ease-standard);
+        }
+
+        [data-theme="dark"] {
+            --color-bg: #0C1018;
+            --color-surface: #111720;
+            --color-surface-alt: #171E28;
+            --color-primary: #E4EAF2;
+            --color-secondary: rgba(204, 214, 228, 0.62);
+            --color-accent: #8DA3B8;
+            --color-accent-light: #A8BDD0;
+            --color-accent-bg: rgba(141, 163, 184, 0.08);
+            --color-success: #7A9E86;
+            --color-success-bg: rgba(122, 158, 134, 0.10);
+            --color-warn: #A8864E;
+            --color-warn-bg: rgba(168, 134, 78, 0.10);
+            --color-error: #C27070;
+            --color-error-bg: rgba(194, 112, 112, 0.10);
+            --color-border: rgba(228, 234, 242, 0.06);
+            --color-card: rgba(17, 23, 32, 0.95);
+            --color-code-bg: #0A0F17;
+            --color-code-text: #C9D1D9;
+            --shadow: 0 1px 3px rgba(0,0,0,0.30);
+            --shadow-md: 0 6px 20px rgba(0,0,0,0.22);
+            --shadow-lg: 0 14px 36px rgba(0,0,0,0.28);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+        body {
+            font-family: var(--font);
+            background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 56%, var(--color-bg)) 0%, var(--color-bg) 26%, var(--color-bg) 100%);
+            color: var(--color-primary);
+            line-height: 1.7;
+            font-size: var(--fs-body);
+            overflow-x: hidden;
+            font-feature-settings: 'cv11' 1, 'ss01' 1;
+            min-height: 100vh;
+        }
+        [data-theme="dark"] body {
+            background: radial-gradient(860px 380px at 50% -8%, rgba(141, 163, 184, 0.05), transparent 60%),
+                linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 54%, var(--color-bg)) 0%, var(--color-bg) 28%, var(--color-bg) 100%),
+                var(--color-bg);
+        }
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.88em;
+            padding: 0.1em 0.4em;
+            border-radius: 6px;
+            background: color-mix(in srgb, var(--color-surface-alt) 60%, transparent);
+            border: 1px solid var(--color-border);
+            font-variant-numeric: tabular-nums;
+        }
+        .container { max-width: var(--container); margin: 0 auto; padding: 0 var(--space-6); }
+        :focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 26%, transparent); }
+        section[id] { scroll-margin-top: 88px; }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            * { transition: none !important; animation: none !important; }
+        }
+
+        /* Header */
+        .header {
+            position: sticky; top: 0; z-index: 100;
+            background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+            backdrop-filter: blur(16px) saturate(140%);
+            -webkit-backdrop-filter: blur(16px) saturate(140%);
+            border-bottom: 1px solid var(--color-border);
+            padding: var(--space-3) 0;
+        }
+        .header .container { display: flex; align-items: center; justify-content: space-between; }
+        .header-logo {
+            display: flex; align-items: center; gap: var(--space-3);
+            font-weight: 600; font-size: 1rem; color: var(--color-primary);
+            text-decoration: none; letter-spacing: -0.01em;
+        }
+        .header-nav { display: flex; align-items: center; gap: var(--space-4); }
+        .header-link {
+            display: flex; align-items: center; gap: var(--space-2);
+            color: var(--color-secondary); text-decoration: none;
+            font-size: 13px; font-weight: 500;
+            padding: var(--space-2) var(--space-3); border-radius: var(--radius);
+            transition: color var(--dur-fast) var(--ease-standard);
+            min-height: 44px;
+        }
+        .header-link:hover { color: var(--color-primary); }
+        .header-link.is-active { color: var(--color-primary); background: color-mix(in srgb, var(--color-surface-alt) 78%, transparent); }
+        .theme-toggle {
+            background: none; border: 1px solid var(--color-border); cursor: pointer;
+            color: var(--color-secondary); border-radius: var(--radius);
+            padding: var(--space-2); display: flex; align-items: center; justify-content: center;
+            min-height: 44px; min-width: 44px;
+            transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+        }
+        .theme-toggle:hover { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-border)); }
+        .theme-toggle svg { width: 20px; height: 20px; }
+        .theme-toggle .icon-sun { display: none; }
+        [data-theme="dark"] .theme-toggle .icon-sun { display: flex; }
+        [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+        /* Hero */
+        .hero {
+            padding: calc(var(--space-7) + var(--space-2)) 0 var(--space-7);
+            text-align: start; position: relative;
+        }
+        .hero::before {
+            content: ""; position: absolute; inset: -96px -48px auto -48px; height: 540px;
+            background: radial-gradient(660px 340px at 20% 18%, color-mix(in srgb, var(--color-accent) 8%, transparent) 0%, transparent 56%),
+                radial-gradient(520px 320px at 82% 28%, color-mix(in srgb, var(--color-accent-light) 6%, transparent) 0%, transparent 58%);
+            pointer-events: none; opacity: 0.46;
+        }
+        [data-theme="dark"] .hero::before { opacity: 0.22; }
+        .hero .container { position: relative; z-index: 1; }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.88fr);
+            gap: var(--space-6); align-items: start;
+        }
+        .hero-copy { display: grid; gap: var(--space-4); max-width: 640px; }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            background: var(--color-warn-bg); border: 1px solid color-mix(in srgb, var(--color-warn) 10%, transparent);
+            color: var(--color-warn); padding: 6px var(--space-4); border-radius: 999px;
+            font-size: var(--fs-xs); font-weight: 600; margin-bottom: var(--space-1); letter-spacing: 0.02em;
+        }
+        .hero h1 {
+            font-size: var(--fs-hero); font-family: var(--font-display); font-weight: 400;
+            line-height: 1.08; letter-spacing: -0.015em; margin-bottom: 0;
+            max-width: 14ch; text-wrap: balance;
+        }
+        .hero h1 .accent { color: var(--color-accent); }
+        .hero-sub {
+            font-size: clamp(1rem, 1vw + 0.7rem, 1.15rem);
+            color: var(--color-secondary); max-width: 57ch;
+            margin: 0 0 var(--space-1); line-height: 1.65;
+            text-wrap: pretty; font-weight: 400;
+        }
+        .hero-panel {
+            background: color-mix(in srgb, var(--color-card) 96%, var(--color-surface));
+            border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+            padding: var(--space-5); box-shadow: var(--shadow-md);
+            display: grid; gap: var(--space-5);
+        }
+        .hero-panel-kicker {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--color-secondary);
+        }
+        .hero-panel-head { display: grid; gap: var(--space-3); }
+        .hero-proof {
+            display: block; color: var(--color-secondary); font-size: var(--fs-small); line-height: 1.65; text-wrap: pretty;
+        }
+        .hero-stats {
+            display: grid; grid-template-columns: 1fr; gap: 0;
+            padding-block: var(--space-1);
+            border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border);
+        }
+        .hero-stat {
+            background: transparent; border: none; border-radius: 0;
+            padding: var(--space-3) 0;
+            display: flex; flex-direction: row-reverse; align-items: end;
+            justify-content: space-between; gap: var(--space-4);
+        }
+        .hero-stat + .hero-stat { border-top: 1px solid var(--color-border); }
+        .hero-stat-value {
+            font-size: clamp(1.35rem, 1.8vw + 0.55rem, 1.9rem);
+            font-weight: 700; letter-spacing: -0.02em; line-height: 1.2;
+            color: var(--color-primary); font-variant-numeric: tabular-nums; text-align: end;
+        }
+        .hero-stat-value.gap-highlight { color: var(--color-error); }
+        .hero-stat-label {
+            margin-top: 0; font-size: 12px; color: var(--color-secondary);
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
+        }
+        .hero-actions { display: flex; justify-content: flex-start; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-1); }
+        .hero-cta {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            background: var(--color-primary); color: var(--color-bg);
+            padding: var(--space-3) var(--space-6); border-radius: var(--radius);
+            text-decoration: none; font-weight: 600; font-size: var(--fs-small);
+            transition: opacity var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+            min-height: 48px; letter-spacing: 0.01em;
+        }
+        .hero-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+        .hero-cta-secondary {
+            background: transparent; color: var(--color-primary); border: 1px solid var(--color-border);
+        }
+        .hero-cta-secondary:hover {
+            opacity: 1; border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+            background: color-mix(in srgb, var(--color-surface-alt) 60%, transparent);
+        }
+
+        /* Section */
+        section { padding: var(--space-7) 0; }
+        .section-title {
+            font-size: var(--fs-h2); font-family: var(--font-display); font-weight: 400;
+            text-align: start; margin-bottom: var(--space-2); letter-spacing: -0.005em;
+            line-height: 1.12; max-width: 20ch;
+        }
+        .section-sub {
+            text-align: start; color: var(--color-secondary); max-width: 60ch;
+            margin: 0 0 var(--space-6); font-size: clamp(0.9375rem, 1vw + 0.5rem, 1.0625rem);
+            text-wrap: pretty; line-height: 1.65;
+        }
+
+        /* Metrics grid */
+        .metrics-grid {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: var(--space-3); align-items: stretch;
+        }
+        .metric-card {
+            background: var(--color-card); border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg); padding: var(--space-5); text-align: start;
+            transition: border-color var(--dur-fast) var(--ease-standard);
+            min-width: 0; display: flex; flex-direction: column; gap: var(--space-2);
+        }
+        .metric-card:hover { border-color: color-mix(in srgb, var(--color-accent) 18%, var(--color-border)); }
+        .metric-card.featured {
+            border-color: color-mix(in srgb, var(--color-warn) 22%, var(--color-border));
+            background: color-mix(in srgb, var(--color-card) 96%, var(--color-warn-bg));
+            grid-column: span 3;
+        }
+        .metric-value {
+            font-size: clamp(1.75rem, 3vw, 2.5rem); font-weight: 700;
+            letter-spacing: -0.02em; line-height: 1.2; font-variant-numeric: tabular-nums;
+        }
+        .metric-value.score { color: var(--color-warn); }
+        .metric-value.speed { color: var(--color-accent); }
+        .metric-value.neutral { color: var(--color-primary); }
+        .metric-value.gap { color: var(--color-error); }
+        .metric-label { font-size: 13px; color: var(--color-secondary); font-weight: 500; line-height: 1.35; }
+        .metric-context { font-size: var(--fs-xs); color: var(--color-secondary); opacity: 0.82; line-height: 1.35; margin-top: auto; }
+        .metric-bar { margin: var(--space-3) 0 var(--space-2); height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--color-border) 45%, transparent); overflow: hidden; }
+        .metric-bar-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--color-warn); transition: width 0.8s var(--ease-entrance); }
+
+        /* Findings cards */
+        .findings-grid {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--space-4);
+        }
+        .finding-card {
+            background: var(--color-card); border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg); padding: var(--space-5) var(--space-6);
+            transition: border-color var(--dur-fast) var(--ease-standard);
+        }
+        .finding-card:hover { border-color: color-mix(in srgb, var(--color-accent) 18%, var(--color-border)); }
+        .finding-card h3 {
+            font-size: var(--fs-h3); font-weight: 600; margin-bottom: var(--space-2);
+            line-height: 1.15; letter-spacing: -0.01em;
+        }
+        .finding-card p { color: var(--color-secondary); font-size: var(--fs-small); line-height: 1.7; }
+        .finding-card .tag {
+            display: inline-block; font-size: 10px; font-weight: 700;
+            padding: 2px 8px; border-radius: 999px; margin-bottom: var(--space-3); letter-spacing: 0.03em;
+        }
+        .tag.rejected { background: var(--color-error-bg); color: var(--color-error); }
+        .tag.worked { background: var(--color-success-bg); color: var(--color-success); }
+        .tag.finding { background: var(--color-warn-bg); color: var(--color-warn); }
+
+        /* Ablation table */
+        .ablation-section { background: var(--color-surface); }
+        .table-wrap {
+            background: var(--color-card); border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg); overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
+        thead { background: var(--color-surface-alt); }
+        th {
+            text-align: start; padding: var(--space-3) var(--space-4);
+            font-weight: 600; font-size: 11px; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--color-secondary); white-space: nowrap;
+        }
+        td {
+            padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-border);
+            color: var(--color-primary); vertical-align: top;
+        }
+        td.dim { color: var(--color-secondary); }
+        td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; font-variant-numeric: tabular-nums; }
+
+        /* Pipeline */
+        .pipeline-section { background: var(--color-surface); }
+        .pipeline-wrap {
+            background: var(--color-card); border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg); padding: var(--space-6);
+        }
+        .pipeline-text {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 13px; line-height: 1.8; color: var(--color-primary);
+            white-space: pre-wrap; overflow-x: auto;
+        }
+        .pipeline-text .step { color: var(--color-accent); font-weight: 600; }
+        .pipeline-text .conditional { color: var(--color-warn); }
+        .pipeline-legend {
+            margin-top: var(--space-4); font-size: 11px; color: var(--color-secondary); opacity: 0.7;
+        }
+
+        /* Agent names */
+        .agent-grid {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: var(--space-3);
+        }
+        .agent-chip {
+            background: var(--color-card); border: 1px solid var(--color-border);
+            border-radius: var(--radius); padding: var(--space-3) var(--space-4);
+            font-size: var(--fs-small); font-weight: 600;
+            text-align: center; letter-spacing: 0.02em;
+        }
+
+        /* Links section */
+        .links-grid {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: var(--space-3);
+        }
+        .link-card {
+            background: var(--color-card); border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg); padding: var(--space-5);
+            text-decoration: none; color: var(--color-primary);
+            transition: border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+        }
+        .link-card:hover { border-color: color-mix(in srgb, var(--color-accent) 22%, var(--color-border)); transform: translateY(-1px); }
+        .link-card h3 { font-size: var(--fs-h3); font-weight: 600; margin-bottom: var(--space-2); letter-spacing: -0.01em; }
+        .link-card p { color: var(--color-secondary); font-size: var(--fs-small); line-height: 1.65; }
+
+        /* Footer */
+        .footer {
+            border-top: 1px solid var(--color-border);
+            padding: var(--space-7) 0 var(--space-6);
+            text-align: center; color: var(--color-secondary); font-size: var(--fs-small);
+        }
+        .footer a { color: var(--color-secondary); text-decoration: none; transition: color var(--dur-fast) var(--ease-standard); }
+        .footer a:hover { color: var(--color-primary); }
+        .footer-links {
+            display: flex; justify-content: center; gap: var(--space-5);
+            margin-bottom: var(--space-4); font-size: 13px; font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero { padding: var(--space-6) 0; }
+            .hero-grid { grid-template-columns: 1fr; }
+            .hero-copy { max-width: none; }
+            .hero h1 { max-width: none; }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .metric-card.featured { grid-column: span 2; }
+            .findings-grid { grid-template-columns: 1fr; }
+            .links-grid { grid-template-columns: 1fr; }
+            .agent-grid { grid-template-columns: repeat(3, 1fr); }
+            .header-nav { gap: var(--space-2); }
+            section { padding: var(--space-6) 0 var(--space-5); }
+            .hero-actions { flex-direction: column; align-items: stretch; }
+        }
+        @media (max-width: 480px) {
+            .container { padding: 0 var(--space-4); }
+            .hero { padding: var(--space-5) 0; }
+            .metrics-grid { grid-template-columns: 1fr 1fr; }
+            .metric-card.featured { grid-column: span 2; }
+            .agent-grid { grid-template-columns: repeat(2, 1fr); }
+            section { padding: var(--space-5) 0; }
+            .hero-panel { padding: var(--space-4); }
+            .header .container { flex-wrap: wrap; gap: var(--space-3); }
+            .header-logo { flex: 1 1 100%; font-size: 0.95rem; }
+            .header-nav { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
+            .header-link { padding: var(--space-2); min-height: 40px; font-size: 12px; }
+            .theme-toggle { min-height: 40px; min-width: 40px; }
+            table { font-size: var(--fs-xs); }
+            th, td { padding: var(--space-2) var(--space-3); }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div class="container">
+            <a href="#" class="header-logo">Shafi</a>
+            <nav class="header-nav">
+                <a href="#metrics" class="header-link">Metrics</a>
+                <a href="#findings" class="header-link">Findings</a>
+                <a href="#pipeline" class="header-link">Pipeline</a>
+                <a href="#ablation" class="header-link">Ablation</a>
+                <a href="#links" class="header-link">Links</a>
+                <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                    <span class="icon-moon" aria-hidden="true"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.36A88,88,0,0,1,65.64,67.09a89,89,0,0,1,31.76-26.26,104.12,104.12,0,0,0,117.77,117.77A89,89,0,0,1,188.9,190.36Z"/></svg></span>
+                    <span class="icon-sun" aria-hidden="true"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg></span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero-grid">
+                    <div class="hero-copy">
+                        <div class="hero-badge">Platform score: 0.480</div>
+                        <h1>Shafi</h1>
+                        <p class="hero-sub">
+                            Evidence-first legal QA over DIFC regulations. Built in 13 days for the Agentic RAG Legal Challenge 2026 (350+ teams). Internal estimate was ~0.92. The platform returned 0.48. The 48-point gap from distribution shift is the interesting part.
+                        </p>
+                        <div class="hero-actions">
+                            <a href="https://alexchernysh.com/blog/legal-answering-systems" class="hero-cta">Read the article</a>
+                            <a href="https://github.com/chernistry/shafi" class="hero-cta hero-cta-secondary" target="_blank" rel="noopener">Source code</a>
+                        </div>
+                    </div>
+                    <aside class="hero-panel" aria-label="Score summary">
+                        <div class="hero-panel-head">
+                            <div class="hero-panel-kicker">Final result</div>
+                            <div class="hero-proof">
+                                Platform evaluation on the private test set, March 22, 2026.
+                            </div>
+                        </div>
+                        <div class="hero-stats" role="list" aria-label="Key numbers">
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value">0.480</div>
+                                <div class="hero-stat-label">Platform Total</div>
+                            </div>
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value">~0.92</div>
+                                <div class="hero-stat-label">Internal estimate</div>
+                            </div>
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value gap-highlight">-48 pts</div>
+                                <div class="hero-stat-label">Distribution shift</div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Metrics -->
+        <section id="metrics">
+            <div class="container">
+                <h2 class="section-title">By the numbers</h2>
+                <p class="section-sub">Raw measurements from 13 days of competition. The internal G score was 0.9956 on the public trial set. The platform returned Total = 0.480 on the private set.</p>
+                <div class="metrics-grid">
+                    <div class="metric-card featured">
+                        <div class="metric-value score">Total = 0.480</div>
+                        <div class="metric-label">Platform score (private set)</div>
+                        <div class="metric-bar" aria-hidden="true"><div class="metric-bar-fill" data-bar-fill="48"></div></div>
+                        <div class="metric-context">Internal estimate was ~0.92. The gap is distribution shift: the private test set differed from the public trial set in ways the system did not generalize to.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value speed">1,931 ms</div>
+                        <div class="metric-label">TTFT after prompt caching</div>
+                        <div class="metric-context">Down from 5,086 ms. Prompt caching was the single largest improvement to any metric. Standard retrieval techniques (BM25, HyDE, RAG Fusion) all failed to move the score.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value neutral">16</div>
+                        <div class="metric-label">Experiments run</div>
+                        <div class="metric-context">87.5% rejection rate (14 of 16). Only 2 experiments produced measurable improvements. Negative results documented in the article.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value neutral">172</div>
+                        <div class="metric-label">Python source files</div>
+                        <div class="metric-context">~65,500 lines of code. Up from 49 files on Day 1. Pipeline, retrieval, grounding, ML, generation, and ingestion subsystems.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value neutral">1,595</div>
+                        <div class="metric-label">Commits in 13 days</div>
+                        <div class="metric-context">March 10-22, 2026. 12 AI agents running concurrently via Claude Code CLI, pulling tasks from a shared FastAPI server. 737 tickets processed.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value neutral">12</div>
+                        <div class="metric-label">AI agents</div>
+                        <div class="metric-context">Claude Opus 4.6 instances coordinated via Bernstein orchestrator. Final 47 hours: 737 tickets across all 12 agents.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Findings -->
+        <section id="findings">
+            <div class="container">
+                <h2 class="section-title">What failed, what worked</h2>
+                <p class="section-sub">16 experiments, 87.5% rejection rate. Every standard RAG retrieval improvement failed. Infrastructure optimization beat all retrieval techniques.</p>
+                <div class="findings-grid">
+                    <div class="finding-card">
+                        <div class="tag rejected">Rejected</div>
+                        <h3>BM25 standalone retrieval</h3>
+                        <p>Added latency without grounding gain. Failed telemetry gating on the validation slice.</p>
+                    </div>
+                    <div class="finding-card">
+                        <div class="tag rejected">Rejected</div>
+                        <h3>RAG Fusion</h3>
+                        <p>Multiple query reformulations. Increased latency, no measurable improvement to answer quality or grounding score.</p>
+                    </div>
+                    <div class="finding-card">
+                        <div class="tag rejected">Rejected</div>
+                        <h3>HyDE (Hypothetical Document Embeddings)</h3>
+                        <p>Generated hypothetical answers to improve retrieval. Caused answer quality regression on the validation set.</p>
+                    </div>
+                    <div class="finding-card">
+                        <div class="tag rejected">Rejected</div>
+                        <h3>Step-back prompting</h3>
+                        <p>Abstracting to a broader question before retrieval. No score improvement, added an extra LLM call per question.</p>
+                    </div>
+                    <div class="finding-card">
+                        <div class="tag worked">Worked</div>
+                        <h3>Prompt caching</h3>
+                        <p>TTFT dropped from 5,086 ms to 1,931 ms. The single largest improvement to any metric across all 16 experiments. Infrastructure beat sophistication.</p>
+                    </div>
+                    <div class="finding-card">
+                        <div class="tag finding">Key finding</div>
+                        <h3>Distribution shift</h3>
+                        <p>Internal G = 0.9956 on the public trial set. Platform Total = 0.480 on the private set. 48 percentage points of gap from distribution shift. The system overfit to the public set's patterns without explicit memorization.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pipeline Architecture -->
+        <section id="pipeline" class="pipeline-section">
+            <div class="container">
+                <h2 class="section-title">Pipeline architecture</h2>
+                <p class="section-sub">LangGraph DAG with structured fast paths, hybrid retrieval, independent grounding sidecar, and typed answer routing.</p>
+                <div class="pipeline-wrap">
+                    <div class="pipeline-text" role="img" aria-label="Pipeline diagram"><span class="step">01 Classify</span>         heuristic, zero-latency
+   |
+<span class="step">02 Query Contract</span>    typed IR compiler
+   |
+<span class="conditional">03 DB Answerer</span>       &lt;50ms fast path (13% of questions bypass LLM)
+   |
+<span class="step">04 Retrieve</span>          Kanon-2 1792d + BM25 RRF, Qdrant
+   |
+<span class="step">05 Zerank-2</span>          reranker, TOP_N=12 chunks
+   |
+<span class="conditional">06 Confidence</span>        retry gate
+   |
+<span class="conditional">07 Retry</span>             widen retrieval (conditional)
+   |
+<span class="step">08 Generate</span>          GPT-4.1 (free_text) / GPT-4.1-mini (strict types)
+   |
+<span class="step">09 StrictAnswerer</span>    type coercion (boolean, number, date, name, names)
+   |
+<span class="step">10 Grounding</span>         LightGBM sidecar + portfolio optimizer (independent)
+   |
+<span class="step">11 Emit + Finalize</span>   SSE stream + telemetry</div>
+                    <div class="pipeline-legend">Highlighted in amber = conditional/fast-exit path. DB Answerer and Confidence gate both short-circuit to Emit. Grounding sidecar runs independently from the answer path.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Ablation / Score Progression -->
+        <section id="ablation" class="ablation-section">
+            <div class="container">
+                <h2 class="section-title">Stack</h2>
+                <p class="section-sub">Component-level detail. All of this produced an internal estimate of ~0.92 and a platform result of 0.480.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Technology</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Embeddings</td>
+                                <td class="mono">Kanon-2 1792d</td>
+                                <td class="dim">Dense vectors, fused with BM25 sparse via Qdrant server-side RRF</td>
+                            </tr>
+                            <tr>
+                                <td>Vector store</td>
+                                <td class="mono">Qdrant</td>
+                                <td class="dim">4 collections: chunks, pages, segments, bridge_facts</td>
+                            </tr>
+                            <tr>
+                                <td>Reranker</td>
+                                <td class="mono">Zerank-2</td>
+                                <td class="dim">TOP_N=12 chunks after retrieval</td>
+                            </tr>
+                            <tr>
+                                <td>Generation</td>
+                                <td class="mono">GPT-4.1 / GPT-4.1-mini</td>
+                                <td class="dim">4.1 for free_text, mini for strict types (boolean, number, date, name, names)</td>
+                            </tr>
+                            <tr>
+                                <td>Grounding</td>
+                                <td class="mono">LightGBM</td>
+                                <td class="dim">Page scorer sidecar, scope classifier, evidence portfolio optimizer, 14 modules</td>
+                            </tr>
+                            <tr>
+                                <td>Orchestration</td>
+                                <td class="mono">LangGraph</td>
+                                <td class="dim">DAG with conditional fast paths, retry gate, confidence scoring</td>
+                            </tr>
+                            <tr>
+                                <td>Agent swarm</td>
+                                <td class="mono">Claude Opus 4.6</td>
+                                <td class="dim">12 agents via Claude Code CLI, Bernstein orchestrator, FastAPI task server</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 style="margin-top: var(--space-7); margin-bottom: var(--space-4); font-size: var(--fs-h3); font-weight: 600;">Agent roster</h3>
+                <p style="color: var(--color-secondary); font-size: var(--fs-small); margin-bottom: var(--space-4);">12 Claude Opus 4.6 instances. 737 tickets in the final 47 hours.</p>
+                <div class="agent-grid">
+                    <div class="agent-chip">KEREN</div>
+                    <div class="agent-chip">DAGAN</div>
+                    <div class="agent-chip">SHAI</div>
+                    <div class="agent-chip">OREV</div>
+                    <div class="agent-chip">EYAL</div>
+                    <div class="agent-chip">NOGA</div>
+                    <div class="agent-chip">TAMAR</div>
+                    <div class="agent-chip">NOAM</div>
+                    <div class="agent-chip">KESHET</div>
+                    <div class="agent-chip">LIRON</div>
+                    <div class="agent-chip">TZUF</div>
+                    <div class="agent-chip">GILAD</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Links -->
+        <section id="links">
+            <div class="container">
+                <h2 class="section-title">Links</h2>
+                <p class="section-sub">Everything is open source under AGPL-3.0.</p>
+                <div class="links-grid">
+                    <a href="https://alexchernysh.com/blog/legal-answering-systems" class="link-card">
+                        <h3>Article</h3>
+                        <p>Full write-up on the competition, architecture decisions, what worked, what didn't, and the distribution shift story.</p>
+                    </a>
+                    <a href="https://github.com/chernistry/shafi" class="link-card" target="_blank" rel="noopener">
+                        <h3>Shafi (pipeline)</h3>
+                        <p>The RAG pipeline. 172 Python files, ~65,500 LOC. Retrieval, generation, grounding, ingestion.</p>
+                    </a>
+                    <a href="https://github.com/chernistry/bernstein" class="link-card" target="_blank" rel="noopener">
+                        <h3>Bernstein (orchestrator)</h3>
+                        <p>The multi-agent orchestrator. Task server, agent coordination, ticket management for the Claude swarm.</p>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/chernistry/shafi" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://alexchernysh.com/blog/legal-answering-systems">Article</a>
+                <a href="https://github.com/chernistry/bernstein" target="_blank" rel="noopener">Bernstein</a>
+            </div>
+            <p>Shafi &mdash; Agentic RAG Legal Challenge 2026 &mdash; AGPL-3.0 &mdash; Alex Chernysh</p>
+        </div>
+    </footer>
+
+    <script>
+        (function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+        }
+
+        (function initAnimations() {
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reduceMotion) return;
+
+            const bars = document.querySelectorAll('.metric-bar-fill[data-bar-fill]');
+            if (!('IntersectionObserver' in window)) {
+                bars.forEach(bar => { bar.style.width = bar.dataset.barFill + '%'; });
+                return;
+            }
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    const bar = entry.target.querySelector('.metric-bar-fill[data-bar-fill]');
+                    if (bar) bar.style.width = bar.dataset.barFill + '%';
+                    observer.unobserve(entry.target);
+                });
+            }, { threshold: 0.18 });
+
+            document.querySelectorAll('.metric-card').forEach(card => observer.observe(card));
+        })();
+
+        (function initNavState() {
+            const links = Array.from(document.querySelectorAll('.header-link[href^="#"]'));
+            const sections = links
+                .map(link => { const href = link.getAttribute('href'); return href ? document.querySelector(href) : null; })
+                .filter(Boolean);
+            if (!links.length || !sections.length) return;
+
+            const activate = (id) => {
+                links.forEach(link => {
+                    const isActive = link.getAttribute('href') === '#' + id;
+                    link.classList.toggle('is-active', isActive);
+                });
+            };
+
+            const initial = window.location.hash ? window.location.hash.slice(1) : sections[0].id;
+            activate(initial);
+
+            if (!('IntersectionObserver' in window)) return;
+
+            const navObserver = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter(entry => entry.isIntersecting)
+                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+                if (visible[0]?.target?.id) activate(visible[0].target.id);
+            }, { rootMargin: '-18% 0px -58% 0px', threshold: [0.2, 0.35, 0.6] });
+
+            sections.forEach(section => navObserver.observe(section));
+        })();
+    </script>
+
+</body>
+</html>

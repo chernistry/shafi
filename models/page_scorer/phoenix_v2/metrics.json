@@ -1,0 +1,45 @@
+{
+  "model_type": "lgbm",
+  "retrained_from_eval": true,
+  "corrected_question_count": 16,
+  "corrected_positive_examples": 56,
+  "corrected_negative_examples": 447,
+  "corrected_sample_weight": 5.0,
+  "train_example_count": 1567,
+  "dev_example_count": 369,
+  "train_question_count": 72,
+  "dev_question_count": 19,
+  "train_hit_at_1": 0.8333333333333334,
+  "train_hit_at_2": 0.875,
+  "train_mrr": 0.8587962962962963,
+  "train_fbeta_2_5": 0.9327928870292888,
+  "dev_hit_at_1": 0.6842105263157895,
+  "dev_hit_at_2": 0.7368421052631579,
+  "dev_mrr": 0.744736842105263,
+  "dev_fbeta_2_5": 0.6278755074424899,
+  "heuristic_dev_hit_at_1": 0.631578947368421,
+  "heuristic_dev_hit_at_2": 0.6842105263157895,
+  "heuristic_dev_mrr": 0.7078947368421052,
+  "train_supervision_question_counts": {
+    "eval_verified": 16,
+    "reviewed": 56
+  },
+  "dev_supervision_question_counts": {
+    "reviewed": 19
+  },
+  "label_mode": "reviewed_weighted",
+  "feature_policy": "runtime_safe_r3",
+  "elapsed_seconds": 0.7,
+  "lgbm_params": {
+    "n_estimators": 120,
+    "max_depth": 4,
+    "learning_rate": 0.06,
+    "num_leaves": 12,
+    "min_child_samples": 10,
+    "scale_pos_weight": 6.25,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.5,
+    "reg_lambda": 1.0
+  }
+}

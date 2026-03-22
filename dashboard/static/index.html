@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Control Room</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header id="app-header">
+    <div class="header-left">
+      <span class="header-mark">TL</span>
+      <h1 class="header-title">RAG Challenge Control</h1>
+      <span class="header-sep"></span>
+      <span class="header-subtitle" id="current-best-label">Loading...</span>
+    </div>
+    <div class="header-right">
+      <div id="system-health" class="status-badge" style="display:none;"></div>
+      <span id="global-ts" class="header-ts"></span>
+      <button id="refresh-btn" class="btn-secondary" onclick="loadAll()">Refresh</button>
+    </div>
+  </header>
+
+  <main id="app-main">
+
+    <!-- STATUS BANNER -->
+    <section class="section" style="margin-bottom: 16px;">
+      <div style="border: 3px solid var(--green, #4caf50); padding: 16px; background: rgba(76,175,80,0.1); border-radius: 4px; text-align: center;">
+        <div style="font-size: 28px; font-weight: 900; color: var(--green, #4caf50); letter-spacing: 0.05em; margin-bottom: 8px;">
+          V2 ГОТОВ К САБМИТУ
+        </div>
+        <div style="font-size: 14px; color: var(--text-primary); font-family: var(--font-mono); line-height: 1.6;">
+          V2: null=3 | nopg=3 | 10 109 стр (+209%) | F=1.032 | 103+ коррекций<br>
+          Оценка: 0.90-0.95 | Лидер: 0.982 (warmup, не private) | Цель: топ-5<br>
+          <span style="color: var(--yellow, #ff9800);">Файл: data/private_submission_V2.json + code_archive_final.zip</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Primary Signal -->
+    <section class="section" id="section-headline">
+      <div class="section-label">Submission Readiness</div>
+      <div class="kpi-strip" id="kpi-strip"></div>
+    </section>
+
+    <!-- Operations & Diagnostics -->
+    <section class="section" id="section-operations">
+      <div class="grid-2">
+        <div>
+          <div class="section-label">Fleet Operations</div>
+          <div class="agent-list" id="agent-grid"></div>
+        </div>
+        
+        <div>
+          <div class="section-label">Diagnostics & Pipeline</div>
+          <div class="card">
+            <div class="card-body" id="diagnostics-body">
+              <table class="data-table">
+                <tbody id="diag-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Logs -->
+    <section class="section" id="section-logs">
+      <div class="grid-2">
+        <div>
+          <div class="section-label">Command Log (NOAM)</div>
+          <div class="card">
+            <div class="card-body feed-scroll" id="iggy-status-body"></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-label">System Bulletin</div>
+          <div class="card">
+            <div class="card-body feed-scroll" id="bulletin-body"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
