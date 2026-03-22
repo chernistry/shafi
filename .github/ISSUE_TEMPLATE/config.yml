@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Ideas
+    url: https://github.com/chernistry/rag_challenge/discussions
+    about: Ask questions and share ideas in Discussions

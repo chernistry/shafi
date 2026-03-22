@@ -1,0 +1,242 @@
+import json
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import httpx
+import pytest
+from pydantic import SecretStr
+
+from rag_challenge.core.embedding import EmbeddingClient, EmbeddingError
+
+
+@pytest.fixture
+def mock_settings():
+    """Patch get_settings to return test config."""
+    embedding = SimpleNamespace(
+        provider_mode="api",
+        model="kanon-2-embedder",
+        api_url="https://api.isaacus.com/v1/embeddings",
+        api_key=SecretStr("test-key"),
+        local_model_path="",
+        local_normalize_embeddings=True,
+        dimensions=1024,
+        batch_size=128,
+        concurrency=4,
+        timeout_s=30.0,
+        connect_timeout_s=10.0,
+        retry_attempts=6,
+        retry_base_delay_s=0.5,
+        retry_max_delay_s=16.0,
+        retry_jitter_s=2.0,
+        circuit_failure_threshold=3,
+        circuit_reset_timeout_s=60.0,
+    )
+    settings = SimpleNamespace(embedding=embedding)
+    with patch("rag_challenge.core.embedding.get_settings", return_value=settings):
+        yield settings
+
+
+def _make_embed_response(count: int, dims: int = 1024) -> dict[str, object]:
+    return {
+        "embeddings": [[0.1] * dims for _ in range(count)],
+        "usage": {"total_tokens": count * 10},
+    }
+
+
+async def _no_sleep(_: float) -> None:
+    return None
+
+
+@pytest.mark.asyncio
+async def test_embed_query_single(mock_settings):
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, json=_make_embed_response(1)))
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client)
+        result = await ec.embed_query("What is contract law?")
+        assert len(result) == 1024
+        assert isinstance(result[0], float)
+
+
+@pytest.mark.asyncio
+async def test_embed_documents_batching(mock_settings):
+    """Test that 200 texts are split into 2 batches (128 + 72)."""
+    call_count = 0
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        body = json.loads(req.content)
+        count = len(body["texts"])
+        assert body["task"] == "retrieval/document"
+        return httpx.Response(200, json=_make_embed_response(count))
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client)
+        texts = [f"chunk {i}" for i in range(200)]
+        result = await ec.embed_documents(texts)
+        assert len(result) == 200
+        assert call_count == 2  # ceil(200/128)
+
+
+@pytest.mark.asyncio
+async def test_embed_empty_list(mock_settings):
+    async with httpx.AsyncClient() as client:
+        ec = EmbeddingClient(client=client)
+        result = await ec.embed_documents([])
+        assert result == []
+
+
+@pytest.mark.asyncio
+async def test_embed_retry_on_429(mock_settings):
+    attempt = 0
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        del req
+        nonlocal attempt
+        attempt += 1
+        if attempt <= 2:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return httpx.Response(200, json=_make_embed_response(1))
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client, sleep_func=_no_sleep)
+        result = await ec.embed_query("test")
+        assert len(result) == 1024
+        assert attempt == 3
+
+
+@pytest.mark.asyncio
+async def test_embed_raises_on_persistent_failure(mock_settings):
+    transport = httpx.MockTransport(lambda req: httpx.Response(500, text="Internal Server Error"))
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client, sleep_func=_no_sleep)
+        with pytest.raises(EmbeddingError, match="failed after"):
+            await ec.embed_query("test")
+
+
+@pytest.mark.asyncio
+async def test_embed_raises_on_client_error(mock_settings):
+    transport = httpx.MockTransport(lambda req: httpx.Response(400, text="Bad request"))
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client)
+        with pytest.raises(EmbeddingError, match="400"):
+            await ec.embed_query("test")
+
+
+@pytest.mark.asyncio
+async def test_embed_query_uses_query_task(mock_settings):
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        assert body["task"] == "retrieval/query"
+        return httpx.Response(200, json=_make_embed_response(1))
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client)
+        await ec.embed_query("test query")
+
+
+@pytest.mark.asyncio
+async def test_embed_documents_uses_document_task(mock_settings):
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        assert body["task"] == "retrieval/document"
+        return httpx.Response(200, json=_make_embed_response(len(body["texts"])))
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client)
+        await ec.embed_documents(["doc1", "doc2"])
+
+
+@pytest.mark.asyncio
+async def test_embed_parses_object_rows_with_embedding_field(mock_settings):
+    response = {
+        "embeddings": [
+            {"embedding": [0.1] * 4},
+            {"embedding": [0.2] * 4},
+        ]
+    }
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, json=response))
+    async with httpx.AsyncClient(transport=transport) as client:
+        ec = EmbeddingClient(client=client)
+        vectors = await ec.embed_documents(["a", "b"])
+    assert vectors == [[0.1] * 4, [0.2] * 4]
+
+
+@pytest.mark.asyncio
+async def test_embed_query_uses_local_model_when_enabled():
+    class _FakeSentenceTransformer:
+        def __init__(self, model_path: str) -> None:
+            self.model_path = model_path
+
+        def encode(self, texts: list[str], *, normalize_embeddings: bool) -> list[list[float]]:
+            assert self.model_path == "/tmp/local-embedder"
+            assert normalize_embeddings is True
+            return [[float(len(text)), 1.0] for text in texts]
+
+    embedding = SimpleNamespace(
+        provider_mode="local",
+        model="kanon-2-embedder",
+        api_url="https://api.isaacus.com/v1/embeddings",
+        api_key=SecretStr("test-key"),
+        local_model_path="/tmp/local-embedder",
+        local_normalize_embeddings=True,
+        dimensions=2,
+        batch_size=128,
+        concurrency=4,
+        timeout_s=30.0,
+        connect_timeout_s=10.0,
+        retry_attempts=6,
+        retry_base_delay_s=0.5,
+        retry_max_delay_s=16.0,
+        retry_jitter_s=2.0,
+        circuit_failure_threshold=3,
+        circuit_reset_timeout_s=60.0,
+    )
+    settings = SimpleNamespace(embedding=embedding)
+    with (
+        patch("rag_challenge.core.embedding.get_settings", return_value=settings),
+        patch(
+            "rag_challenge.core.embedding.importlib.import_module",
+            return_value=SimpleNamespace(SentenceTransformer=_FakeSentenceTransformer),
+        ),
+    ):
+        async with httpx.AsyncClient() as client:
+            ec = EmbeddingClient(client=client)
+            vector = await ec.embed_query("local query")
+            docs = await ec.embed_documents(["alpha", "beta"])
+
+    assert vector == [11.0, 1.0]
+    assert docs == [[5.0, 1.0], [4.0, 1.0]]
+
+
+@pytest.mark.asyncio
+async def test_embed_local_model_requires_model_path():
+    embedding = SimpleNamespace(
+        provider_mode="local",
+        model="kanon-2-embedder",
+        api_url="https://api.isaacus.com/v1/embeddings",
+        api_key=SecretStr("test-key"),
+        local_model_path="",
+        local_normalize_embeddings=True,
+        dimensions=2,
+        batch_size=128,
+        concurrency=4,
+        timeout_s=30.0,
+        connect_timeout_s=10.0,
+        retry_attempts=6,
+        retry_base_delay_s=0.5,
+        retry_max_delay_s=16.0,
+        retry_jitter_s=2.0,
+        circuit_failure_threshold=3,
+        circuit_reset_timeout_s=60.0,
+    )
+    settings = SimpleNamespace(embedding=embedding)
+    with patch("rag_challenge.core.embedding.get_settings", return_value=settings):
+        async with httpx.AsyncClient() as client:
+            ec = EmbeddingClient(client=client)
+            with pytest.raises(EmbeddingError, match="EMBED_LOCAL_MODEL_PATH"):
+                await ec.embed_query("local query")

@@ -1,0 +1,2071 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic RAG Legal Challenge 2026</title>
+    <meta name="description" content="Final-state evidence-first legal RAG system for the Agentic RAG Legal Challenge 2026. 172 Python files, Kanon-2 1792d hybrid retrieval, Zerank-2 reranker, DB answerer fast path, LightGBM grounding sidecar, GPT-4.1 generation. G=0.9956, TTFT=1399ms, F=1.020.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231A5F59'/%3E%3Cpath d='M18 44h28M24 22l8 8m0-8l-8 8m12-4h10' stroke='%23fff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+    <script src="i18n.js?v=20260310" defer></script>
+    <style>
+        :root {
+            --color-bg: #FAFBFD;
+            --color-surface: #F1F4F8;
+            --color-surface-alt: #E8EDF3;
+            --color-primary: #0F1419;
+            --color-secondary: #566171;
+            --color-accent: #1A5F59;
+            --color-accent-light: #267A72;
+            --color-accent-bg: rgba(26, 95, 89, 0.06);
+            --color-success: #1A6B44;
+            --color-success-bg: rgba(26, 107, 68, 0.06);
+            --color-warn: #8B5E28;
+            --color-warn-bg: rgba(139, 94, 40, 0.06);
+            --color-border: rgba(15, 20, 25, 0.08);
+            --color-card: rgba(255, 255, 255, 0.92);
+            --color-code-bg: #1A2332;
+            --color-code-text: #E2E8F0;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
+            --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.08);
+            --font: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-display: 'Instrument Serif', ui-serif, Georgia, serif;
+            --fs-hero: clamp(2.5rem, 5vw + 1rem, 4.5rem);
+            --fs-h2: clamp(1.75rem, 3vw + 0.5rem, 2.75rem);
+            --fs-h3: clamp(1.25rem, 1.5vw + 0.5rem, 1.5rem);
+            --fs-body: 1rem;
+            --fs-small: 0.875rem;
+            --fs-xs: 0.75rem;
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.5rem;
+            --space-6: 2rem;
+            --space-7: 3rem;
+            --space-8: 5rem;
+            --container: 1140px;
+            --radius: 10px;
+            --radius-lg: 14px;
+            --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+            --ease-entrance: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+            --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+            --dur-fast: 150ms;
+            --dur-normal: 250ms;
+            --dur-slow: 400ms;
+            --transition: all var(--dur-normal) var(--ease-standard);
+        }
+
+        [data-theme="dark"] {
+            --color-bg: #0C1018;
+            --color-surface: #111720;
+            --color-surface-alt: #171E28;
+            --color-primary: #E4EAF2;
+            --color-secondary: rgba(204, 214, 228, 0.62);
+            --color-accent: #8DA3B8;
+            --color-accent-light: #A8BDD0;
+            --color-accent-bg: rgba(141, 163, 184, 0.08);
+            --color-success: #7A9E86;
+            --color-success-bg: rgba(122, 158, 134, 0.10);
+            --color-warn: #A8864E;
+            --color-warn-bg: rgba(168, 134, 78, 0.10);
+            --color-border: rgba(228, 234, 242, 0.06);
+            --color-card: rgba(17, 23, 32, 0.95);
+            --color-code-bg: #0A0F17;
+            --color-code-text: #C9D1D9;
+            --shadow: 0 1px 3px rgba(0,0,0,0.30);
+            --shadow-md: 0 6px 20px rgba(0,0,0,0.22);
+            --shadow-lg: 0 14px 36px rgba(0,0,0,0.28);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        body {
+            font-family: var(--font);
+            background:
+                linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 56%, var(--color-bg)) 0%, var(--color-bg) 26%, var(--color-bg) 100%);
+            color: var(--color-primary);
+            line-height: 1.7;
+            font-size: var(--fs-body);
+            overflow-x: hidden;
+            font-feature-settings: 'cv11' 1, 'ss01' 1;
+            min-height: 100vh;
+        }
+        [data-theme="dark"] body {
+            background:
+                radial-gradient(860px 380px at 50% -8%, rgba(141, 163, 184, 0.05), transparent 60%),
+                linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 54%, var(--color-bg)) 0%, var(--color-bg) 28%, var(--color-bg) 100%),
+                var(--color-bg);
+        }
+        main { position: relative; }
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.88em;
+            padding: 0.1em 0.4em;
+            border-radius: 6px;
+            background: color-mix(in srgb, var(--color-surface-alt) 60%, transparent);
+            border: 1px solid var(--color-border);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .container {
+            max-width: var(--container);
+            margin: 0 auto;
+            padding: 0 var(--space-6);
+        }
+
+        .icon { display: inline-flex; align-items: center; justify-content: center; }
+        .icon > * { display: block; }
+
+        .reveal { opacity: 1; transform: none; }
+        .reveal.is-visible { opacity: 1; transform: none; }
+        :focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 26%, transparent);
+        }
+        section[id] { scroll-margin-top: 88px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            * { transition: none !important; animation: none !important; }
+            .reveal { opacity: 1; transform: none; }
+        }
+
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+            backdrop-filter: blur(16px) saturate(140%);
+            -webkit-backdrop-filter: blur(16px) saturate(140%);
+            border-bottom: 1px solid var(--color-border);
+            padding: var(--space-3) 0;
+        }
+        .header .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--color-primary);
+            text-decoration: none;
+            letter-spacing: -0.01em;
+        }
+        .header-logo .icon { font-size: 24px; color: var(--color-accent); }
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+        }
+        .header-link {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            color: var(--color-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius);
+            transition: color var(--dur-fast) var(--ease-standard);
+            min-height: 44px;
+        }
+        .header-link:hover { color: var(--color-primary); }
+        .header-link.is-active {
+            color: var(--color-primary);
+            background: color-mix(in srgb, var(--color-surface-alt) 78%, transparent);
+        }
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--color-border);
+            cursor: pointer;
+            color: var(--color-secondary);
+            border-radius: var(--radius);
+            padding: var(--space-2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            min-width: 44px;
+            transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+        }
+        .theme-toggle:hover { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-border)); }
+        .theme-toggle .icon { font-size: 20px; }
+        .theme-toggle .icon-sun { display: none; }
+        [data-theme="dark"] .theme-toggle .icon-sun { display: inline-flex; }
+        [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+        /* Hero */
+        .hero {
+            padding: calc(var(--space-7) + var(--space-2)) 0 var(--space-7);
+            text-align: start;
+            position: relative;
+        }
+        .hero::before {
+            content: "";
+            position: absolute;
+            inset: -96px -48px auto -48px;
+            height: 540px;
+            background:
+                radial-gradient(660px 340px at 20% 18%, color-mix(in srgb, var(--color-accent) 8%, transparent) 0%, transparent 56%),
+                radial-gradient(520px 320px at 82% 28%, color-mix(in srgb, var(--color-accent-light) 6%, transparent) 0%, transparent 58%);
+            pointer-events: none;
+            opacity: 0.46;
+        }
+        [data-theme="dark"] .hero::before {
+            opacity: 0.22;
+        }
+        .hero .container {
+            position: relative;
+            z-index: 1;
+        }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.88fr);
+            gap: var(--space-6);
+            align-items: start;
+        }
+        .hero-copy {
+            display: grid;
+            gap: var(--space-4);
+            max-width: 640px;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            background: var(--color-accent-bg);
+            border: 1px solid color-mix(in srgb, var(--color-accent) 10%, transparent);
+            color: var(--color-accent);
+            padding: 6px var(--space-4);
+            border-radius: 999px;
+            font-size: var(--fs-xs);
+            font-weight: 600;
+            margin-bottom: var(--space-1);
+            letter-spacing: 0.02em;
+        }
+        .hero h1 {
+            font-size: var(--fs-hero);
+            font-family: var(--font-display);
+            font-weight: 400;
+            line-height: 1.08;
+            letter-spacing: -0.015em;
+            margin-bottom: 0;
+            max-width: 12ch;
+            margin-left: 0;
+            margin-right: 0;
+            text-wrap: balance;
+        }
+        .hero h1 .accent { color: var(--color-accent); }
+        .hero-sub {
+            font-size: clamp(1rem, 1vw + 0.7rem, 1.15rem);
+            color: var(--color-secondary);
+            max-width: 57ch;
+            margin: 0 0 var(--space-1);
+            line-height: 1.65;
+            text-wrap: pretty;
+            font-weight: 400;
+        }
+        .hero-panel {
+            background: color-mix(in srgb, var(--color-card) 96%, var(--color-surface));
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            box-shadow: var(--shadow-md);
+            display: grid;
+            gap: var(--space-5);
+        }
+        .hero-panel-head {
+            display: grid;
+            gap: var(--space-3);
+        }
+        .hero-panel-kicker {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            color: var(--color-secondary);
+        }
+        .hero-proof {
+            display: block;
+            max-width: none;
+            margin: 0;
+            padding: 0;
+            border-radius: 0;
+            border: none;
+            background: none;
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+            line-height: 1.65;
+            text-wrap: pretty;
+        }
+        .hero-stats {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0;
+            max-width: none;
+            margin: 0;
+            padding-block: var(--space-1);
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+        }
+        .hero-stat {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: var(--space-3) 0;
+            display: flex;
+            flex-direction: row-reverse;
+            align-items: end;
+            justify-content: space-between;
+            gap: var(--space-4);
+            position: relative;
+            overflow: visible;
+        }
+        .hero-stat + .hero-stat {
+            border-top: 1px solid var(--color-border);
+        }
+        .metric-card::before,
+        .evolution-card::before,
+        .pipeline-wrap::before,
+        .tech-card::before,
+        .demo-card::before,
+        .why-card::before,
+        .competition-wrap::before {
+            content: none;
+        }
+        .hero-stat-value {
+            font-size: clamp(1.35rem, 1.8vw + 0.55rem, 1.9rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+            color: var(--color-primary);
+            font-variant-numeric: tabular-nums;
+            text-align: end;
+        }
+        .hero-stat-label {
+            margin-top: 0;
+            font-size: 12px;
+            color: var(--color-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.09em;
+        }
+        .hero-rail {
+            display: grid;
+            gap: var(--space-3);
+        }
+        .hero-rail-item {
+            display: grid;
+            gap: 4px;
+            padding-inline-start: var(--space-4);
+            border-inline-start: 1px solid color-mix(in srgb, var(--color-accent) 22%, var(--color-border));
+        }
+        .hero-rail-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+        .hero-rail-text {
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+            line-height: 1.6;
+        }
+        .hero-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            background: var(--color-primary);
+            color: var(--color-bg);
+            padding: var(--space-3) var(--space-6);
+            border-radius: var(--radius);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: var(--fs-small);
+            transition: opacity var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+            min-height: 48px;
+            letter-spacing: 0.01em;
+        }
+        .hero-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+        .hero-actions {
+            display: flex;
+            justify-content: flex-start;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            margin-top: var(--space-1);
+        }
+        .hero-cta-secondary {
+            background: transparent;
+            color: var(--color-primary);
+            border: 1px solid var(--color-border);
+        }
+        .hero-cta-secondary:hover {
+            opacity: 1;
+            border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+            background: color-mix(in srgb, var(--color-surface-alt) 60%, transparent);
+        }
+
+        /* Section */
+        section { padding: var(--space-7) 0; }
+        .section-title {
+            font-size: var(--fs-h2);
+            font-family: var(--font-display);
+            font-weight: 400;
+            text-align: start;
+            margin-bottom: var(--space-2);
+            letter-spacing: -0.005em;
+            line-height: 1.12;
+            max-width: 15ch;
+        }
+        .section-sub {
+            text-align: start;
+            color: var(--color-secondary);
+            max-width: 60ch;
+            margin: 0 0 var(--space-6);
+            font-size: clamp(0.9375rem, 1vw + 0.5rem, 1.0625rem);
+            text-wrap: pretty;
+            line-height: 1.65;
+        }
+
+        /* Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: var(--space-3);
+            align-items: stretch;
+        }
+        #scorecard .metric-card.featured { grid-column: span 2; }
+        .metric-card {
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            text-align: start;
+            transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-card:hover { border-color: color-mix(in srgb, var(--color-accent) 18%, var(--color-border)); }
+        .metric-card.featured {
+            border-color: color-mix(in srgb, var(--color-accent) 22%, var(--color-border));
+            background: color-mix(in srgb, var(--color-card) 96%, var(--color-accent-bg));
+        }
+        .metric-value {
+            font-size: clamp(1.75rem, 3vw, 2.5rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+            font-variant-numeric: tabular-nums;
+        }
+        .metric-value.speed { color: var(--color-accent); }
+        .metric-value.perfect { color: var(--color-success); }
+        .metric-value.score { color: var(--color-warn); }
+        .metric-label {
+            font-size: 13px;
+            color: var(--color-secondary);
+            font-weight: 500;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+            text-wrap: balance;
+        }
+        .metric-context {
+            font-size: var(--fs-xs);
+            color: var(--color-secondary);
+            opacity: 0.82;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+            margin-top: auto;
+        }
+        .metric-bar {
+            margin: var(--space-3) 0 var(--space-2);
+            height: 6px;
+            max-width: none;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--color-border) 45%, transparent);
+            overflow: hidden;
+        }
+        .metric-bar-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: var(--color-accent);
+            transition: width 0.8s var(--ease-entrance);
+        }
+
+        /* Evolution */
+        .evolution-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-4);
+        }
+        .evolution-card {
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            position: relative;
+            overflow: hidden;
+        }
+        .evolution-kicker {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            font-weight: 600;
+            color: var(--color-secondary);
+        }
+        .evolution-value {
+            margin-top: var(--space-3);
+            font-size: clamp(2rem, 2.5vw, 2.75rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            font-variant-numeric: tabular-nums;
+        }
+        .evolution-note {
+            margin-top: var(--space-3);
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+            line-height: 1.65;
+        }
+        @media (max-width: 768px) {
+            .evolution-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Pipeline */
+        .pipeline-section { background: var(--color-surface); }
+        .pipeline-wrap {
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            position: relative;
+            overflow: hidden;
+        }
+        .pipeline-toggle { cursor: pointer; list-style: none; text-align: center; }
+        .pipeline-toggle::-webkit-details-marker { display: none; }
+        .pipeline-toggle::marker { content: ''; }
+        .pipeline-toggle-inner {
+            display: inline-flex; align-items: center; gap: var(--space-2);
+            font-size: var(--fs-small); font-weight: 600; color: var(--color-secondary);
+            padding: var(--space-2) var(--space-4); border-radius: 999px;
+            border: 1px solid var(--color-border); background: var(--color-card);
+            transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+            user-select: none;
+        }
+        .pipeline-toggle-inner:hover { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-border)); }
+        details[open] > .pipeline-toggle .chevron-icon { transform: rotate(180deg); }
+        .chevron-icon { transition: transform 0.25s ease; }
+
+        .pipeline-diagram {
+            max-width: 980px;
+            margin: 0 auto;
+            padding-top: var(--space-5);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+        }
+        .pipeline-row-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: var(--space-4);
+            align-items: stretch;
+        }
+        /* Desktop: "snake" layout on the second row (6 -> 7 directly below, then right-to-left) */
+        .pipeline-row-grid.bottom { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .pipeline-row-grid.bottom > * { grid-row: 1; }
+        .pipeline-spacer { display: block; }
+        .pipeline-row-grid.bottom .pipeline-spacer { grid-column: 1; }
+        .pipeline-row-grid.bottom .pnode[data-step="7"] { grid-column: 6; }
+        .pipeline-row-grid.bottom .pnode[data-step="8"] { grid-column: 5; }
+        .pipeline-row-grid.bottom .pnode[data-step="9"] { grid-column: 4; }
+        .pipeline-row-grid.bottom .pnode[data-step="10"] { grid-column: 3; }
+        .pipeline-row-grid.bottom .pnode[data-step="11"] { grid-column: 2; }
+
+        /* SVG connector overlay */
+        .pipeline-links {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            z-index: 0;
+        }
+        .pipeline-links .pl-link {
+            stroke: color-mix(in srgb, var(--color-secondary) 28%, var(--color-border));
+            stroke-width: 1.75;
+            fill: none;
+            opacity: 0.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .pipeline-links .pl-link.is-conditional {
+            stroke: var(--color-warn);
+            stroke-dasharray: 5 5;
+            opacity: 0.75;
+        }
+        .pipeline-links .pl-arrowhead { fill: color-mix(in srgb, var(--color-secondary) 28%, var(--color-border)); }
+        .pipeline-links .pl-arrowhead-warn { fill: var(--color-warn); }
+
+        .pnode {
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            background: color-mix(in srgb, var(--color-card) 96%, transparent);
+            padding: var(--space-3);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            opacity: 0.55;
+            transform: translateY(6px);
+            transition: opacity var(--dur-normal) var(--ease-entrance), transform var(--dur-normal) var(--ease-entrance), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+        }
+        .pnode.is-lit {
+            opacity: 1;
+            transform: translateY(0);
+            border-color: color-mix(in srgb, var(--color-accent) 25%, var(--color-border));
+            background: var(--color-card);
+        }
+        .pnode.conditional { border-style: dashed; border-color: color-mix(in srgb, var(--color-warn) 40%, var(--color-border)); }
+        .pnode.conditional.is-lit { border-color: color-mix(in srgb, var(--color-warn) 50%, var(--color-border)); }
+        .pnode-step {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.10em;
+            color: var(--color-secondary);
+            opacity: 0.6;
+            font-variant-numeric: tabular-nums;
+        }
+        .pnode-icon { display: inline-flex; justify-content: center; color: var(--color-accent); opacity: 0.8; }
+        .pnode.conditional .pnode-icon { color: var(--color-warn); }
+        .pnode-label {
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.2;
+            text-wrap: balance;
+            letter-spacing: -0.005em;
+        }
+        .pnode-meta {
+            font-size: 11px;
+            color: var(--color-secondary);
+            line-height: 1.3;
+            opacity: 0.7;
+            text-wrap: balance;
+        }
+        .pipeline-legend {
+            margin-top: var(--space-4);
+            text-align: center;
+            font-size: 11px;
+            color: var(--color-secondary);
+            opacity: 0.7;
+        }
+
+        @media (max-width: 900px) {
+            .pipeline-row-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .pipeline-row-grid.bottom { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .pipeline-spacer { display: none; }
+            .pnode { text-align: start; }
+            .pnode-icon { justify-content: flex-start; }
+            .pipeline-row-grid.bottom .pnode[data-step] { grid-column: auto; }
+        }
+
+        @media (max-width: 640px) {
+            .pipeline-diagram { gap: var(--space-3); }
+            .pipeline-row-grid { grid-template-columns: 1fr; }
+            .pipeline-row-grid.bottom { grid-template-columns: 1fr; }
+        }
+
+        /* Tech stack */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--space-4);
+        }
+        .tech-card {
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5) var(--space-6);
+            transition: border-color var(--dur-fast) var(--ease-standard);
+            position: relative;
+            overflow: hidden;
+        }
+        .tech-card:hover { border-color: color-mix(in srgb, var(--color-accent) 18%, var(--color-border)); }
+        .tech-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        .tech-card-header > div:last-child { min-width: 0; }
+        .tech-card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .tech-card-icon.blue { background: var(--color-accent-bg); color: var(--color-accent); }
+        .tech-card-icon.green { background: var(--color-success-bg); color: var(--color-success); }
+        .tech-card-icon.amber { background: var(--color-warn-bg); color: var(--color-warn); }
+        .tech-card h3 {
+            font-size: var(--fs-h3);
+            font-weight: 600;
+            line-height: 1.15;
+            text-wrap: balance;
+            overflow-wrap: anywhere;
+            hyphens: auto;
+            letter-spacing: -0.01em;
+        }
+        .tech-card-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            margin-left: var(--space-2);
+            letter-spacing: 0.03em;
+        }
+        .tech-card-badge.top { background: var(--color-success-bg); color: var(--color-success); }
+        .tech-card p { color: var(--color-secondary); font-size: var(--fs-small); line-height: 1.7; }
+
+        /* Demo */
+        .demo-section { background: var(--color-surface); }
+        .demo-notice {
+            background: var(--color-surface-alt);
+            border-left: 2px solid var(--color-accent);
+            border-radius: 0 var(--radius) var(--radius) 0;
+            padding: var(--space-4) var(--space-5);
+            margin-bottom: var(--space-6);
+            font-size: var(--fs-small);
+            color: var(--color-secondary);
+            line-height: 1.6;
+        }
+        .demo-notice strong { color: var(--color-primary); font-weight: 600; }
+        .demo-grid {
+            display: grid;
+            gap: var(--space-4);
+        }
+        .demo-card {
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            position: relative;
+        }
+        .demo-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-3) var(--space-5);
+            border-bottom: 1px solid var(--color-border);
+            background: var(--color-surface-alt);
+        }
+        .demo-type {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px var(--space-3);
+            border-radius: 999px;
+            background: var(--color-accent-bg);
+            color: var(--color-accent);
+            letter-spacing: 0.02em;
+        }
+        .demo-ttft {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--color-success);
+            font-variant-numeric: tabular-nums;
+        }
+        .demo-question {
+            padding: var(--space-4) var(--space-5);
+            border-bottom: 1px solid var(--color-border);
+        }
+        .demo-question-label {
+            font-size: 11px;
+            color: var(--color-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: var(--space-2);
+        }
+        .demo-question p {
+            font-weight: 500;
+            line-height: 1.55;
+            font-size: var(--fs-small);
+        }
+        .demo-answer {
+            padding: var(--space-4) var(--space-5);
+            background: var(--color-surface-alt);
+        }
+        .demo-answer-label {
+            font-size: 11px;
+            color: var(--color-success);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+        .demo-answer p {
+            font-size: var(--fs-small);
+            line-height: 1.7;
+            color: var(--color-primary);
+        }
+        .demo-answer .cite {
+            font-size: 11px;
+            color: var(--color-accent);
+            font-weight: 500;
+            background: var(--color-accent-bg);
+            padding: 1px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            max-width: 240px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 10px;
+        }
+        .demo-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-4);
+            padding: var(--space-3) var(--space-5);
+            border-top: 1px solid var(--color-border);
+            font-size: 11px;
+            color: var(--color-secondary);
+        }
+        .demo-meta-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-1);
+            flex: 1 1 220px;
+            font-variant-numeric: tabular-nums;
+        }
+        .demo-meta-item .icon { font-size: 14px; opacity: 0.7; }
+        .audit-stack {
+            margin-top: var(--space-4);
+            display: grid;
+            gap: var(--space-3);
+        }
+        .audit-kicker {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            color: var(--color-secondary);
+        }
+        .audit-list {
+            margin: 0;
+            padding-left: var(--space-5);
+            color: var(--color-primary);
+            font-size: var(--fs-small);
+            line-height: 1.7;
+        }
+        .audit-quote {
+            margin: 0;
+            padding: var(--space-4);
+            border-left: 2px solid var(--color-accent);
+            background: color-mix(in srgb, var(--color-accent-bg) 55%, transparent);
+            color: var(--color-primary);
+            font-size: var(--fs-small);
+            line-height: 1.7;
+        }
+        .audit-proof {
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+            line-height: 1.7;
+        }
+
+        /* Why section */
+        .why-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-3);
+        }
+        #evolution .why-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        @media (max-width: 768px) {
+            .why-grid { grid-template-columns: 1fr 1fr; }
+            .tech-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 480px) {
+            .why-grid { grid-template-columns: 1fr; }
+        }
+        .why-card {
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            transition: border-color var(--dur-fast) var(--ease-standard);
+            position: relative;
+            overflow: hidden;
+        }
+        .why-card:hover { border-color: color-mix(in srgb, var(--color-accent) 18%, var(--color-border)); }
+        .why-card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-3);
+            font-size: 18px;
+        }
+        .why-card-icon.blue { background: var(--color-accent-bg); color: var(--color-accent); }
+        .why-card-icon.green { background: var(--color-success-bg); color: var(--color-success); }
+        .why-card-icon.amber { background: var(--color-warn-bg); color: var(--color-warn); }
+        .why-card h3 {
+            font-size: var(--fs-h3);
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+            line-height: 1.15;
+            text-wrap: balance;
+            overflow-wrap: anywhere;
+            hyphens: auto;
+            letter-spacing: -0.01em;
+        }
+        .why-card p { color: var(--color-secondary); font-size: var(--fs-small); line-height: 1.65; }
+
+        /* Competition section */
+        .competition-section { background: var(--color-surface); }
+        .competition-wrap {
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-6);
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .competition-wrap.brief-grid {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 0;
+            gap: var(--space-6);
+        }
+        .competition-info h3 {
+            font-size: var(--fs-h3);
+            font-weight: 600;
+            margin-bottom: var(--space-4);
+            letter-spacing: -0.01em;
+        }
+        .competition-info p {
+            color: var(--color-secondary);
+            margin-bottom: var(--space-5);
+            line-height: 1.7;
+            font-size: var(--fs-small);
+        }
+        .competition-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-3);
+        }
+        .brief-grid {
+            align-items: start;
+        }
+        .brief-list {
+            display: grid;
+            gap: 0;
+        }
+        .brief-item {
+            border: none;
+            border-top: 1px solid var(--color-border);
+            border-radius: 0;
+            background: transparent;
+            padding: var(--space-4) 0;
+        }
+        .brief-item h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: var(--space-2);
+        }
+        .brief-item p {
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+            line-height: 1.65;
+        }
+        .scorecard-note {
+            text-align: start;
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+            margin: 0 0 var(--space-5);
+            max-width: 70ch;
+            line-height: 1.65;
+        }
+        .comp-stat {
+            text-align: center;
+            padding: var(--space-4);
+            background: var(--color-surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--color-border);
+        }
+        .comp-stat-value {
+            font-size: clamp(1.5rem, 2vw, 2rem);
+            font-weight: 700;
+            color: var(--color-primary);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.02em;
+        }
+        .comp-stat-label {
+            font-size: 11px;
+            color: var(--color-secondary);
+            margin-top: var(--space-1);
+            letter-spacing: 0.02em;
+        }
+        /* Footer */
+        .footer {
+            border-top: 1px solid var(--color-border);
+            padding: var(--space-7) 0 var(--space-6);
+            text-align: center;
+            color: var(--color-secondary);
+            font-size: var(--fs-small);
+        }
+        .footer a {
+            color: var(--color-secondary);
+            text-decoration: none;
+            transition: color var(--dur-fast) var(--ease-standard);
+        }
+        .footer a:hover { color: var(--color-primary); }
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-5);
+            margin-bottom: var(--space-4);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero { padding: var(--space-6) 0; }
+            .hero-grid { grid-template-columns: 1fr; }
+            .hero-copy { max-width: none; }
+            .hero h1 { max-width: 13ch; }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .competition-wrap { grid-template-columns: 1fr; }
+            .header-nav { gap: var(--space-2); }
+            section { padding: var(--space-6) 0 var(--space-5); }
+            .hero-actions { flex-direction: column; align-items: stretch; }
+            #scorecard .metric-card.featured { grid-column: span 2; }
+        }
+        @media (max-width: 480px) {
+            .container { padding: 0 var(--space-4); }
+            .hero { padding: var(--space-5) 0; }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .competition-stats { grid-template-columns: 1fr; }
+            section { padding: var(--space-5) 0; }
+            .demo-answer .cite { max-width: 170px; }
+            .hero h1 { max-width: none; }
+            .hero-panel { padding: var(--space-4); }
+            .header .container { flex-wrap: wrap; gap: var(--space-3); }
+            .header-logo { flex: 1 1 100%; font-size: 0.95rem; }
+            .header-nav {
+                width: 100%;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: var(--space-2);
+            }
+            .header-link {
+                padding: var(--space-2);
+                min-height: 40px;
+                font-size: 12px;
+            }
+            .lang-toggle {
+                min-height: 40px;
+                font-size: 10px;
+                padding: var(--space-2);
+            }
+            .theme-toggle {
+                min-height: 40px;
+                min-width: 40px;
+            }
+        }
+
+        /* Language picker */
+        .lang-picker { position: relative; }
+        .lang-toggle {
+            background: none;
+            border: 1px solid var(--color-border);
+            cursor: pointer;
+            color: var(--color-secondary);
+            border-radius: var(--radius);
+            padding: var(--space-2) var(--space-3);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            min-height: 44px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+            font-family: var(--font);
+        }
+        .lang-toggle:hover { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-border)); }
+        .lang-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            min-width: 160px;
+            z-index: 300;
+            overflow: hidden;
+            backdrop-filter: blur(16px) saturate(140%);
+            -webkit-backdrop-filter: blur(16px) saturate(140%);
+        }
+        [dir="rtl"] .lang-menu { right: auto; left: 0; }
+        .lang-option {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            width: 100%;
+            padding: var(--space-2) var(--space-4);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--color-primary);
+            font-family: var(--font);
+            text-align: start;
+            transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+            white-space: nowrap;
+        }
+        .lang-option:hover { background: var(--color-surface-alt); }
+        .lang-option.is-active { font-weight: 600; }
+        .lang-code {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: var(--color-secondary);
+            min-width: 22px;
+            opacity: 0.6;
+        }
+        .lang-option.is-active .lang-code { opacity: 1; }
+
+        /* RTL layout adjustments */
+        [dir="rtl"] .tech-card-header { flex-direction: row-reverse; }
+        [dir="rtl"] .demo-answer-label { flex-direction: row-reverse; }
+        [dir="rtl"] .demo-meta { flex-direction: row-reverse; }
+        [dir="rtl"] .why-card-icon { margin-right: 0; }
+        [dir="rtl"] .hero-cta { flex-direction: row-reverse; }
+        [dir="rtl"] .header-logo { flex-direction: row-reverse; }
+        [dir="rtl"] .footer-links { flex-direction: row-reverse; }
+        [dir="rtl"] .hero-rail-item { border-inline-start: none; border-inline-end: 1px solid color-mix(in srgb, var(--color-accent) 22%, var(--color-border)); padding-inline-start: 0; padding-inline-end: var(--space-4); }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <a href="#" class="header-logo">
+                <span class="icon" aria-hidden="true"><ph-gavel weight="duotone" size="28"></ph-gavel></span>
+                <span data-i18n="logo_text">Agentic RAG Legal Challenge</span>
+            </a>
+            <nav class="header-nav">
+                <a href="#brief" class="header-link" data-i18n="nav_brief">Brief</a>
+                <a href="#scorecard" class="header-link" data-i18n="nav_scorecard">Scorecard</a>
+                <a href="#pipeline" class="header-link" data-i18n="nav_pipeline">Pipeline</a>
+                <a href="#appendix" class="header-link" data-i18n="nav_appendix">Stack</a>
+                <a href="#audit" class="header-link" data-i18n="nav_audit">Audit</a>
+                <!-- Language picker -->
+                <div class="lang-picker">
+                    <button class="lang-toggle" onclick="toggleLangMenu()" aria-label="Change language" aria-haspopup="listbox">
+                        <ph-translate weight="bold" size="16"></ph-translate>
+                        <span id="lang-current-label">EN</span>
+                        <ph-caret-down weight="bold" size="11"></ph-caret-down>
+                    </button>
+                    <div class="lang-menu" id="lang-menu" role="listbox" hidden>
+                        <button class="lang-option" data-lang="en" onclick="setLang('en')"><span class="lang-code">EN</span> English</button>
+                        <button class="lang-option" data-lang="ru" onclick="setLang('ru')"><span class="lang-code">RU</span> Русский</button>
+                        <button class="lang-option" data-lang="ar" onclick="setLang('ar')"><span class="lang-code">AR</span> العربية</button>
+                        <button class="lang-option" data-lang="es" onclick="setLang('es')"><span class="lang-code">ES</span> Español</button>
+                        <button class="lang-option" data-lang="he" onclick="setLang('he')"><span class="lang-code">HE</span> עברית</button>
+                    </div>
+                </div>
+                <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                    <span class="icon icon-moon" aria-hidden="true"><ph-moon-stars weight="bold" size="20"></ph-moon-stars></span>
+                    <span class="icon icon-sun" aria-hidden="true"><ph-sun-dim weight="bold" size="20"></ph-sun-dim></span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero-grid">
+                    <div class="hero-copy">
+                        <div class="hero-badge">
+                            <span class="icon" aria-hidden="true"><ph-trophy weight="duotone" size="22"></ph-trophy></span>
+                            <span data-i18n="hero_badge">Dubai AI Week &middot; Machines Can See 2026</span>
+                        </div>
+                        <h1 data-i18n="hero_h1">Final-state legal RAG engineered to <span class="accent">win</span> on private grounding.</h1>
+                        <p class="hero-sub" data-i18n="hero_sub">
+                            172 Python files, Kanon-2 hybrid retrieval, Zerank-2 reranking, LightGBM grounding sidecar, DB answerer fast path, and typed answer routing — built over 13 days by a 12-agent Claude swarm targeting 1st place on the private set.
+                        </p>
+                        <div class="hero-actions">
+                            <a href="#audit" class="hero-cta" data-i18n="hero_cta_primary">Inspect answer audit</a>
+                            <a href="https://github.com/chernistry/rag_challenge" class="hero-cta hero-cta-secondary" target="_blank" rel="noopener" data-i18n="hero_cta_secondary">Review repository</a>
+                        </div>
+                    </div>
+                    <aside class="hero-panel" aria-label="Evidence panel">
+                        <div class="hero-panel-head">
+                            <div class="hero-panel-kicker" data-i18n="brief_title">At a Glance</div>
+                            <div class="hero-proof" data-i18n="hero_note">
+                                Verified on the public-trial set, with clear source trails and stable response timing.
+                            </div>
+                        </div>
+                        <div class="hero-stats" role="list" aria-label="Key metrics">
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value"><span class="countup" data-count-to="1399" data-format="ms-int">1399ms</span></div>
+                                <div class="hero-stat-label" data-i18n="hero_stat_ttft">TTFT (V10.1)</div>
+                            </div>
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value"><span class="countup" data-count-to="99.56" data-format="pct-2">99.56%</span></div>
+                                <div class="hero-stat-label" data-i18n="hero_stat_docref">Grounding score (G)</div>
+                            </div>
+                            <div class="hero-stat" role="listitem">
+                                <div class="hero-stat-value"><span class="countup" data-count-to="1.020" data-format="score-2">1.020</span></div>
+                                <div class="hero-stat-label" data-i18n="hero_stat_hallucinated">TTFT coefficient (F)</div>
+                            </div>
+                        </div>
+                        <div class="hero-rail" aria-label="Brief highlights">
+                            <div class="hero-rail-item">
+                                <div class="hero-rail-label" data-i18n="brief_item1_h">Grounding sidecar</div>
+                                <p class="hero-rail-text" data-i18n="brief_item1_p">Page selection runs as an independent sidecar — LightGBM scorer, scope classifier, evidence portfolio optimizer — never touching the answer text.</p>
+                            </div>
+                            <div class="hero-rail-item">
+                                <div class="hero-rail-label" data-i18n="brief_item2_h">DB answerer fast path</div>
+                                <p class="hero-rail-text" data-i18n="brief_item2_p">A corpus registry resolves 13% of questions in &lt;50ms, bypassing the vector store and LLM entirely. Deterministic, zero-hallucination.</p>
+                            </div>
+                            <div class="hero-rail-item">
+                                <div class="hero-rail-label" data-i18n="brief_item3_h">Agent-orchestrated development</div>
+                                <p class="hero-rail-text" data-i18n="brief_item3_p">12 Claude Opus 4.6 agents drove development via Claude Code CLI, each owning isolated experiment lanes with telemetry-gated merges.</p>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- Judge Brief -->
+        <section id="brief" class="competition-section reveal">
+            <div class="container">
+                <h2 class="section-title" data-i18n="brief_title">System at a Glance</h2>
+                <p class="section-sub" data-i18n="brief_sub">Final state as of V10.1 submission (March 21, 2026). Score formula: Total = (0.7&times;Det + 0.3&times;Asst) &times; G &times; T &times; F.</p>
+                <div class="competition-wrap brief-grid">
+                    <div class="competition-info">
+                        <h3 data-i18n="brief_info_h">What the system does</h3>
+                        <p data-i18n="brief_info_p1">Evidence-first DIFC legal QA over 300+ documents and 1,000+ questions. Agentic flow: classify &rarr; query-contract compile &rarr; DB lookup &rarr; hybrid retrieve &rarr; Zerank-2 rerank &rarr; GPT-4.1 generate &rarr; strict coerce &rarr; grounding sidecar &rarr; SSE emit &rarr; telemetry finalize.</p>
+                        <p data-i18n="brief_info_p2">The grounding sidecar selects <code>used_page_ids</code> independently from the answer path using a LightGBM page scorer and evidence portfolio optimizer. The DB answerer resolves 13% of questions from a compiled corpus registry in &lt;50ms without touching the LLM.</p>
+                    </div>
+                    <div class="brief-list">
+                        <div class="brief-item">
+                            <h4 data-i18n="brief_item1_h">Grounding is the multiplier</h4>
+                            <p data-i18n="brief_item1_p">G multiplies Det, Asst, T, and F in the score formula. A +0.01 G improvement is worth ~0.009 total. The grounding sidecar lifted G from 0.801 (Day 1) to 0.9956 (V10.1) through 14 dedicated modules.</p>
+                        </div>
+                        <div class="brief-item">
+                            <h4 data-i18n="brief_item2_h">TTFT coefficient</h4>
+                            <p data-i18n="brief_item2_p">V10.1 TTFT=1399ms puts F=1.020. The DB answerer fast path (&lt;50ms on 13% of questions) and typed strict paths (GPT-4.1-mini) keep the average below 2s without degrading answer quality.</p>
+                        </div>
+                        <div class="brief-item">
+                            <h4 data-i18n="brief_item3_h">Agent swarm development</h4>
+                            <p data-i18n="brief_item3_p">12 Claude Opus 4.6 agents operated concurrently via Claude Code CLI, each pulling tasks from a shared FastAPI server. The system grew from 49 to 172 Python files across 13 days of competition.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Scorecard -->
+        <section id="scorecard" class="reveal">
+            <div class="container">
+                <h2 class="section-title" data-i18n="scorecard_title">Competition Scorecard</h2>
+                <p class="section-sub" data-i18n="scorecard_sub">V10.1 submission — best validated state as of March 21, 2026.</p>
+                <p class="scorecard-note" data-i18n="scorecard_note">Score formula: Total = (0.7&times;Det + 0.3&times;Asst) &times; G &times; T &times; F. Grounding (G) multiplies everything — recall is the primary lever.</p>
+                <div class="metrics-grid">
+                    <div class="metric-card featured">
+                        <div class="metric-value speed"><span class="countup" data-count-to="1399" data-format="ms-int">1399ms</span></div>
+                        <div class="metric-label" data-i18n="scorecard_avgttft_label">TTFT — V10.1</div>
+                        <div class="metric-bar" aria-hidden="true"><div class="metric-bar-fill" data-bar-fill="72"></div></div>
+                        <div class="metric-context" data-i18n="scorecard_avgttft_ctx">F=1.020 (1&ndash;2s band). DB answerer fast path (<50ms) pulls the average down for ~13% of questions. TTFT formula: &lt;1s=1.05, 1&ndash;2s=1.02, 2&ndash;3s=1.00, &gt;5s=0.85.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value score"><span class="countup" data-count-to="99.56" data-format="pct-2">99.56%</span></div>
+                        <div class="metric-label" data-i18n="scorecard_pass_label">Grounding Score (G)</div>
+                        <div class="metric-context" data-i18n="scorecard_pass_ctx">G=0.9956. Only 3 null answers, 4 no-page answers. LightGBM sidecar + portfolio optimization.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value perfect"><span class="countup" data-count-to="1.020" data-format="score-2">1.020</span></div>
+                        <div class="metric-label" data-i18n="scorecard_citation_label">TTFT Coefficient (F)</div>
+                        <div class="metric-context" data-i18n="scorecard_citation_ctx">F=1.020 from the 1&ndash;2s band. DB answerer and typed fast paths keep median TTFT below 2s.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value perfect"><span class="countup" data-count-to="172" data-format="">172</span></div>
+                        <div class="metric-label" data-i18n="scorecard_format_label">Python Source Files</div>
+                        <div class="metric-context" data-i18n="scorecard_format_ctx">Up from 49 files on Day 1. 65,500+ LOC across pipeline, retrieval, grounding, ML, generation, and ingestion subsystems.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value perfect"><span class="countup" data-count-to="13" data-format="pct-0">13%</span></div>
+                        <div class="metric-label" data-i18n="scorecard_hallucinated_label">DB Answerer Coverage</div>
+                        <div class="metric-context" data-i18n="scorecard_hallucinated_ctx">~13% of questions resolved from corpus registry in &lt;50ms. Zero LLM calls, zero hallucination risk for that slice.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value score"><span class="countup" data-count-to="4" data-format="">4</span></div>
+                        <div class="metric-label" data-i18n="scorecard_docref_label">Qdrant Collections</div>
+                        <div class="metric-context" data-i18n="scorecard_docref_ctx">chunks, pages, segments, bridge_facts. Kanon-2 1792-dim dense + FastEmbed BM25 sparse, server-side RRF fusion.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value speed"><span class="countup" data-count-to="12" data-format="">12</span></div>
+                        <div class="metric-label" data-i18n="scorecard_p50_label">Claude Agents</div>
+                        <div class="metric-context" data-i18n="scorecard_p50_ctx">12 Claude Opus 4.6 agents coordinated via Claude Code CLI and a FastAPI task server at localhost:8052.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Why This Works -->
+        <section id="evolution" class="reveal">
+            <div class="container">
+                <h2 class="section-title" data-i18n="causal_title">13-Day Architecture Sprint</h2>
+                <p class="section-sub" data-i18n="causal_sub">From a 49-file monolith pipeline to a 172-file decomposed system. Every structural decision was justified by a measurable score improvement or reduced audit risk.</p>
+                <div class="evolution-grid">
+                    <div class="evolution-card">
+                        <div class="evolution-kicker" data-i18n="causal_left_kicker">Day 1 baseline</div>
+                        <div class="evolution-value" data-i18n="causal_left_value">49 files &mdash; G=0.801 &mdash; rank&nbsp;13</div>
+                        <div class="evolution-note" data-i18n="causal_left_note">Single 5,746-line <code>pipeline.py</code> monolith. Chunk-level Qdrant. BM25 sparse fusion. GPT-4.1/mini generation. No grounding sidecar. Total score ~0.742 on public leaderboard.</div>
+                    </div>
+                    <div class="evolution-card">
+                        <div class="evolution-kicker" data-i18n="causal_right_kicker">Day 13 final</div>
+                        <div class="evolution-value" data-i18n="causal_right_value">172 files &mdash; G=0.9956 &mdash; target&nbsp;1st</div>
+                        <div class="evolution-note" data-i18n="causal_right_note">Pipeline split into 24-file package. 4 Qdrant collections. LightGBM grounding sidecar. DB answerer fast path. Query contract compiler. Zerank-2 reranker. Kanon-2 1792d embeddings.</div>
+                    </div>
+                </div>
+                <div class="why-grid" style="margin-top: var(--space-4);">
+                    <div class="why-card">
+                        <div class="why-card-icon green">
+                            <span class="icon" aria-hidden="true"><ph-database weight="bold" size="20"></ph-database></span>
+                        </div>
+                        <h3 data-i18n="causal_card1_h">Grounding sidecar</h3>
+                        <p data-i18n="causal_card1_p">Page selection runs independently from answer generation. 14 modules: scope classifier, authority priors, LightGBM scorer, evidence portfolio optimizer, necessity pruner. G went from 0.801 to 0.9956.</p>
+                    </div>
+                    <div class="why-card">
+                        <div class="why-card-icon blue">
+                            <span class="icon" aria-hidden="true"><ph-lightning weight="bold" size="20"></ph-lightning></span>
+                        </div>
+                        <h3 data-i18n="causal_card2_h">DB answerer fast path</h3>
+                        <p data-i18n="causal_card2_p">QueryContractCompiler parses the question into a typed IR. DatabaseAnswerer resolves field lookups (dates, parties, judges, commencement) from a compiled corpus registry in &lt;50ms — no LLM needed.</p>
+                    </div>
+                    <div class="why-card">
+                        <div class="why-card-icon amber">
+                            <span class="icon" aria-hidden="true"><ph-arrows-split weight="bold" size="20"></ph-arrows-split></span>
+                        </div>
+                        <h3 data-i18n="causal_card3_h">Typed answer routing</h3>
+                        <p data-i18n="causal_card3_p">StrictAnswerer (2,534 lines) handles boolean, number, date, name, names with type-specific regex. GPT-4.1 for free_text, GPT-4.1-mini for strict types. Predicted output for boolean (speculative decoding).</p>
+                    </div>
+                    <div class="why-card">
+                        <div class="why-card-icon green">
+                            <span class="icon" aria-hidden="true"><ph-robot weight="bold" size="20"></ph-robot></span>
+                        </div>
+                        <h3 data-i18n="causal_card4_h">Agent-orchestrated iteration</h3>
+                        <p data-i18n="causal_card4_p">12 Claude Opus 4.6 agents (DAGAN, SHAI, TAMAR, GILAD, NOGA, &hellip;) pulled tasks from a FastAPI watering-hole server, each running isolated experiment lanes with gated telemetry merges.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pipeline -->
+        <section id="pipeline" class="pipeline-section reveal">
+            <div class="container">
+                <h2 class="section-title" data-i18n="pipeline_title">Final Pipeline Architecture</h2>
+                <p class="section-sub" data-i18n="pipeline_sub">LangGraph DAG with structured fast paths, hybrid retrieval, independent grounding sidecar, and typed answer routing. 24 pipeline files in <code>core/pipeline/</code>.</p>
+                <details>
+                    <summary class="pipeline-toggle">
+                        <span class="pipeline-toggle-inner">
+                            <span class="icon chevron-icon" aria-hidden="true"><ph-caret-down weight="bold" size="16"></ph-caret-down></span>
+                            <span data-i18n="pipeline_toggle">Open pipeline diagram</span>
+                        </span>
+                    </summary>
+                    <div class="pipeline-wrap">
+                        <div class="pipeline-diagram" role="img" aria-label="12-stage pipeline diagram">
+                            <svg class="pipeline-links" aria-hidden="true" focusable="false"></svg>
+                            <div class="pipeline-row-grid top">
+                                <div class="pnode" data-step="1">
+                                    <div class="pnode-step">01</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-tag weight="bold" size="20"></ph-tag></div>
+                                    <div class="pnode-label" data-i18n="node_classify">Classify</div>
+                                    <div class="pnode-meta" data-i18n="node_classify_meta">heuristic, zero-latency</div>
+                                </div>
+                                <div class="pnode" data-step="2">
+                                    <div class="pnode-step">02</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-tree-structure weight="bold" size="20"></ph-tree-structure></div>
+                                    <div class="pnode-label" data-i18n="node_contract">Query Contract</div>
+                                    <div class="pnode-meta" data-i18n="node_contract_meta">typed IR compiler</div>
+                                </div>
+                                <div class="pnode conditional" data-step="3">
+                                    <div class="pnode-step">03</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-lightning weight="bold" size="20"></ph-lightning></div>
+                                    <div class="pnode-label" data-i18n="node_db">DB Answerer</div>
+                                    <div class="pnode-meta" data-i18n="node_db_meta">&lt;50ms fast path</div>
+                                </div>
+                                <div class="pnode" data-step="4">
+                                    <div class="pnode-step">04</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-magnifying-glass weight="bold" size="20"></ph-magnifying-glass></div>
+                                    <div class="pnode-label" data-i18n="node_retrieve">Retrieve</div>
+                                    <div class="pnode-meta" data-i18n="node_retrieve_meta">Kanon-2 + BM25 RRF</div>
+                                </div>
+                                <div class="pnode" data-step="5">
+                                    <div class="pnode-step">05</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-arrows-down-up weight="bold" size="20"></ph-arrows-down-up></div>
+                                    <div class="pnode-label" data-i18n="node_rerank">Zerank-2</div>
+                                    <div class="pnode-meta" data-i18n="node_rerank_meta">TOP_N=12 chunks</div>
+                                </div>
+                                <div class="pnode conditional" data-step="6">
+                                    <div class="pnode-step">06</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-gauge weight="bold" size="20"></ph-gauge></div>
+                                    <div class="pnode-label" data-i18n="node_confidence">Confidence</div>
+                                    <div class="pnode-meta" data-i18n="node_confidence_meta">retry gate</div>
+                                </div>
+                            </div>
+                            <div class="pipeline-row-grid bottom">
+                                <span class="pipeline-spacer" aria-hidden="true"></span>
+                                <div class="pnode conditional" data-step="7">
+                                    <div class="pnode-step">07</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-arrow-counter-clockwise weight="bold" size="20"></ph-arrow-counter-clockwise></div>
+                                    <div class="pnode-label" data-i18n="node_retry">Retry</div>
+                                    <div class="pnode-meta" data-i18n="node_retry_meta">widen retrieval</div>
+                                </div>
+                                <div class="pnode" data-step="8">
+                                    <div class="pnode-step">08</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-sparkle weight="bold" size="20"></ph-sparkle></div>
+                                    <div class="pnode-label" data-i18n="node_generate">Generate</div>
+                                    <div class="pnode-meta" data-i18n="node_generate_meta">GPT-4.1 / mini</div>
+                                </div>
+                                <div class="pnode" data-step="9">
+                                    <div class="pnode-step">09</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-funnel weight="bold" size="20"></ph-funnel></div>
+                                    <div class="pnode-label" data-i18n="node_strict">StrictAnswerer</div>
+                                    <div class="pnode-meta" data-i18n="node_strict_meta">type coercion</div>
+                                </div>
+                                <div class="pnode" data-step="10">
+                                    <div class="pnode-step">10</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-chart-line weight="bold" size="20"></ph-chart-line></div>
+                                    <div class="pnode-label" data-i18n="node_grounding">Grounding Sidecar</div>
+                                    <div class="pnode-meta" data-i18n="node_grounding_meta">LightGBM + portfolio</div>
+                                </div>
+                                <div class="pnode" data-step="11">
+                                    <div class="pnode-step">11</div>
+                                    <div class="pnode-icon" aria-hidden="true"><ph-broadcast weight="bold" size="20"></ph-broadcast></div>
+                                    <div class="pnode-label" data-i18n="node_emit">Emit + Finalize</div>
+                                    <div class="pnode-meta" data-i18n="node_emit_meta">SSE + telemetry</div>
+                                </div>
+                            </div>
+                            <div class="pipeline-legend" data-i18n="pipeline_legend">Dashed border = conditional/fast-exit path. DB Answerer and Confidence gate both short-circuit to Emit. Grounding sidecar runs independently — page selection never touches answer text.</div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <!-- Canonical Answer Audit -->
+        <section id="audit" class="demo-section reveal">
+            <div class="container">
+                <h2 class="section-title" data-i18n="audit_title">Canonical Answer Audit</h2>
+                <p class="section-sub" data-i18n="audit_sub">One question, one final answer, one inspectable evidence path from answer to supporting source.</p>
+                <div class="demo-notice" data-i18n="audit_notice">
+                    <strong>Simplified evidence views</strong> derived from real evaluation outputs, with the citation chain kept visible.
+                </div>
+                <div class="demo-grid">
+                    <div class="demo-card">
+                        <div class="demo-card-header">
+                            <div class="demo-type">
+                                <span class="icon" aria-hidden="true"><ph-check-circle weight="bold" size="16"></ph-check-circle></span>
+                                <span data-i18n="audit_type_boolean">strict_boolean</span>
+                            </div>
+                            <div class="demo-ttft">TTFT: 696ms</div>
+                        </div>
+                        <div class="demo-question">
+                            <div class="demo-question-label" data-i18n="demo_q_label">Question</div>
+                            <p data-i18n="audit_bool_q">Under the Operating Law 2018, can the Registrar be held liable for acts or omissions in performing their functions if the act or omission is shown to have been in bad faith, according to Article 7(8)?</p>
+                        </div>
+                        <div class="demo-answer">
+                            <div class="demo-answer-label">
+                                <span class="icon" aria-hidden="true"><ph-seal-check weight="bold" size="16"></ph-seal-check></span>
+                                <span data-i18n="demo_a_label">System Answer</span>
+                            </div>
+                            <p data-i18n="audit_bool_a"><strong>Yes</strong></p>
+                            <div class="audit-stack">
+                                <div>
+                                    <div class="audit-kicker" data-i18n="audit_kicker_authority">Authority trail</div>
+                                    <ul class="audit-list">
+                                        <li data-i18n="audit_bool_law">Law: Operating Law 2018</li>
+                                        <li data-i18n="audit_bool_provision">Provision: Article 7(8)</li>
+                                        <li data-i18n="audit_bool_telemetry">Evidence trail: 6 chunks used across 6 source pages</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <div class="audit-kicker" data-i18n="audit_kicker_excerpt">Source excerpt</div>
+                                    <blockquote class="audit-quote" data-i18n="audit_bool_quote">&ldquo;... shown to have been in bad faith.&rdquo;</blockquote>
+                                </div>
+                                <div>
+                                    <div class="audit-kicker" data-i18n="audit_kicker_why">Why this matters</div>
+                                    <p class="audit-proof" data-i18n="audit_bool_why">The system answers a deterministic legal question with a typed output and avoids adding unsupported narrative around the cited provision.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="demo-meta">
+                            <div class="demo-meta-item">
+                                <span class="icon" aria-hidden="true"><ph-stack weight="bold" size="16"></ph-stack></span>
+                                <span data-i18n="audit_bool_meta_chunks">6 chunks used</span>
+                            </div>
+                            <div class="demo-meta-item">
+                                <span class="icon" aria-hidden="true"><ph-file-search weight="bold" size="16"></ph-file-search></span>
+                                <span data-i18n="audit_bool_meta_path">Article-level answer path</span>
+                            </div>
+                            <div class="demo-meta-item">
+                                <span class="icon" aria-hidden="true"><ph-timer weight="bold" size="16"></ph-timer></span>
+                                <span data-i18n="audit_bool_meta_time">Search: 37ms &middot; Rerank: 290ms &middot; Generation: 519ms</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="demo-card">
+                        <div class="demo-card-header">
+                            <div class="demo-type">
+                                <span class="icon" aria-hidden="true"><ph-file-text weight="bold" size="16"></ph-file-text></span>
+                                <span data-i18n="audit_type_free_text">free_text</span>
+                            </div>
+                            <div class="demo-ttft">TTFT: 957ms</div>
+                        </div>
+                        <div class="demo-question">
+                            <div class="demo-question-label" data-i18n="demo_q_label">Question</div>
+                            <p data-i18n="audit_ft_q">When was the DIFC Laws Amendment Law, DIFC Law No. 8 of 2018 enacted and what law did it amend?</p>
+                        </div>
+                        <div class="demo-answer">
+                            <div class="demo-answer-label">
+                                <span class="icon" aria-hidden="true"><ph-seal-check weight="bold" size="16"></ph-seal-check></span>
+                                <span data-i18n="demo_a_label">System Answer</span>
+                            </div>
+                            <p data-i18n="audit_ft_a1">The DIFC Laws Amendment Law, DIFC Law No. 8 of 2018 was enacted on the <strong>5th day of November 2018</strong> <span class="cite">cite: fe81ef...e4bd25d2</span>.</p>
+                            <p style="margin-top: var(--space-3);" data-i18n="audit_ft_a2">This amendment law amended several laws, including the <strong>Trust Law, DIFC Law No. 4 of 2018</strong> <span class="cite">cite: 6f7b33...df926698</span> and the <strong>Non Profit Incorporated Organisations Law, DIFC Law No. 6 of 2012</strong> <span class="cite">cite: 2071fc...95dd46c9</span>.</p>
+                            <div class="audit-stack">
+                                <div>
+                                    <div class="audit-kicker" data-i18n="audit_kicker_authority">Authority trail</div>
+                                    <ul class="audit-list">
+                                        <li data-i18n="audit_ft_instrument">Instrument: DIFC Laws Amendment Law, DIFC Law No. 8 of 2018</li>
+                                        <li data-i18n="audit_ft_enactment">Enactment fact surfaced in final answer: 5th day of November 2018</li>
+                                        <li data-i18n="audit_ft_telemetry">Evidence trail: 8 chunks retrieved, 1 cited page</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <div class="audit-kicker" data-i18n="audit_kicker_excerpt">Source excerpt</div>
+                                    <blockquote class="audit-quote" data-i18n="audit_ft_quote">&ldquo;... 5th day of November 2018.&rdquo;</blockquote>
+                                </div>
+                                <div>
+                                    <div class="audit-kicker" data-i18n="audit_kicker_why">Why this matters</div>
+                                    <p class="audit-proof" data-i18n="audit_ft_why">This is a multi-part free-text answer, but the evidence path still stays legible: enactment fact, amended-law references, and emitted citations remain separable and auditable.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="demo-meta">
+                            <div class="demo-meta-item">
+                                <span class="icon" aria-hidden="true"><ph-stack weight="bold" size="16"></ph-stack></span>
+                                <span data-i18n="audit_ft_meta_chunks">8 chunks retrieved, 1 cited</span>
+                            </div>
+                            <div class="demo-meta-item">
+                                <span class="icon" aria-hidden="true"><ph-file-search weight="bold" size="16"></ph-file-search></span>
+                                <span data-i18n="audit_ft_meta_path">Multi-part answer with separate cited claims</span>
+                            </div>
+                            <div class="demo-meta-item">
+                                <span class="icon" aria-hidden="true"><ph-timer weight="bold" size="16"></ph-timer></span>
+                                <span data-i18n="audit_ft_meta_time">Rerank: 558ms &middot; Generation: 6,052ms</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Method Appendix -->
+        <section id="appendix" class="reveal">
+            <div class="container">
+                <h2 class="section-title" data-i18n="appendix_title">Method Appendix</h2>
+                <p class="section-sub" data-i18n="appendix_sub">Component-level detail: models, retrieval strategy, grounding pipeline, and agent orchestration architecture.</p>
+                <div class="tech-grid">
+                    <div class="tech-card">
+                        <div class="tech-card-header">
+                            <div class="tech-card-icon blue"><span class="icon" aria-hidden="true"><ph-magnifying-glass weight="duotone" size="22"></ph-magnifying-glass></span></div>
+                            <div>
+                                <h3 data-i18n="appendix_card1_h">Hybrid retrieval &mdash; Kanon-2 + BM25</h3>
+                            </div>
+                        </div>
+                        <p data-i18n="appendix_card1_p"><strong>Kanon-2 1792-dim dense embeddings</strong> fused with <strong>FastEmbed BM25 sparse vectors</strong> via Qdrant server-side Reciprocal Rank Fusion. 4 collections: <code>chunks</code>, <code>pages</code>, <code>segments</code>, <code>bridge_facts</code>. Citation graph expansion for cross-document hops. Segment retrieval for article-level questions.</p>
+                    </div>
+                    <div class="tech-card">
+                        <div class="tech-card-header">
+                            <div class="tech-card-icon amber"><span class="icon" aria-hidden="true"><ph-brain weight="duotone" size="22"></ph-brain></span></div>
+                            <div>
+                                <h3 data-i18n="appendix_card2_h">Generation &mdash; GPT-4.1 / GPT-4.1-mini</h3>
+                            </div>
+                        </div>
+                        <p data-i18n="appendix_card2_p"><strong>GPT-4.1</strong> for <code>free_text</code> and complex multi-document queries. <strong>GPT-4.1-mini</strong> for strict types (boolean, number, date, name, names). <strong>Zerank-2</strong> reranker narrows to TOP_N=12 chunks. Predicted output for boolean (speculative decoding). Evidence-first prompts with claim graph and proof-carrying answers.</p>
+                    </div>
+                    <div class="tech-card">
+                        <div class="tech-card-header">
+                            <div class="tech-card-icon green"><span class="icon" aria-hidden="true"><ph-chart-line weight="duotone" size="22"></ph-chart-line></span></div>
+                            <div>
+                                <h3 data-i18n="appendix_card3_h">Grounding sidecar &mdash; LightGBM page scorer</h3>
+                            </div>
+                        </div>
+                        <p data-i18n="appendix_card3_p">Independent from the answer path. <strong>LightGBM page scorer</strong> trained on reviewed grounding labels. Scope classifier (single-doc vs multi-doc). Evidence portfolio optimizer. Authority priors. Necessity pruner. Semantic re-ranking. 14 modules, 4,005 lines in <code>core/grounding/</code>. G lifted from 0.801 to 0.9956.</p>
+                    </div>
+                    <div class="tech-card">
+                        <div class="tech-card-header">
+                            <div class="tech-card-icon blue"><span class="icon" aria-hidden="true"><ph-robot weight="duotone" size="22"></ph-robot></span></div>
+                            <div>
+                                <h3 data-i18n="appendix_card4_h">Agent orchestration &mdash; 12 Claude agents</h3>
+                            </div>
+                        </div>
+                        <p data-i18n="appendix_card4_p">12 <strong>Claude Opus 4.6</strong> agents (DAGAN, SHAI, TAMAR, GILAD, NOGA, EYAL, and others) ran concurrently via <strong>Claude Code CLI</strong>. A <strong>FastAPI task server</strong> at <code>localhost:8052</code> served the work queue — agents pulled tasks via HTTP, preventing idle loops. Each agent owned an isolated experiment lane; changes required telemetry-gated merges.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Limits -->
+        <section id="limits" class="reveal">
+            <div class="container">
+                <h2 class="section-title" data-i18n="limits_title">Design Decisions and Trade-offs</h2>
+                <p class="section-sub" data-i18n="limits_sub">Each architectural choice involved an explicit trade-off justified by score math. The decisions that shaped the system most are documented here.</p>
+                <div class="why-grid">
+                    <div class="why-card">
+                        <div class="why-card-icon green">
+                            <span class="icon" aria-hidden="true"><ph-split-horizontal weight="bold" size="20"></ph-split-horizontal></span>
+                        </div>
+                        <h3 data-i18n="limits_card1_h">Chunks for answers, sidecar for grounding</h3>
+                        <p data-i18n="limits_card1_p">The March 16 page-first crisis (4x latency, 52% answer churn) proved that page-level retrieval degrades answer quality. Chunk retrieval stayed as the LLM context path; page selection became an independent sidecar. This separation became the defining architectural pattern.</p>
+                    </div>
+                    <div class="why-card">
+                        <div class="why-card-icon blue">
+                            <span class="icon" aria-hidden="true"><ph-arrows-left-right weight="bold" size="20"></ph-arrows-left-right></span>
+                        </div>
+                        <h3 data-i18n="limits_card2_h">Rejected: BM25, HyDE, FlashRank, verifier</h3>
+                        <p data-i18n="limits_card2_p">BM25 standalone, RAG Fusion, HyDE, FlashRank reranker, and the LLM-based verifier were all trialed and rejected. Each either added latency without grounding gain, caused answer quality regression, or failed telemetry gating on the validation slice.</p>
+                    </div>
+                    <div class="why-card">
+                        <div class="why-card-icon amber">
+                            <span class="icon" aria-hidden="true"><ph-warning weight="bold" size="20"></ph-warning></span>
+                        </div>
+                        <h3 data-i18n="limits_card3_h">Private-set generalization is the true test</h3>
+                        <p data-i18n="limits_card3_p">All metrics on this page are from the public set. The private set is the only one that counts. Every component choice was evaluated for private generalization risk: overfitting to warm-up patterns, prompt-memorization, and LLM judge gaming were explicitly guarded against.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/chernistry/rag_challenge" target="_blank" rel="noopener" data-i18n="footer_github">GitHub</a>
+                <a href="https://machinescansee.com" data-i18n="footer_competition">Competition</a>
+                <a href="https://machinescansee.com" target="_blank" rel="noopener" data-i18n="footer_mcv">Machines Can See 2026</a>
+            </div>
+            <p data-i18n="footer_brief">Final-state evidence brief for the Agentic RAG Legal Challenge 2026. V10.1 &mdash; G=0.9956 &mdash; 172 Python files &mdash; 12 Claude agents.</p>
+        </div>
+    </footer>
+
+    <script>
+        (function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+        }
+
+        (function initMotion() {
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const formatValue = (value, format) => {
+                const n = Number(value);
+                if (!Number.isFinite(n)) return String(value);
+                switch (format) {
+                    case 'ms-int': return `${Math.round(n).toLocaleString()}ms`;
+                    case 'pct-0': return `${Math.round(n)}%`;
+                    case 'pct-2': return `${n.toFixed(2)}%`;
+                    case 'score-2': return n.toFixed(2);
+                    default: return String(value);
+                }
+            };
+
+            const animateCountUp = (el) => {
+                if (!el || el.dataset.animated === 'true') return;
+                const target = Number(el.dataset.countTo);
+                const format = el.dataset.format || '';
+                if (!Number.isFinite(target)) return;
+                el.dataset.animated = 'true';
+
+                if (reduceMotion || !('requestAnimationFrame' in window)) {
+                    el.textContent = formatValue(target, format);
+                    return;
+                }
+
+                const duration = 1100;
+                const start = performance.now();
+                const from = 0;
+                const step = (now) => {
+                    const t = Math.min(1, (now - start) / duration);
+                    const eased = 1 - Math.pow(1 - t, 4);
+                    const current = from + (target - from) * eased;
+                    el.textContent = formatValue(current, format);
+                    if (t < 1) requestAnimationFrame(step);
+                };
+                requestAnimationFrame(step);
+            };
+
+            const animateBars = (root) => {
+                const bars = (root || document).querySelectorAll('.metric-bar-fill[data-bar-fill]');
+                bars.forEach((bar) => {
+                    if (bar.dataset.animated === 'true') return;
+                    const pct = Number(bar.dataset.barFill);
+                    if (!Number.isFinite(pct)) return;
+                    bar.dataset.animated = 'true';
+                    requestAnimationFrame(() => { bar.style.width = `${Math.max(0, Math.min(100, pct))}%`; });
+                });
+            };
+
+            const runCountupsIn = (root) => {
+                (root || document).querySelectorAll('.countup[data-count-to]').forEach(animateCountUp);
+            };
+
+            const revealEls = Array.from(document.querySelectorAll('.reveal'));
+            if (reduceMotion || !('IntersectionObserver' in window)) {
+                revealEls.forEach((el) => el.classList.add('is-visible'));
+                runCountupsIn(document);
+                animateBars(document);
+                document.querySelectorAll('.pnode').forEach((node) => node.classList.add('is-lit'));
+                return;
+            }
+
+            const revealObserver = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (!entry.isIntersecting) return;
+                    entry.target.classList.add('is-visible');
+
+                    if (entry.target.querySelector('.countup[data-count-to]')) {
+                        runCountupsIn(entry.target);
+                    }
+
+                    if (entry.target.querySelector('.metric-bar-fill[data-bar-fill]')) {
+                        animateBars(entry.target);
+                    }
+
+                    if (entry.target.id === 'pipeline') {
+                        const nodes = Array.from(entry.target.querySelectorAll('.pnode'))
+                            .sort((a, b) => Number(a.dataset.step || '0') - Number(b.dataset.step || '0'));
+                        nodes.forEach((node, idx) => {
+                            window.setTimeout(() => node.classList.add('is-lit'), 70 * idx);
+                        });
+                    }
+
+                    revealObserver.unobserve(entry.target);
+                });
+            }, { threshold: 0.18 });
+
+            revealEls.forEach((el) => revealObserver.observe(el));
+
+            // Hero counters start immediately (above the fold).
+            runCountupsIn(document.querySelector('.hero'));
+        })();
+
+        (function initNavState() {
+            const links = Array.from(document.querySelectorAll('.header-link[href^="#"]'));
+            const sections = links
+                .map((link) => {
+                    const href = link.getAttribute('href');
+                    return href ? document.querySelector(href) : null;
+                })
+                .filter(Boolean);
+
+            if (!links.length || !sections.length) return;
+
+            const activate = (id) => {
+                links.forEach((link) => {
+                    const isActive = link.getAttribute('href') === `#${id}`;
+                    link.classList.toggle('is-active', isActive);
+                    if (isActive) link.setAttribute('aria-current', 'page');
+                    else link.removeAttribute('aria-current');
+                });
+            };
+
+            const initial = window.location.hash ? window.location.hash.slice(1) : sections[0].id;
+            activate(initial);
+
+            if (!('IntersectionObserver' in window)) return;
+
+            const navObserver = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+                if (visible[0]?.target?.id) activate(visible[0].target.id);
+            }, {
+                rootMargin: '-18% 0px -58% 0px',
+                threshold: [0.2, 0.35, 0.6],
+            });
+
+            sections.forEach((section) => navObserver.observe(section));
+            window.addEventListener('hashchange', () => {
+                const id = window.location.hash.slice(1);
+                if (id) activate(id);
+            });
+        })();
+
+        (function initPipelineLinks() {
+            const SVG_NS = 'http://www.w3.org/2000/svg';
+            const diagram = document.querySelector('.pipeline-diagram');
+            if (!diagram) return;
+            const svg = diagram.querySelector('svg.pipeline-links');
+            if (!svg) return;
+            const details = diagram.closest('details');
+
+            const clamp = (min, max, value) => Math.min(max, Math.max(min, value));
+            const clear = (node) => {
+                while (node.firstChild) node.removeChild(node.firstChild);
+            };
+            const mk = (name, attrs = {}) => {
+                const el = document.createElementNS(SVG_NS, name);
+                Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
+                return el;
+            };
+            const box = (el, rootRect) => {
+                const r = el.getBoundingClientRect();
+                const left = r.left - rootRect.left;
+                const right = r.right - rootRect.left;
+                const top = r.top - rootRect.top;
+                const bottom = r.bottom - rootRect.top;
+                const width = r.width;
+                const height = r.height;
+                return {
+                    left, right, top, bottom, width, height,
+                    cx: left + width / 2,
+                    cy: top + height / 2,
+                };
+            };
+
+            const connectorPath = (a, b) => {
+                const yOverlap = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+                const minH = Math.min(a.height, b.height);
+                const sameRow = minH > 0 && (yOverlap / minH) > 0.6;
+
+                if (sameRow) {
+                    const dirX = b.cx >= a.cx ? 1 : -1;
+                    const gap = dirX === 1 ? (b.left - a.right) : (a.left - b.right);
+                    const pad = clamp(2, 10, gap / 2 - 2);
+                    const sx = dirX === 1 ? (a.right + pad) : (a.left - pad);
+                    const ex = dirX === 1 ? (b.left - pad) : (b.right + pad);
+                    const sy = a.cy;
+                    const ey = b.cy;
+                    const dx = ex - sx;
+                    const c1x = sx + dx * 0.35;
+                    const c2x = ex - dx * 0.35;
+                    return `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ey}, ${ex} ${ey}`;
+                }
+
+                const dirY = b.cy >= a.cy ? 1 : -1;
+                const gapY = dirY === 1 ? (b.top - a.bottom) : (a.top - b.bottom);
+                const padY = clamp(2, 10, gapY / 2 - 2);
+                const sx = a.cx;
+                const sy = dirY === 1 ? (a.bottom + padY) : (a.top - padY);
+                const ex = b.cx;
+                const ey = dirY === 1 ? (b.top - padY) : (b.bottom + padY);
+
+                if (Math.abs(ex - sx) < 1) return `M ${sx} ${sy} L ${ex} ${ey}`;
+
+                const midY = (sy + ey) / 2;
+                const radius = 10;
+
+                const p0 = { x: sx, y: sy };
+                const p1 = { x: sx, y: midY };
+                const p2 = { x: ex, y: midY };
+                const p3 = { x: ex, y: ey };
+
+                const seg1 = Math.abs(p1.y - p0.y);
+                const seg2 = Math.abs(p2.x - p1.x);
+                const seg3 = Math.abs(p3.y - p2.y);
+
+                const r1 = Math.min(radius, seg1 / 2, seg2 / 2);
+                const r2 = Math.min(radius, seg2 / 2, seg3 / 2);
+
+                if (r1 < 1 || r2 < 1) {
+                    return `M ${p0.x} ${p0.y} L ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y}`;
+                }
+
+                const dy0 = Math.sign(p1.y - p0.y) || 1;
+                const dx1 = Math.sign(p2.x - p1.x) || 1;
+                const dy1 = Math.sign(p3.y - p2.y) || 1;
+
+                const p1a = { x: p1.x, y: p1.y - dy0 * r1 };
+                const p1b = { x: p1.x + dx1 * r1, y: p1.y };
+                const p2a = { x: p2.x - dx1 * r2, y: p2.y };
+                const p2b = { x: p2.x, y: p2.y + dy1 * r2 };
+
+                return `M ${p0.x} ${p0.y} L ${p1a.x} ${p1a.y} Q ${p1.x} ${p1.y} ${p1b.x} ${p1b.y} L ${p2a.x} ${p2a.y} Q ${p2.x} ${p2.y} ${p2b.x} ${p2b.y} L ${p3.x} ${p3.y}`;
+            };
+
+            const draw = () => {
+                if (details && !details.open) return;
+                const rootRect = diagram.getBoundingClientRect();
+                const width = Math.round(rootRect.width);
+                const height = Math.round(rootRect.height);
+                if (width <= 0 || height <= 0) return;
+
+                svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+                svg.setAttribute('preserveAspectRatio', 'none');
+
+                clear(svg);
+
+                const defs = mk('defs');
+
+                const mkMarker = (id, cls) => {
+                    const marker = mk('marker', {
+                        id,
+                        viewBox: '0 0 10 10',
+                        refX: '10',
+                        refY: '5',
+                        markerWidth: '8',
+                        markerHeight: '8',
+                        orient: 'auto',
+                        markerUnits: 'userSpaceOnUse',
+                    });
+                    const head = mk('path', { d: 'M 0 0 L 10 5 L 0 10 z' });
+                    head.setAttribute('class', cls);
+                    marker.appendChild(head);
+                    return marker;
+                };
+
+                defs.appendChild(mkMarker('pl-arrow', 'pl-arrowhead'));
+                defs.appendChild(mkMarker('pl-arrow-warn', 'pl-arrowhead-warn'));
+                svg.appendChild(defs);
+
+                const nodes = Array.from(diagram.querySelectorAll('.pnode'))
+                    .sort((x, y) => Number(x.dataset.step || '0') - Number(y.dataset.step || '0'));
+
+                for (let i = 0; i < nodes.length - 1; i++) {
+                    const aEl = nodes[i];
+                    const bEl = nodes[i + 1];
+                    const a = box(aEl, rootRect);
+                    const b = box(bEl, rootRect);
+                    const d = connectorPath(a, b);
+                    if (!d) continue;
+
+                    const path = mk('path', { d });
+                    path.setAttribute('class', 'pl-link');
+
+                    const isConditional = (aEl.dataset.step === '6' && bEl.dataset.step === '7');
+                    if (isConditional) path.classList.add('is-conditional');
+                    path.setAttribute('marker-end', isConditional ? 'url(#pl-arrow-warn)' : 'url(#pl-arrow)');
+
+                    svg.appendChild(path);
+                }
+            };
+
+            let raf = 0;
+            let settleUntil = 0;
+            const schedule = (settleMs = 0) => {
+                if (typeof settleMs === 'number' && settleMs > 0) {
+                    settleUntil = Math.max(settleUntil, performance.now() + settleMs);
+                }
+                if (raf) return;
+
+                const tick = () => {
+                    raf = 0;
+                    draw();
+                    if (settleUntil && performance.now() < settleUntil) {
+                        raf = requestAnimationFrame(tick);
+                    }
+                };
+
+                raf = requestAnimationFrame(tick);
+            };
+
+            schedule();
+            window.addEventListener('resize', () => schedule(), { passive: true });
+            window.addEventListener('load', () => schedule(), { once: true });
+
+            if (details) {
+                details.addEventListener('toggle', () => setTimeout(() => schedule(), 0));
+            }
+
+            if ('ResizeObserver' in window) {
+                const ro = new ResizeObserver(() => schedule());
+                ro.observe(diagram);
+            }
+
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(() => schedule()).catch(() => {});
+            }
+
+            const pnodes = Array.from(diagram.querySelectorAll('.pnode'));
+            if ('MutationObserver' in window && pnodes.length) {
+                const mo = new MutationObserver(() => schedule(500));
+                pnodes.forEach((node) => mo.observe(node, { attributes: true, attributeFilter: ['class'] }));
+            }
+        })();
+    </script>
+
+</body>
+</html>

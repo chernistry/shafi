@@ -1,0 +1,23 @@
+{
+  "base_train_jsonl": "data/derived/grounding_ml/v2_reviewed/train.jsonl",
+  "dev_jsonl": "/Users/sasha/IdeaProjects/personal_projects/rag_challenge/data/derived/grounding_ml/v2_reviewed/dev.jsonl",
+  "eval_target_map": "/tmp/private_target_map.json",
+  "base_model": "models/page_scorer/v8_temporal/page_scorer.joblib",
+  "seed": 610,
+  "model_type": "lgbm",
+  "label_mode": "reviewed_weighted",
+  "feature_policy": "runtime_safe_r3",
+  "corrected_sample_weight": 5.0,
+  "lgbm_params": {
+    "n_estimators": 80,
+    "max_depth": 3,
+    "learning_rate": 0.08,
+    "num_leaves": 8,
+    "min_child_samples": 15,
+    "scale_pos_weight": 6.25,
+    "subsample": 0.7,
+    "colsample_bytree": 0.7,
+    "reg_alpha": 1.0,
+    "reg_lambda": 2.0
+  }
+}

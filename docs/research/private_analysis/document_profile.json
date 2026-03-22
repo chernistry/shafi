@@ -1,0 +1,6362 @@
+[
+  {
+    "doc_id": "00427a0402e71479e78abd615764eba7f3874352663aa227caeca830a3cbf6b4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "01881c1848763013a55f6c39fd55a8e29e74e34ab8e31f96362131421d4cc3e0",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "01ab862cf9ef7012d76d06ebdafa1023ba91138961790824bbcdfd45d90adb86",
+    "title": "General Partnership Law (DIFC Law No. 11 of 2004)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "0223ebe925fccfb9702b6520206010b57df9988f8edb6f574ad1380e413bbe6d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "02a351b5d6dbfe379bfff37b5ec0134e216cd2dacef864b328657151d671a2ff",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "02ec30ff6c98fa3adccd3834d73d76a2ae11dab91f2b4ea3501ff24db27436cc",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "03b621728fe29eb6113fcdb57f6458d793fd2d5c5b833ae26d40f04a29c85359",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "03b72458c300c660c0b6c162f27f00ce563a43b16d66df937abda94f71615215",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0428cdda3cb116062c96885d16d8bb023f6a4a089d40f8129e0253e4fb165d9d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0471e83c1ea18086cfb6b3ff51da6f22b0efee337f10315b2593f782297ccb84",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "04be93255ec4b88e6e6c65c8e9335e10729723c2637452f3ad66d5b3dbe87513",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0511012a2d66f8f56fb9c9dad4c0f2f900bcf623e0c419c658e66c746c1aa013",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "057397024d837ea7bcdf3bfa6a0457d0e161a2a67e595cdbfe55e6ba64ef1a40",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "07853510e9769cd0472f2e65f082649fd1b48b1bcdd7eb2b2e3185b7822fc39b",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "09660f78c26cd56c08c7253ed21ba01fb246092f482ccd8acd8e6f9b6fd2d917",
+    "title": "SCT 295/2025 - Olexa v Odon",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "0a18273af2033f502df727480033b00235011b7959142a5bf3deadbca79cfabb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0a59bb9e8700bdbde4b2cd2ccb3ef6d0e80558a346cf7308f4ff2a0868b1a76c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0bf0e451b14cc7f09d2acef82761ec544dc4f61cd2438d9c445f50c07ec7beac",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0c3661cf1a1002b091a503fe04bdfba72ed3e9c11eb9b05a4c8345224445bae6",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0c4a738afba14a4cba69ae637ffb197f85cfa4a9882fe4108b7d6fb982c08a5f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0e67dea643dcc288aa252c0117e0e5046a344a560626fbd5a0c555cf6da556c3",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0ebf2364f577242b067f3a73a7f1089872e38d2eff0423973adcf6ace42bd303",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0ed03973e0da7d5b5d8f7366a1db44e6e90d96e3fc13c1fed102f5d7a586aad9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0ef7f18935aa585fa35e373f8b6d00c7ea38503da9ed22feb12e48ca9eefb7f4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0f979e960d3ae625f749253073e182d0956b0dadede3551d2f70847dab517e4f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0fab7473adefdc8ab2150cb26aac46cf3f6b5c1da374abb1ec217448ae3c2869",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "0ffd81e8fd8b760ec2bf3af697f340634ef01f30d3e1a62d8f7c58fbc0cd59ba",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "103a9b704ee8a81483a357fed2ea3a7f3ce3cfd4b267bc1d4ad453f36ea2e6cd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1048c5836cde1757702d01500c8b9f151fe5f759560525d7541e723020b8d41a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "108efd7d2665497ea8e52cec24f39f17a850dfb3f2781b339f7963c3d0bd1963",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1097d4b46b95e7b5522bc038d5dc8189f952f04470144de16e1f2add030c1480",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "11409039171b146f7549d0b93ce1742709010bc6a063e8c64c721c012f0b5b28",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "11dd07e610124e86d7c0d1259b13be4806ed0fd060ff02acbe1fc0ab6e393f9a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "13538e4c8db17bf75c0ee32d5658cb1ed07b6fc4ab0f540c8c6289932f441701",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "138dc1cd698cc761ced3726040971ea9025df4d4b7d515412582131ae0e2c751",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "138ff0271bda045823591d0deb089ce14479b561551b90991a23978c118f0cf4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "13f30e764b6645a69f28ec4fd44d419503debfa09538cea43971fe567ffbdf1c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "13f4f5176e77e34e6502e7d1e705034f5ee67998c64cecfc846d5472a1283f61",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "156c7fec26ed2105064c77f4b455ef6e4dab4df8575983f4dba0896292dfb954",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "159dcd9e773b9de72184c318194f085131a99dae6a53318ae816570bd6daaf72",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1635b7381219c2702f25f11e876b3f6c4e99deef68b3f7d424fa32a81952dd64",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "18d5d0320cded1a097fa66202ff2a80dd38e6ab818dfefffea614cd389632dad",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1ae3f9d65856369a15a922eaa5c917a05956869f51c61d5e1c1344107411af42",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1b446e196b4d1752241c8ff689a31ea705e98ad0c16b9d343c303664f72b64a1",
+    "title": "CFI 057/2025 (or related case)",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "1d07d30a17936de4db13fc36409a7b6fa38918a0b87cb806e35b7d598ee7000c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1e6a579d52e99b6ae002a3d4c715c2e2258001e2ceac4092cb65c658172f6eb0",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1e6d5be08babec248c60d8a1cfd1d84ca71c1284b483cea06af65c262698f928",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1f78ba7075f902bff93087e4ae338e72d01b2e836151eab107388863c01e59f5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "1fbae05f38185db6113ecb323f836cd8c5d188037921f5c5c5b7e0a812d9aa14",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "2071fcaf840c53c30a7f4851ca1c0fc1a33475370170e8c22785f9e92d26608a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "20be16a68c4d24768f569bcde5ddb29437204006c0c4262296c350b365672cd1",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "22442c5ee999e2519c68de908be511875a84f2b810ed540c2dcfcbcc65031434",
+    "title": "Foundations Law (DIFC Law No. 3 of 2018)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "23c73b12ed7c78b66808a56f007f12cfb2b7496c6766d682f10572c5355311d0",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "2479d3be6e11a85a6337b32e90ffd398d25a1336a12c0ed5f1e915917f29032f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "265968877f0f4ffa5838a08335ca9d807f2329e83e8ce5088b85fd5e11941746",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "26dbc112e53aac8fb48fdaaba20f55beebcab2724934bbb19f4accbd671d38be",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "27f2898ad3be3087ca0fc56683d24dd389d0aa9e57a72144ee16d3e73e2236b7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "29c70158f1764b519bf8a27cc9dfa96851a6fecf25116059e658c570f39b7492",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "2a2461886df041f237b8f2791c68315070c99f91a719f7d375c3ecdbae72a439",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "2a803bd388debf103582d2396a18e011d96ced0b176227409f7e8b17ee50ac3a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "2bc070593cb09e5256523174fd7b7a2049c2a7ac6e3abd444639b55eda5da751",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "302a0bd8d67775e8dc5960ecec7879be566300d8b32c4b0153ba15ebdb279425",
+    "title": "General Partnership Law (DIFC Law No. 11 of 2004)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "30f90aeb909b703d529ad0548a3062f6c63ed01e269028328d919ed6a3872de8",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "330c4f93e8097a653beb1c1028035943e18fb7475cdf59d01164a8887c7fedb3",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "33bc02044716acdfedb164b065bdaec098aaadcae863c591f9931c88e7307d16",
+    "title": "Employment Law (DIFC Law No. 2 of 2019)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "349c0fe4acab208c0acbe3d2a7226eec079afbb77f4f490f706af338a4e26e9f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "34ce0548d06c348a6dfa9d580f46f105df37fe1bbfe81fa1f4e7b78f0bed05b6",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "37f14b6d6d2a99ea50a8cbe6221c0bef5a0b75a65e270e9b1144b6c2acdb2f57",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "382fb554bdb43738e5ee8ec04cf727a82c852272792219ea35343e2688d48f93",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "396af0dd6b50e174acdfe76a9c60f9d72c4d924b2e71f4d081e5c36965cd3233",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3a574fc4f0baa5ec7ff0dcc822d7c55e4f9c493c24addc217c8df3d848c16fa5",
+    "title": "SCT 169/2025 - Obasi v Oreana",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "3ac7926ffb27015038c93a49ad99bf4211729c4335aea865c0307ece8b19747b",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3b75c8fdd9b85e92adaf9e5511aa1a1e01012b00ddccf4349d5939a7114de7e9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3b9bd294ed6f3427259f6177a76f30be75d7949d82908ea0220729648ed17a9d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3bc2e1e4ad72d2b45b920a7e03c7f75941cc940a4965ad396ad23fb1967d64cc",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3c726426fb529e32acb84c440fce65e22d6d5fb1872de5c770803b1f780c2179",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3ce5e93d520a3651d156fc6d88ce767b0ee8816da205feb9b720c2c02c195017",
+    "title": "Law on the Application of Civil and Commercial Laws in the DIFC (DIFC Law No. 3 of 2004)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "3db5a33386822a7c5f3c76d917786564e7a9a2d960ed0074dbd9207e49ce0cca",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3df91d2a0d246b2c70f663cf92e9c0e345ef2485cf7027ccb1c24ab5732158bd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3ea274c21d79df4d2d62582439eab13132920fbdbd4ec46928c625fe307a8cbe",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "3f8a5ea0e051ba3af7a02da340c911fe0970ebece6c852c3e61a10c00cac6d6e",
+    "title": "DEC 001/2025 - Techteryx v Aria Commodities et al",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "3fa59589a91bf4913703ba0eedd08faa128948285b8a9d085bd7422248abe6c5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "406365706456d37cf871ccb1cfc4618bca6af7d838fbefca08b4a87a3cbe583d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4065b840f805f5dd59314e787d41c9e539faaa347821cf45ea1aec728faf4de4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4153eef0383716968a41846200fa8bb135726cb45d32787053699c805c427ec9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "417258d0c4d75589c3306091287e8269b4ec69c51ca96cfd456a7bb7201ee63a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "41da4a2ba3143f6d0c0f7cfd027538bd380cd35289d9af52870310b17b9902cb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "42b2f4a738af585282f11f9263c52695e7313c1aa2374ed61dd6bfce71946f87",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "437568a801115019fe8278385c0484bdf07ab86f9a499ecaba2b7969b37c764b",
+    "title": "CA 005/2025 - LXT Real Estate v SIR Real Estate",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "43b9033ec25f016635f416e4b49558f5bc29f6c55bbd72bea1d1d840b170a371",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "443e04bc1a78940b3fcd5438d24b6c5f182a276d354a3108e738b193675de032",
+    "title": "CFI 010/2024 - Fursa Consulting v Bay Gate Investment",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "44526eeeb977304793a333fd1851448f5f6d2e75ac0979cc265b03d819be99c5",
+    "title": "Contract Law (DIFC Law No. 6 of 2004)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "44927ba58d3565f435c12443d5fc44454516ee3d35512f788d52dfbdb4f5a14c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "44a42ad36d29f1032b87c08e5ef0ceedd87249842dc795122a26d0797b65a361",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "44eada8b59109a9786d26b923013ae3674be81e37fc9d5a10c5d2e46f04068f7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "46d65204bc0ed80abff934b09cd7dbd11e51b799d25bb14c5813cc36b02cf919",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4c433b99adaf983acb33ed71d199725eb1afc823cb20fb629b8c306d04363c7a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4cccd40fc2bd7aee0287bbff7ac8d922bb4ea4e4646c96af7c16784657d6e884",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4d4af3d59eb050c4d19323e9fe373010f6b1cc3cbc16e7d4e95b2e89aa630a81",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4d915373c993c3bd136c295927be2a071e4a790faa100d0f14fc690a486b4f3c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4e30baac0c5eb8273894d8f7e17d4066356c92eb15eedcc802abf45cf942da43",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4e387152960c1029b3711cacb05b287b13c977bc61f2558059a62b7b427a62eb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "4e417e0f9e35c59af41892165e1ac917525ce688a80508b5621f7d44fd852ea4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "503e3d85a978d32903dd01e58145aade4069b15c71203f893d584fae58c51bb5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "5065c2d1e4f99d8661b6fc72e49c6a3aa1cf5c81a2e397916e7f0f4f7091f9af",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "51d4b9c700ef128624b2b79f6caaf68f2cb879fce9e5329aefce57439322a162",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "520092b050dba213c387126ca1216326e6bad58ab955dbf77232270dcfe616e6",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "52fb230e1dd63d2ca35de47294783861e90f961643e1491637dd4f2072a08afd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "536bbce854b9406cc22697e04fcdabd645e030c0e55b918252643b00e0b2b25f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "54ba3b491049e03fe64fadb65dba420220901c50a6ca8e7100a33bed5f2a170d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "558e99a2079106c4bc6fe3f560c1c9d31ec42ee34d0a0deb3ff139d715af2e29",
+    "title": "ARB 032/2025",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "55fa145c3f08b4ca22bba9263dbcdb3ec4f9d9c762c73ae20e8e6f8019c010f7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "564c99c41f2d5a5d2b3d19c30b3eff2a45c884cc261c1aac9a13e6d0b8e3cd54",
+    "title": "Law on the Application of Civil and Commercial Laws Amendment Law (DIFC Law No. 8 of 2024)",
+    "doc_type_raw": "amendment_law",
+    "detected_type": "amendment_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "58eae81bf668e7f6c58619f419a49b5e35e2e5c9c7475475ace28ec562580545",
+    "title": "ARB 034/2025 - Ohtli v Onora",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "5b2832f111b3aa72cc13807c93b0681112d347dd56cbf623d2ee63373af8f593",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "5c3e143e80b72b5077f5154e8f0f3e5f7fe4e23dc852c0eee87724929edc9afe",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "5cf25531f59a1746d3af4ea82e857ddc0bc5e5c81d6063162d0c4100635dc701",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "5d3df6d69fac3ef91e13ac835b43a35e9e434fbc7e72ea5c01e288d69b66e6a2",
+    "title": "ENF 269/2023 - Ozias, Ori, Octavio v Obadiah & Oaklen (Court of Appeal permission to appeal)",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "5e1dd3fe094245b81e31da9c32d6f5765079ae3de3a3c8f1ca984bdca70dc3f9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "5f2e0f8fe61acf2975a8b3a1a4f51ff3fe01961d220da1ec068cab0f398d6177",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "5f6df5146387225c1ae9a7450d42776dc22bff56702226837c600cb313770cd1",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "5f90e82bc4d43a8b99c2ee4b227e7acc7410c59dd6fa3b243f7295c56c69aa9d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "606129de12e01432648064237207b22367b5fd0d72fd287e5fce6eb394245cfd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "60df5ac5b2e9d1e80e7265783f92f9abbcc06a9eb0fe2c125976f5fa1908d17c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "61ff6aa4d64eabff443255c427b693a857c8bf93c73aa535d990a766c36db890",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "6248961b681ea0deb189f354be0c8286f35974dcdb211c13c921c3dd0e566a6e",
+    "title": "CFI 016/2025 - Omar Ben Hallam v Natixis",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "62930da32fa3172edf2f2bbf3da268455bd99a7b5fab34d72358730d8cd5da30",
+    "title": "TCD 001/2024 - Architeriors v Emirates National Investment Co",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "62d4492fbd9570bdc5d0c9ee17e3969b2238bc5fa12416de9a0fd27adf56deeb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "6306079a16b1dec85690f75c715cdbd78b0685a3e19ee30250d481bc32f2e29a",
+    "title": "SCT 514/2025 - Okpara v Oralee",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "64e24ee9c86d0e0db7423513d157e231711384999c23e9ea728b512d9afa446e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "65f3f4acfcaca7fc9488e275643135ea7e1d30323e4f4c2cc04d7fc16844e373",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "665e1be417bb694d30926dec91130ad36cb25567e49e0e20aabed26f2830fb4c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "66923e1f9d6a775a2c51408692ca8ccd7cdba8d513ede18ff660cc2b7e786c9e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "675e3de7c9673354d27ec3eb353021d444df1ea16506a12272ba3a9ab0262213",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "686b0d8aa480b00e609a255248aff9a73ed10a09b6c2df26cc2ca19cc56047d5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "686ff2967b2a613e33fe221c29c957c3c77e5365cb79830a2eedccf82c64eac7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "687b54d665d233e9639f07e27b7962467d0cd8ab63b476dfb439eef01e30f731",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "68976d0ef40230a57bf5d2cd2b8bbcb5b875fcf476d9aae4ea0b8dacb3787c23",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "6aa239fca4bc0ec592bbbc83f8e342684ffe4aff1b3da65429633fc35e478802",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "6b9a289ff9b26784b4d6c9432ac5e28d43e0b5e607069ed416d3b80295efc2e5",
+    "title": "Real Property Law (DIFC Law No. 10 of 2018)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "6c3c49e1a35a1e3577a0412f97b6e3d91cae11d24430c7390d7865c992b1a515",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "6ed150324fc7fde9706e9ae8fcd8f5c4adaa2d01902d0919b7de9fce0a0076bb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "6f7a44b0f98c8ad1a47bd57b62897d244606b763d685f579419ad89f20aa56d5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "709720c8dbdec5b25dee24c384f0cae7d2b94e3704c44f57c5a98ddf87b94f54",
+    "title": "Limited Partnership Law (DIFC Law No. 4 of 2006)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "70ef7d921e4a10c284f2d912022b14f75e758c07e8e48b0e46d09b80b87b6ce6",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "717dc41cb19258ad4e8901597d165f94cfc4f37074f3cf0b5d2e8f42b17e547a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "721719c13763d3fdfd9544b6b3f8e20f2b8a24238152cc8cf2c1d0aa5af8b67b",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "72c68112558f90a3cd53e49048eec495bf31bdc1846e41cc7f967f55bd10a188",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "72ea171147bf30326fe6fd2e6798f607c7cef4bf9d43761dbccd2f1b6a356849",
+    "title": "DIFC Operating Law (DIFC Law No. 7 of 2018)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "733522767c83ef086457681a870b754fb523d1d48a8e264ebc5aaecc257f4a69",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "74d57882ef8a34a00ad79df480bdc50a8f04e6ae96e8036d32684e5ef496abce",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "760b864b093251098d5770feb2f21c177fda15a563067095dd5d97b01f2582c4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7762b20eeb3ca0cb3dd62a4b079bf01d6b5e7f8707d7be77ad9c6ff1e230aabe",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "77746b5fbfdafc7fb4cb5ac74afa5cd46b30ffcbace8d0117c4dda06444fc943",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "77ed6765ad5556f347f1e9fdfb0ce72dba0451713359f73aae3fbc00b35ede32",
+    "title": "Enactment Notice: Security Law (DIFC Law No. 4 of 2024)",
+    "doc_type_raw": "enactment_notice",
+    "detected_type": "enactment_notice",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "78461539a8b7238c314b7dd56483e1682c5e1ce7f3cf8fc6947e22c0ac5d0d18",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "78ffe994cdc61ce6a2a6937c79fc52751bb5d2b4eaa4019f088fbccf70569c26",
+    "title": "CA 004/2025",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "7929ec9ef6ec42492108d8492f738771f73a8c860fc8079557e93166d2008646",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7a288e5ccc9cf410418f9786f72eaf82becf52c4070446a61bc9eecee004601f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7a3c758cb3a1f48a5583a85bc4ba88e485c109a6f94cbb9ff9cc2bb2b7a1fbf8",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7a852920f26de500808a071c4c3e125a1a4a079649aee58edc5f96c2e158a9f1",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7a86c4a4082d9a122cfd82ee9e01715490ba93ca763ec1edd996f84bc80b5719",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7b0f276d6be791d9a615e9dec1669b3b35c752897c4503949ab23f70d0d05fad",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7b0f62ba9b76398e89863421d2c2c6d2d1f5fe3e092a389363ffb7d11d099576",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7b30756e5285fdf5a2e546427d18b1af24c814a3cebadacb2cccde126ad91e19",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7cbfd7f762ee7b5c913aae73cd9f9238ce462aed0106b628f310b5dd8c927d3f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7d2514bd549b3771c085b0d0b74c6e4353feb3895811046061142738ccfc6869",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7f398f457df6ce1349148a41d5a4736d6212ada4725fc3223294fea78d97336f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "7ff0220f63290431bb5218982a2a9bc2c62c26679b3fe47cb29f0b305cf7bf77",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "80b01206bb6c3d9bec27491d430eeb1f561ca889ec21f310d1dafe61d0e145c5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8135757fe11e278d356c3db494b2baab34e9682bd296683021f5162eef1065f9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "824930648c194c1a5df57eb02252685c51d0d2f880d22e6a1733b20f5df293bc",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8309c7e167d19956c92d7f1db1c878e6bbd66afd5eff176e025427e008105867",
+    "title": "Enactment Notice: Intellectual Property Law (DIFC Law No. 4 of 2019)",
+    "doc_type_raw": "enactment_notice",
+    "detected_type": "enactment_notice",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "87c3ccaba93ec1d1b9c47f831e32a24004e01f02b649e71b458ba339e6ccbe13",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "890c80a61de86cc86adde4f02831193cf4ef75ba74f28df29f7c5cfb307d7c87",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "891fa0be53dfe38c86595913d3095b535b2e34924787c49c2e4be1ea16d77bdf",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "897ab23ed5a70034d3d708d871ad1da8bc7b6608d94b1ca46b5d578d985d3c13",
+    "title": "CFI 067/2025 - Coinmena v Foloosi",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "8983927b2f648fff22bb3829dec54fee521a081ae4967b9956d57ba89464b6e3",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8c60aac556a4a393221d9ad2c04ef4237ee2fbf2bf14e781deafc05867bc32cb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8c6d34f8833e88c664c99576d875f0d1bcab6bd6360e9c6fe6dec3f50f9bde01",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8e18998606b040f5a6d748ccad5c991462aec551a0381ebed6d3f7eac6bab400",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8ea39c3330039057717f4d24599acc29fb30c3eb8fed8059f9437e3762159571",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8f1c1c6cba057742bbf55b26b0867a94ffe676eeedd4d1b9a795fa347001715a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8f507f768bb46f4ec93c131e6235d956f7db755a60c1341a3bef0f3197c255dd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "8f8837a8ccf2a27e9f7264f569a2df49aea92c1d6ecee753c6e307c9c5c37b87",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "91088a39fa438f1a534d28adeca7776c85dd91942f2da19b6d9f9393f1e5fbb7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "912b9d008dbc9a39adf9574e5a49274a18eb58ab7a702cabcd52858ea48a8046",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "91abbc3abf55a4c898506c2b8b50026f92bc61f1bf561bcb1770bd014303f514",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9274c8c56a4832de35a355add4eed94dd350fed358fdbdd1b82fad799d8ffb4c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "93740190cd7d30dfa50217867b46a896d33c4bfe188d6cab5586eaa781aa7cb3",
+    "title": "Strata Title Law (DIFC Law No. 5 of 2007)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "93880a9e97fc3eb570f34a8b13d980dac55e50824c8963998e864bf8ba99b901",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "94602bd75c489210281720049a19ba359b123e8b62262ae871820d1f727ec8ef",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "96853cbb2873718b7613b42de18dcf417aac607e7fd3e143cab9db7f40622263",
+    "title": "Enactment Notice: Employment Law (DIFC Law No. 2 of 2019)",
+    "doc_type_raw": "enactment_notice",
+    "detected_type": "enactment_notice",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "96be25a94c84742ae6b7b6e2275376c2393312c7097682f1135590d76d55e727",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9832c0ab41b10ebd0fda084dbafd97f6483459f3321622faefe323083464e465",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9942e2b7147108ca3342d987ba3ebf09c608a86fb55d05632d56744ed0cda20e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "99c7d4cecba3d4a2be70beeb63d1dcf3fdd93c2651764821b5e1879f62602664",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9b05a9e24953a0effed6793185528181a6c7dcae6f434d67b9682c537815385e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9b9d945ec4c6a9a801ab2f10cf3ba9fde0be8e8385d2335bd92eb385217cb631",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9bcd2108678075f782c9cdda646a29569ca63a05b390e56108471e1b95f0c81d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9c522d9708f195da2ca1f609adb780893c26fdcc8d7c3e6f809b8ad0fbd57c9b",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9c719be2e8692d9a1490f1c61a126bb2d437e5db6724f64772c2b92ec5881607",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9e5724b81e8f9b5a5f0c8bbc9e9255959be1a86bd53ce817c9d6a02a23475d0c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9f3ba7bfbe6197f1142e2cbfc0ed440f95a65794b5b95937bb807ef8c2ddb9b1",
+    "title": "Employment Law (DIFC Law No. 2 of 2019)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "9f41ffdf37412adf838e9851fd7f6b0aa9f5514eed54724f81a69917cffebcf9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9f6214ef4d4b58b60cc3838d7f3388ed49e21cc4a30014b0d61672349747b6d6",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "9f646d76e8767cc6aaf6147174e0fb09a8a50482bca6bfa7b88864f3732c1e1f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a0202a8e076cefa41fb711adb39e9e800bd45f2681ee45a787497a6ffec95eeb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a09572857a46fd7445bf0ed326b8709e0d48a80b9de727cb3e85f39b67e1ad60",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a3c77d9b52fbdca1709099a06596ca14c68fedb02b94a97cdff4f121325a740a",
+    "title": "Data Protection Law (DIFC Law No. 5 of 2020)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "a3dd5a428e8b26001ded74cfa5a8ebf9d3e6fa7c9732bd7cf9995aaba0858f07",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a47f5fc4894a7b82774a070653d6efba606d4f2815ff1d77b714c482cd2e1e42",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a5c882f8a752452602745818ed54af6b6bac133263dcacd6545af8e991f9c2b9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a5e5dcb254049c618d0e0a8cb0e07b4d5ae594c286c54285267254a8b9066309",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a62aeaeb6ecf8084b28582b2fc6b1a2cdc9bb0469714a900857426c9b3b655f7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a7e8a96c9239a9a3a569d843ae20f6fb236dc7d9e6929ef77ad46295d4c6a1b0",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "a9c428eef9025adbe108ef24d21cb59e1c629a87917f88ed9da348b8f2947239",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ab85799d22c065da42766ba7a1ecdbc6a7aaa00c66335a0c4209a4b612c1dfea",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ab9dcd09d0bc91d47746bded87c60aff92c55f9348e2e57b9d5aee09ba93f975",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ace28d887202e102b4a45ee48840b538f90e21c5d989a9cef767f58ba22ef999",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ad76dc7093851d116c8878802b815608adceed54f6b5195ae04ffec28ae25d32",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ae27f8091dab37a0405e5309b8ab256ff6b7cd2b846b7be0c4f484ac1433b4d2",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "af041f578afc93a95cc174b12eb5d3264e6a904228d1e2429356824b2dd957ca",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b01c4920a4aaea771bea654a602259246f58889355525e226575a71e92edf5cb",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b02055aab210dceb055711108f8d4b8a75e8b3c935efe5cab3291ac9a07abada",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b06ff01eb2cb174898a51e09eda30addc073925bd2c63fcf8f0a811dd0c33b5d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b164f6e841bdd425f5fb1bf7913406fcdd82ab8c44bf6440bb47650d012f9af3",
+    "title": "Real Property Law (DIFC Law No. 10 of 2018)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "b212f401e34dc75bb9b65c3c45072125db68094f45e0587ab93669c97da650ce",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b395a50e4a7a1141c11e8f3380f074db986cd0b08a45e3f35ef6dfc53746b6b7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b486db089615010a9b45bc71411b5a238a0a0b9aaf074d875f98f5b934f75079",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b4d7a422e0ede31c3dabe49ce9741fd6fd379f91ba352d050e56697559f2dbb2",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b6490fdcc13fcb906eab34a4fa18b141fa0e77dfea0926774c46cc495a234a47",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b65b18d52daf541ab2dbd813a9bb6fd5b6b7ac482f954ecb83653cb3183b681d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b6d097952fea64e650824789f0f360926a40a30cebbc4d344e8a51b1f6358070",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b82ac8228e051d96bf8d706d3251893ebff1c9457b066fce3b7cb99af956f2a7",
+    "title": "Limited Liability Partnership Law (DIFC Law No. 5 of 2004)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "b9cde965ff214511b3517622bb7c5d5d47f6d229ca3be5d3f126f90ba113499c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "b9fdb42c55d635bd14ae3074bc1ee15f7fcafc647b4d839da882598c05bde6f4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "bac066005f21591dbcff19a56cdef279bd4f32482e3758925a38c478e75b81a8",
+    "title": "Enactment Notice: Employment Law Amendment Law (law number TBD)",
+    "doc_type_raw": "enactment_notice",
+    "detected_type": "enactment_notice",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "bad9ca69916e2a0883df9c09806c833568fa2dea64efff7a29449ebc4d63d67e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "bcb45cace93dd65bca492c1d19bd551eeb596baf1ba30f9713bb8134332c273c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "bcbf1b4067fd79dca18a033ecb026559be2e75c80eae582ae17f94e7b04ae19e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "bd2d222ee0a636a745434cfb457321cd658db5bb32b5f0a3f5643236cc1503d8",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "bd427f328c98eda1f08f1dcca94816894273c14148b9a55836491f7f2bebaf62",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "be66479a8d8e7c1408f4b0a6f462c298bc91a69ecc3495380b6613d98571d43c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "bee43bdc6ca06c2a04f4126d4b94fa4be3d47a62e8b3bdd8d0ddce986dff25a6",
+    "title": "DIFC Operating Law (DIFC Law No. 7 of 2018)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "bf128ffae822edfecbb0a1ead653ace8cd8188a3d664baff6c124b96eb74ae12",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "c01f4b2bf7e3e69686b65f0e37110e4000cc9cdc79138bab95bf94d790efc0cf",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "c19335caa75655b23b3bfd2666ce4e7044d7153c61c8c9e2a17c0969cf35176f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "c19bcb15e6c9242d4990228ecc23d92d74bc02b033e87632bc6fbe13eb17b92a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "c3526451a9131207c28da2e74eabcc4b838fe99acc8e9ed6ea7392a601e8c523",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "c423ebbf17c6557f6bbd3c563ecc979246d2adebc4e24b5b0114c5505e214c1f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "c66b8374d326d16ec5ff48195825798c3ba696c787ad8a59c23a7a2908f34a0d",
+    "title": "ENF 053/2025 - Standard Chartered PLC v Standard Chartered Bank",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 1,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "c8f3f7bdfb0a253b9bf2fe5ca7829955d24aa8d210a94b36a7e4d23063e910a3",
+    "title": "General Partnership Law Amendment Law (DIFC Law No. 3 of 2013)",
+    "doc_type_raw": "amendment_law",
+    "detected_type": "amendment_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "c98c1475692bc22f4abab6a7a7d7969467c94e46a7e68919aaf127179ebf3f54",
+    "title": "TCD 001/2024 (second document) or CFI 057/2025",
+    "doc_type_raw": "court_case",
+    "detected_type": "case_law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 2,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "ca0ca98faf973703aace3b8a5117b7c3fb414545c050f7a97b9b6415a87e36fc",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "cbaf234440cc7199ffa3e3bbfb1ede4aa333b124251071a29b3d53f921a12757",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ce2f02347ea985ac8fbfef23a38cfc5bdb078b2148613aeb1853241ff6dade7a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "cf18d18dae354e2419910c0a7ad37605b9b1885b699b059edd21cac091508ecd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "cf595de1ee130e9c14e220018442c3301db2a29d916f7ea142db4e338d925399",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "cf6fe826c8d98447fb2509c368437743906faf89a74ea51d02c7bfbe2565ce6d",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "cffda548fa3f0a3511e62e3f74145311a54a6199ff92396b523b0c45fd61f6c1",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d0f7fdbb0fb81d646b912a216d61979f658188d8d49473d9ed7138580ec0e533",
+    "title": "Limited Partnership Law (DIFC Law No. 4 of 2006)",
+    "doc_type_raw": "law",
+    "detected_type": "law",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "d32e76d495ac7d855d805fb71682b98d254520e3799aa4529ebc983212648335",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d3d8538e21d8fdb3d0cd0ae6c111c77d8d883a06ce5c10ba79c31d836d6dc386",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d403315f013ec5523844a0ff9a59312418767a9dacdd3f5e58808aff2e90daa5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d55274d6a16dcedfda78376d30e3274009ba969cc09cbdd59053689c119fb6d1",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d592fb6165eab3b0a165c48a984362bcc0f4709765f9025db50620419823da9f",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d840457fd538555662e8256d988c218076a6e95cd16b4e4fab0db44bf8ca198b",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d8a621706e30ce81d7032271ea0199bcd1bf2d58fb9587de04acc3d6d7843416",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "d9323cf2c71d905dfdc0ab3925da0542bdaba045fd899345c9ef386aa7c5f789",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "dbe11c5a8dedb41beb61f9ceb04121b49b037741af11efc934962fa1b4a5f2c2",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "dc1859b7e89521be41003f0206442d753ecfa4ad47dfdc004166e92dd2c5ef80",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "dc942610b9f6ef0fffc048df45958b750d18b26576894e6f994fa72d42222a95",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "dcdfdb7338f8ecb319dd87f50805934ce50078c4d8ed775233373eca848cc298",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "dda8c7ff4dc7629de6c05fa9aeb88e6fb54d5d856af69f54d85ea46eebbf7ee7",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ddd12664d0402e2b4935a0716e0b488a9a3071bf4d0a06d58478f02da7873fd4",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "df1355930bf24acf13f161965f6f413db2877773a500f4d5a804a1e3f951166e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e2e3deaf1cce49433407a0b4ac4af29977f4bb59f341002ecea7ba3da0204c8a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e431876e23e87f7d8a47425304c8a749fd960984af3e1bc302c50e18522778fc",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e431a7be5d2271f185d4a8469c7927de116be1343291e4be4aae83366edc1b65",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e46e9d9e140e3e4dcb8cc2d111edd8d14ba631554d4961790022e13212eeef57",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e4741149b9a44c7cd24286313a2c89e92923b8e99786d4b02107f093aa8293c2",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e4cd798b4b918bcae0d60c3384763d0a90efa60901d5e41a352d99b438e5cb15",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e5141e7c3c2041490e9d20eee2a653b97c3c3f8179397c74e9a8ebc5146bc627",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e62abd09e7a46cddf1546260305fcfd7f87200f4b3eda0a6bded5c48e589c669",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e70ae1d37abe6ea09ad1615c2480411ef34b7d0f4b9defc50b63f8815ac79d36",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e8f40f6102b8f7e2f7e48b43620d9a4b7af36cc231178d42811e404435a4422b",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "e9a32d22eb9bac59756c1fe25e6d5ffd09d75582efcbe191fe8f078145cc08a5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ea81bf0f8c1d423dd61e6d2901ca7872209185eb8e25e05a672148a9fb3e635e",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "eaa0fe6459acec126535e416342312727d056a9fff5894358e4a47604fd043bd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "eb035930bcd048cd397408b09c4e5ea8092c4aa71031c92204aacb15c1b44cbd",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "eb21473f54ab4648cd26afdc1c99381ac25b2307b870832b36f61eb7dcef2528",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ebb6ef8d028043d93b70eb6ab13aef224aa6e934b8008c5a6ed31983d654f7f2",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ec70dca8ed05590449db65f2e6cae5213af3ca12c6bf2dc176f07f460668ac9a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ecb090f111a0abf41a184cc877a06f8bb1d6d40bf92f9aa41f90589394ceb438",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ed04d28060b040f87f5a32885f850617afff1254867417dea961080f15a94684",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ee0796ad2bae4b2eb02e0859f0d655986ffaac811ed763de1ee4fb01d4a66562",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "efa6f9ce52c6a8f3f2725d44a7c328211ad9ad1dd2fdb7ff0f0dd1005369a91a",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f0681f1c30de666d0b7b8eb030eb463ec6bc0dcf277de9078beb1689ef4c8ca2",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f11e77a89f31b4a472d2caf22f043fbc9cbc4285889dc88be441d19224b4b905",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f283b88843e999a36801cebb852796fc645b04119cc4c6196f491d8d073f33cc",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f2a738454f11281234fceb6c7a09ab7c2d6515a5b04211bfc56e2b857b5e58cf",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f3ef6ad7f5231c706997189baa89e8199fe5c7bd43cb0d6c84ef1f6a884be79b",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f4616ad41ec3ba5b428b3e40c2ede7b5f37f2fe26d30d6fc152db8924bfda10c",
+    "title": "Enactment Notice: Employment Law Amendment Law (DIFC Law No. 4 of 2021)",
+    "doc_type_raw": "enactment_notice",
+    "detected_type": "enactment_notice",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 1,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 1.0
+  },
+  {
+    "doc_id": "f496d28b9b6d2ceb574529fc1bbeebcdeb086a5b609e3d7724c5f2e7e7f10c87",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f4ade2ce28f57c24a90495b629a512509d6a610c7e97e1eb55bf0684d56e3c99",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f4c4d051d514270964adcf58e124569e396602340b7d9172671759de10a95897",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f8d3778ec2891efd616f8f34595cb80a61d49cde1e9bef7e857718c6337397fe",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "f954e46dee6f53601314dfe02e0c28c323ba4f050449b79f2de1b756564d808c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "fa251d4bbd681a784173495b2551d39f6a1f2155b31c2bc57887719b3b7a3887",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "fb2d4e5fc4064d466bff512927912ba042780e3aa4374a7ff4c86236421e4fcf",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "fbcf7b546efdab6e21f2023d43ab8edd654c91d75e9e5c7d8bb134a662711699",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "fbdd7f9dd299d83b1f398778da2e6765dfaaed62005667264734a1f76ec09071",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "fccbe5d824f0f65ff17712daa3dd4a1c49cc98fa616f26b134870f10e2af9d95",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "fe8332161cbb02fe54914556ae76e33e6f7fb88e0cf895b8b39eeb97d582d3f5",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ff50fa9d2c1addb40fa3032f4777287e67bb888d6fbfb0885bf585bdad0a70a9",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ff746f7b583490a80ba104361c0a82a1ebbf7ed9097cd03dc49d744cb5057761",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  },
+  {
+    "doc_id": "ff79b04bb44341529eb5fc2c90257e6834919be3d736e084f9febb1a3315785c",
+    "title": "",
+    "doc_type_raw": "unknown",
+    "detected_type": "other",
+    "page_count": 0,
+    "entity_counts": {
+      "law_titles": 0,
+      "case_refs": 0,
+      "article_refs": 0,
+      "section_refs": 0,
+      "schedule_refs": 0
+    },
+    "structural_markers": {
+      "has_toc": false,
+      "has_definitions_section": false,
+      "has_schedule": false
+    },
+    "warmup_similarity": 0.0
+  }
+]
