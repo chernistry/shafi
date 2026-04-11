@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Agentic RAG Legal Challenge 2026 — competition system"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115",
+    "fastapi>=0.135.3",
     "uvicorn[standard]>=0.34",
     "httpx>=0.28",
     "pydantic>=2.10",
