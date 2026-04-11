@@ -41,7 +41,7 @@ dev = [
     "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
     "ruff>=0.14.5",
-    "pyright>=1.1",
+    "pyright>=1.1.408",
     "PyYAML>=6.0",
     "httpx",  # for TestClient
 ]
