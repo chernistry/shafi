@@ -1,4 +1,4 @@
-# pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
+# pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false, reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
 import re

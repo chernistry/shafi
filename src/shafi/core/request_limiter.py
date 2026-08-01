@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 SleepFunc = Callable[[float], Awaitable[None]]
@@ -39,7 +39,7 @@ class AsyncRequestLimiter:
         self._next_allowed_start_s = 0.0
 
     @asynccontextmanager
-    async def acquire(self) -> AsyncIterator[None]:
+    async def acquire(self) -> AsyncGenerator[None, None]:
         """Acquire a request slot and enforce configured start spacing.
 
         Args:
