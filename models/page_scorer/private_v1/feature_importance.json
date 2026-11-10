@@ -1,0 +1,53 @@
+{
+  "positive": [
+    {
+      "feature": "query_content_jaccard",
+      "weight": 49.0
+    },
+    {
+      "feature": "sidecar_rank_normalized",
+      "weight": 45.0
+    },
+    {
+      "feature": "sidecar_retrieved_rank",
+      "weight": 41.0
+    },
+    {
+      "feature": "page_position_ratio",
+      "weight": 40.0
+    },
+    {
+      "feature": "doc_pages_in_candidates",
+      "weight": 33.0
+    },
+    {
+      "feature": "from_legacy_cited",
+      "weight": 33.0
+    },
+    {
+      "feature": "page_num",
+      "weight": 27.0
+    },
+    {
+      "feature": "doc_rank",
+      "weight": 26.0
+    },
+    {
+      "feature": "doc_ref_count",
+      "weight": 19.0
+    },
+    {
+      "feature": "query_token_count",
+      "weight": 18.0
+    },
+    {
+      "feature": "same_page_num_competitors",
+      "weight": 16.0
+    },
+    {
+      "feature": "legacy_cited_rank",
+      "weight": 13.0
+    }
+  ],
+  "negative": []
+}

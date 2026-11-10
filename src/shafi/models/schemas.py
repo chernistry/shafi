@@ -1,0 +1,616 @@
+from __future__ import annotations
+
+import uuid
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field
+
+# -- Enums --
+
+
+class DocType(StrEnum):
+    STATUTE = "statute"
+    CASE_LAW = "case_law"
+    CONTRACT = "contract"
+    REGULATION = "regulation"
+    OTHER = "other"
+
+
+class QueryComplexity(StrEnum):
+    SIMPLE = "simple"
+    COMPLEX = "complex"
+
+
+class SSEEventType(StrEnum):
+    TOKEN = "token"
+    ANSWER_FINAL = "answer_final"
+    TELEMETRY = "telemetry"
+    ERROR = "error"
+    DONE = "done"
+
+
+class PageRole(StrEnum):
+    """Semantic role of a page within a legal document."""
+
+    TITLE_COVER = "title_cover"
+    CAPTION = "caption"
+    ISSUED_BY_BLOCK = "issued_by_block"
+    ARTICLE_CLAUSE = "article_clause"
+    OPERATIVE_ORDER = "operative_order"
+    COSTS_BLOCK = "costs_block"
+    SCHEDULE_TABLE = "schedule_table"
+    COMMENCEMENT = "commencement"
+    ADMINISTRATION = "administration"
+    REASONS = "reasons"
+    OTHER = "other"
+
+
+class SegmentType(StrEnum):
+    """Typed legal segment categories for compiler-driven retrieval units."""
+
+    ARTICLE = "article"
+    SECTION = "section"
+    SCHEDULE = "schedule"
+    CAPTION = "caption"
+    OPERATIVE_ORDER = "operative_order"
+    DEFINITION = "definition"
+    PART = "part"
+    CHAPTER = "chapter"
+    ISSUED_BY = "issued_by"
+
+
+class BridgeFactType(StrEnum):
+    """Typed bridge-fact categories for compiler-driven cross-field retrieval."""
+
+    CASE_PARTY = "case_party"
+    CASE_JUDGE = "case_judge"
+    CASE_LAW = "case_law"
+    CASE_OUTCOME = "case_outcome"
+    LAW_AUTHORITY = "law_authority"
+    LAW_AMENDMENT = "law_amendment"
+    LAW_DEFINITION = "law_definition"
+    LAW_COMMENCEMENT = "law_commencement"
+    ENTITY_DOCUMENT = "entity_document"
+    ARTICLE_LOCATION = "article_location"
+
+
+class ScopeMode(StrEnum):
+    """Query scope classification for grounding evidence selection."""
+
+    SINGLE_FIELD_SINGLE_DOC = "single_field_single_doc"
+    EXPLICIT_PAGE = "explicit_page"
+    COMPARE_PAIR = "compare_pair"
+    FULL_CASE_FILES = "full_case_files"
+    NEGATIVE_UNANSWERABLE = "negative_unanswerable"
+    BROAD_FREE_TEXT = "broad_free_text"
+
+
+# -- Domain Objects --
+
+
+class ChunkMetadata(BaseModel):
+    """Payload stored in Qdrant alongside vectors."""
+
+    model_config = ConfigDict(frozen=True)
+
+    chunk_id: str
+    doc_id: str
+    doc_title: str
+    doc_type: DocType
+    jurisdiction: str = ""
+    section_path: str = ""
+    citations: list[str] = Field(default_factory=list)
+    anchors: list[str] = Field(default_factory=list)
+    ingest_version: str = ""
+    chunk_text: str = ""
+    doc_summary: str = ""
+    chunk_type: str = ""
+    doc_family: str = ""
+    page_family: str = ""
+    normalized_title: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    amount_roles: list[str] = Field(default_factory=list)
+    shadow_search_text: str = ""
+    party_names: list[str] = Field(default_factory=list)
+    court_names: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    cross_refs: list[str] = Field(default_factory=list)
+    canonical_entity_ids: list[str] = Field(default_factory=list)
+    segment_id: str = ""
+
+
+class PageMetadata(BaseModel):
+    """Payload stored in Qdrant for page-level collection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    page_id: str
+    doc_id: str
+    page_num: int
+    doc_title: str
+    doc_type: DocType
+    jurisdiction: str = ""
+    section_path: str = ""
+    ingest_version: str = ""
+    page_text: str = ""
+    doc_summary: str = ""
+    page_family: str = ""
+    doc_family: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    page_role: str = ""
+    support_search_text: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
+    linked_refs: list[str] = Field(default_factory=list)
+    top_lines: list[str] = Field(default_factory=list)
+    heading_lines: list[str] = Field(default_factory=list)
+    field_labels_present: list[str] = Field(default_factory=list)
+    has_caption_block: bool = False
+    has_title_like_header: bool = False
+    has_issued_by_pattern: bool = False
+    has_date_of_issue_pattern: bool = False
+    has_claim_number_pattern: bool = False
+    has_law_number_pattern: bool = False
+    document_template_family: str = ""
+    page_template_family: str = ""
+    officialness_score: float = 0.0
+    source_vs_reference_prior: float = 0.0
+    canonical_law_family: str = ""
+    law_title_aliases: list[str] = Field(default_factory=list)
+    related_law_families: list[str] = Field(default_factory=list)
+    canonical_entity_ids: list[str] = Field(default_factory=list)
+
+
+class LegalSegment(BaseModel):
+    """First-class legal segment compiled from one or more pages."""
+
+    model_config = ConfigDict(frozen=True)
+
+    segment_id: str
+    segment_type: SegmentType
+    doc_id: str
+    doc_title: str
+    doc_type: DocType
+    canonical_doc_id: str = ""
+    legal_path: str = ""
+    text: str = ""
+    page_ids: list[str] = Field(default_factory=list)
+    start_page: int = 0
+    end_page: int = 0
+    parent_segment_id: str = ""
+    child_segment_ids: list[str] = Field(default_factory=list)
+    canonical_entity_ids: list[str] = Field(default_factory=list)
+    search_text: str = ""
+
+
+class RetrievedPage(BaseModel):
+    """A page returned from Qdrant page-level hybrid search."""
+
+    page_id: str
+    doc_id: str
+    page_num: int
+    doc_title: str = ""
+    doc_type: str = ""
+    page_text: str = ""
+    score: float = 0.0
+    page_family: str = ""
+    doc_family: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    page_role: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
+    linked_refs: list[str] = Field(default_factory=list)
+    top_lines: list[str] = Field(default_factory=list)
+    heading_lines: list[str] = Field(default_factory=list)
+    field_labels_present: list[str] = Field(default_factory=list)
+    has_caption_block: bool = False
+    has_title_like_header: bool = False
+    has_issued_by_pattern: bool = False
+    has_date_of_issue_pattern: bool = False
+    has_claim_number_pattern: bool = False
+    has_law_number_pattern: bool = False
+    document_template_family: str = ""
+    page_template_family: str = ""
+    officialness_score: float = 0.0
+    source_vs_reference_prior: float = 0.0
+    canonical_law_family: str = ""
+    law_title_aliases: list[str] = Field(default_factory=list)
+    related_law_families: list[str] = Field(default_factory=list)
+    canonical_entity_ids: list[str] = Field(default_factory=list)
+
+
+class SupportFact(BaseModel):
+    """A grounding-native fact extracted from a page at ingest time."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fact_id: str
+    doc_id: str
+    page_id: str
+    page_num: int
+    doc_title: str
+    doc_type: DocType
+    doc_family: str = ""
+    page_family: str = ""
+    page_role: str = ""
+    fact_type: str
+    normalized_value: str = ""
+    quote_text: str = ""
+    field_explicitness: float = 1.0
+    scope_ref: str = ""
+    search_text: str = ""
+
+
+class SupportFactMetadata(BaseModel):
+    """Payload stored in Qdrant alongside support-fact vectors."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fact_id: str
+    doc_id: str
+    page_id: str
+    page_num: int
+    doc_title: str
+    doc_type: DocType
+    doc_family: str = ""
+    page_family: str = ""
+    page_role: str = ""
+    fact_type: str
+    normalized_value: str = ""
+    quote_text: str = ""
+    field_explicitness: float = 1.0
+    scope_ref: str = ""
+    search_text: str = ""
+
+
+class RetrievedSupportFact(BaseModel):
+    """A support fact returned from Qdrant support-fact search."""
+
+    fact_id: str
+    doc_id: str
+    page_id: str
+    page_num: int
+    doc_title: str = ""
+    fact_type: str = ""
+    normalized_value: str = ""
+    quote_text: str = ""
+    page_role: str = ""
+    page_family: str = ""
+    score: float = 0.0
+
+
+class BridgeFact(BaseModel):
+    """Compiler-emitted bridge fact indexed as an additive retrieval unit."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fact_id: str
+    fact_type: BridgeFactType
+    canonical_text: str
+    source_entity_ids: list[str] = Field(default_factory=list)
+    source_doc_ids: list[str] = Field(default_factory=list)
+    evidence_page_ids: list[str] = Field(default_factory=list)
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
+class RetrievedBridgeFact(BaseModel):
+    """Bridge fact returned from the additive bridge-fact collection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fact_id: str
+    fact_type: BridgeFactType
+    canonical_text: str
+    score: float = 0.0
+    source_entity_ids: list[str] = Field(default_factory=list)
+    source_doc_ids: list[str] = Field(default_factory=list)
+    evidence_page_ids: list[str] = Field(default_factory=list)
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
+class QueryScopePrediction(BaseModel):
+    """Output of query scope classifier for grounding evidence selection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    scope_mode: ScopeMode
+    target_page_roles: list[str] = Field(default_factory=list)
+    page_budget: int = 1
+    requires_all_docs_in_case: bool = False
+    hard_anchor_strings: list[str] = Field(default_factory=list)
+    should_force_empty_grounding_on_null: bool = False
+
+
+class RetrievedChunk(BaseModel):
+    """A chunk returned from Qdrant hybrid search (pre-rerank)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    chunk_id: str
+    doc_id: str
+    doc_title: str
+    doc_type: DocType
+    section_path: str = ""
+    text: str
+    score: float
+    doc_summary: str = ""
+    page_family: str = ""
+    doc_family: str = ""
+    chunk_type: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
+    normalized_refs: list[str] = Field(default_factory=list)
+    shadow_search_text: str = ""
+    party_names: list[str] = Field(default_factory=list)
+    court_names: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    cross_refs: list[str] = Field(default_factory=list)
+    canonical_entity_ids: list[str] = Field(default_factory=list)
+    segment_id: str = ""
+    retrieval_sources: list[str] = Field(default_factory=list)
+
+
+class RetrievedSegment(BaseModel):
+    """A legal segment returned from the additive segment collection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    segment_id: str
+    doc_id: str
+    doc_title: str
+    doc_type: DocType
+    segment_type: SegmentType
+    legal_path: str = ""
+    text: str = ""
+    score: float = 0.0
+    page_ids: list[str] = Field(default_factory=list)
+    start_page: int = 0
+    end_page: int = 0
+    canonical_doc_id: str = ""
+    canonical_entity_ids: list[str] = Field(default_factory=list)
+    search_text: str = ""
+
+
+class RankedChunk(BaseModel):
+    """A chunk after reranking with Zerank 2 / Cohere."""
+
+    model_config = ConfigDict(frozen=True)
+
+    chunk_id: str
+    doc_id: str
+    doc_title: str
+    doc_type: DocType
+    section_path: str = ""
+    text: str
+    retrieval_score: float
+    rerank_score: float
+    doc_summary: str = ""
+    page_family: str = ""
+    doc_family: str = ""
+    chunk_type: str = ""
+    amount_roles: list[str] = Field(default_factory=list)
+    normalized_refs: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+
+
+# -- API Request / Response --
+
+
+class QueryRequest(BaseModel):
+    """POST /query request body."""
+
+    model_config = ConfigDict(frozen=True)
+
+    question: str = Field(..., min_length=1, max_length=4000)
+    request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    question_id: str = ""
+    answer_type: str = "free_text"
+
+
+class Citation(BaseModel):
+    """A grounded citation linking answer text to a source chunk."""
+
+    model_config = ConfigDict(frozen=True)
+
+    chunk_id: str
+    doc_title: str
+    section_path: str | None = None
+    quote: str | None = None
+
+
+class TelemetryPayload(BaseModel):
+    """Mandatory telemetry included in every response."""
+
+    request_id: str
+    question_id: str = ""
+    answer_type: str = "free_text"
+    ttft_ms: int
+    time_per_output_token_ms: int = 0
+    total_ms: int
+    embed_ms: int
+    qdrant_ms: int
+    rerank_ms: int
+    llm_ms: int
+    verify_ms: int = 0
+    classify_ms: float = 0.0
+    grounding_ms: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    retrieved_chunk_ids: list[str] = Field(default_factory=list)
+    context_chunk_ids: list[str] = Field(default_factory=list)
+    cited_chunk_ids: list[str] = Field(default_factory=list)
+    chunk_snippets: dict[str, str] = Field(default_factory=dict)
+    retrieved_page_ids: list[str] = Field(default_factory=list)
+    context_page_ids: list[str] = Field(default_factory=list)
+    cited_page_ids: list[str] = Field(default_factory=list)
+    used_page_ids: list[str] = Field(default_factory=list)
+    doc_refs: list[str] = Field(default_factory=list)
+    model_embed: str = ""
+    model_rerank: str = ""
+    selective_icr_shadow_used: bool = False
+    selective_icr_shadow_model: str = ""
+    selective_icr_shadow_latency_ms: int = 0
+    selective_icr_shadow_candidate_count: int = 0
+    selective_icr_shadow_chunk_ids: list[str] = Field(default_factory=list)
+    selective_icr_shadow_page_ids: list[str] = Field(default_factory=list)
+    selective_icr_shadow_provider_exit: bool = False
+    model_llm: str = ""
+    llm_provider: str = ""
+    llm_finish_reason: str = ""
+    generation_mode: str = ""
+    context_chunk_count: int = 0
+    context_budget_tokens: int = 0
+    malformed_tail_detected: bool = False
+    retried: bool = False
+    model_upgraded: bool = False
+    trained_page_scorer_used: bool = False
+    trained_page_scorer_model_path: str = ""
+    trained_page_scorer_page_ids: list[str] = Field(default_factory=list)
+    trained_page_scorer_fallback_reason: str = ""
+    grounding_portfolio_candidates: list[str] = Field(default_factory=list)
+    grounding_portfolio_selected: str = ""
+    grounding_portfolio_decision_reasons: list[str] = Field(default_factory=list)
+    grounding_audit_failed_slots: list[str] = Field(default_factory=list)
+    grounding_audit_fallback_used: bool = False
+    grounding_escalation_triggered: bool = False
+    grounding_escalation_reasons: list[str] = Field(default_factory=list)
+    grounding_escalation_family: str = ""
+    grounding_shadow_rewrite_used: bool = False
+    grounding_shadow_rewrite_family: str = ""
+    grounding_relevance_verifier_used: bool = False
+    grounding_relevance_verifier_confidence: float = 0.0
+    grounding_relevance_verifier_fallback_reason: str = ""
+    claim_graph_enabled: bool = False
+    claim_graph_count: int = 0
+    claim_graph_unsupported_count: int = 0
+    claim_graph_support_coverage: float = 0.0
+    proof_compiler_enabled: bool = False
+    proof_compiler_used: bool = False
+    proof_compiler_support_coverage: float = 0.0
+    proof_compiler_verified_claim_count: int = 0
+    proof_compiler_dropped_claim_count: int = 0
+    proof_compiler_fallback_reason: str = ""
+    proof_compiler_fully_supported: bool = False
+
+
+class RAGResponse(BaseModel):
+    """Full (non-streaming) response model — used for testing/logging."""
+
+    answer: str | None
+    citations: list[Citation]
+    telemetry: TelemetryPayload
+
+
+class SSEEvent(BaseModel):
+    """Individual SSE event sent during streaming."""
+
+    event: SSEEventType
+    data: str  # JSON-encoded payload
+
+
+# -- Ingestion Models --
+
+
+class DocumentSection(BaseModel):
+    """A structural section within a parsed document."""
+
+    heading: str = ""
+    section_path: str = ""
+    text: str = ""
+    level: int = 0
+
+
+class ProvidedChunk(BaseModel):
+    """A chunk provided by the evaluator/dataset (IDs must be preserved).
+
+    Use this when the competition starter kit provides pre-chunked inputs with stable `chunk_id`s
+    that are used for grounding verification (gold-chunk matching).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    chunk_id: str
+    text: str
+    section_path: str = ""
+    citations: list[str] = Field(default_factory=list)
+    anchors: list[str] = Field(default_factory=list)
+
+
+def _document_sections_factory() -> list[DocumentSection]:
+    return []
+
+
+def _provided_chunks_factory() -> list[ProvidedChunk]:
+    return []
+
+
+class ParsedDocument(BaseModel):
+    """Output of document parser — one per source file."""
+
+    doc_id: str
+    title: str
+    doc_type: DocType
+    jurisdiction: str = ""
+    source_path: str = ""
+    full_text: str = ""
+    sections: list[DocumentSection] = Field(default_factory=_document_sections_factory)
+    provided_chunks: list[ProvidedChunk] = Field(default_factory=_provided_chunks_factory)
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class Chunk(BaseModel):
+    """A text chunk ready for embedding and indexing."""
+
+    chunk_id: str
+    doc_id: str
+    doc_title: str
+    doc_type: DocType
+    jurisdiction: str = ""
+    section_path: str = ""
+    chunk_text: str
+    chunk_text_for_embedding: str  # SAC-augmented version
+    doc_summary: str = ""
+    citations: list[str] = Field(default_factory=list)
+    anchors: list[str] = Field(default_factory=list)
+    token_count: int = 0
+    chunk_type: str = ""
+    doc_family: str = ""
+    page_family: str = ""
+    normalized_title: str = ""
+    normalized_refs: list[str] = Field(default_factory=list)
+    amount_roles: list[str] = Field(default_factory=list)
+    shadow_search_text: str = ""
+    party_names: list[str] = Field(default_factory=list)
+    court_names: list[str] = Field(default_factory=list)
+    law_titles: list[str] = Field(default_factory=list)
+    article_refs: list[str] = Field(default_factory=list)
+    case_numbers: list[str] = Field(default_factory=list)
+    cross_refs: list[str] = Field(default_factory=list)
+    canonical_entity_ids: list[str] = Field(default_factory=list)
+    segment_id: str = ""
+
+
+# -- LangGraph State --
+
+
+class PipelineTimings(BaseModel):
+    """Per-stage timing accumulator."""
+
+    embed_ms: float = 0.0
+    qdrant_ms: float = 0.0
+    rerank_ms: float = 0.0
+    llm_ms: float = 0.0
+    classify_ms: float = 0.0
+    verify_ms: float = 0.0
+    grounding_ms: float = 0.0
+    total_ms: float = 0.0

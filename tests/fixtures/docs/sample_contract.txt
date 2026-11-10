@@ -1,0 +1,13 @@
+# Service Agreement
+
+## Parties
+This Agreement is entered into between Party A ("Provider") and Party B ("Client").
+
+## Term and Termination
+This Agreement shall commence on the Effective Date and continue for a period of twelve (12) months. Either party may terminate this Agreement upon thirty (30) days' written notice.
+
+## Confidential Information
+"Confidential Information" means all non-public information disclosed by either party. The receiving party shall not disclose Confidential Information to any third party without prior written consent.
+
+## Governing Law
+This Agreement shall be governed by the laws of the United States, specifically the State of Delaware.

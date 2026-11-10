@@ -1,0 +1,10 @@
+# Smith v. Jones [2021] UKSC 45
+
+## Facts
+The plaintiff, Mr. Smith, entered into a service agreement with the defendant, Mr. Jones, on 1 January 2018. The agreement contained a termination clause requiring 90 days' notice.
+
+## Holding
+The Supreme Court held that the termination clause in the service agreement between Smith and Jones was enforceable. The court determined that 90 days constitutes reasonable notice under Section 5 of the Employment Rights Act.
+
+## Reasoning
+The court considered the precedent set in Brown v. Green [2019] and found that termination clauses providing notice periods between 30 and 180 days are presumptively reasonable.

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "test_1",
+    "question_type": "boolean",
+    "complexity": "complex",
+    "question": "Under the UK Companies Act 2006, is a private company required to hold an annual general meeting?",
+    "old_prompt_weakness": "The old strict prompt lacked guidance on conditional/exception-laden provisions. The source text says private companies are NOT required to hold AGMs unless their articles require it. A naive extraction sees 'annual general meeting' and 'required' co-occurring in the provision and answers 'Yes' without accounting for the negation and the exception clause ('unless the articles require'). The old prompt had no disambiguation rule for conditional boolean answers where the provision contains both an affirmative and a negation.",
+    "new_prompt_improvement": "The new strict prompt adds: 'Before answering, confirm the EXACT provision mentioned in the question actually appears in your sources.' and 'If the answer requires inference, interpretation, or combining information not explicitly connected in the sources, output null.' This forces the model to read the full provision including its exception clause rather than pattern-matching on keywords. The disambiguation block also warns that related but different instruments must be matched exactly.",
+    "expected_behavior": "The model should identify that s.336 of the Companies Act 2006 states private companies are NOT required to hold AGMs (the requirement applies to public companies under s.336(1)), and answer 'No' with the correct provision cited. If the source only contains the public company requirement, the model should output 'null' rather than guessing."
+  },
+  {
+    "id": "test_2",
+    "question_type": "boolean",
+    "complexity": "complex",
+    "question": "Do both the Singapore Employment Act and the Singapore Partnership Act impose a statutory minimum wage?",
+    "old_prompt_weakness": "The old prompt did not explicitly handle comparison questions where one entity has supporting data and the other does not. When sources contain wage provisions for the Employment Act but nothing about minimum wage in the Partnership Act, the old prompt risked the model answering 'Yes' based on partial evidence or 'No' based on the absence of data for one act, conflating 'not found in sources' with 'the law does not impose it'. There was no rule forcing per-entity verification in boolean mode.",
+    "new_prompt_improvement": "The new strict prompt adds the grounding rule: 'Your answer must be a direct extraction from the source text. If the answer requires inference, interpretation, or combining information not explicitly connected in the sources, output null.' Combined with the disambiguation rule about different instruments, this prevents the model from transferring a fact about one statute to another and forces a null when one entity lacks source coverage.",
+    "expected_behavior": "The model should recognize that the sources may cover only one of the two acts. If the Partnership Act sources contain no minimum wage provision, the model should output 'null' rather than answering 'No' (which would be an inference about absence) or 'Yes' (which would be unsupported for the second act). The model must verify the claim independently for each named statute."
+  },
+  {
+    "id": "test_3",
+    "question_type": "number",
+    "complexity": "simple",
+    "question": "In what year was the Hong Kong Arbitration Ordinance (Cap. 609) enacted?",
+    "old_prompt_weakness": "The old strict prompt gave no guidance distinguishing between different numeric answer subtypes. When the question asks for a year, the source text might contain both 'Ordinance No. 17 of 2010' and 'enacted in 2011'. The old prompt's number extraction logic could latch onto '17' (the ordinance number) or '609' (the chapter number) instead of '2010' or '2011' (the enactment year). There was no instruction to match the semantic intent of the question to the correct numeric field.",
+    "new_prompt_improvement": "The new strict prompt adds: 'Your answer must be a direct extraction from the source text. You must be able to point to the exact passage that states the answer.' This forces the model to identify which numeric value in the source corresponds to the year of enactment specifically, not just any number co-located with the law title. The repair hint template also reinforces outputting only the value matching the asked type.",
+    "expected_behavior": "The model should extract the enactment year (e.g. '2010') and not confuse it with the ordinance number (17) or the chapter number (609). If the source says 'enacted on 10 June 2011', the answer should be '2011'. If the source only contains the chapter number and not the enactment year, the model should output 'null'."
+  },
+  {
+    "id": "test_4",
+    "question_type": "number",
+    "complexity": "simple",
+    "question": "What is the maximum number of days within which a notice of appeal must be filed under the EU General Court Rules of Procedure?",
+    "old_prompt_weakness": "The old strict prompt had no instruction for extracting a quantity embedded inside a duration phrase. The source text might say 'within two months and ten days' or 'within a period of 56 days from notification'. The old prompt could extract '2' from 'two months' or '10' from 'ten days' rather than the correct composite value, or fail to parse text-form numbers ('two', 'ten') into digits. There was no rule about preferring the numeric value that answers the specific unit asked (days vs months).",
+    "new_prompt_improvement": "The new strict prompt's grounding rule ('Your answer must be a direct extraction from the source text') combined with the anti-calculation rule ('Do NOT perform arithmetic or date calculations') prevents the model from computing a composite. The model must find the exact stated number of days. If the source says 'two months and ten days', the model should not attempt to convert months to days and add them.",
+    "expected_behavior": "The model should locate the specific duration stated in the source and extract the number matching the unit the question asks for. If the source states a period in a different unit than days, the model should output 'null' rather than converting. If the source says '56 days', the answer is '56'. The model should not perform arithmetic on composite durations."
+  },
+  {
+    "id": "test_5",
+    "question_type": "name",
+    "complexity": "simple",
+    "question": "What is the full citation title of the UK statute governing the protection of personal data enacted in 2018?",
+    "old_prompt_weakness": "The old prompt did not address preservation of prepositions and small words in legal titles. The correct answer is 'Data Protection Act 2018', but common model behavior drops or rearranges prepositions in longer titles. For a more complex example like 'Regulation of Investigatory Powers Act 2000' or 'Prevention of Terrorism Act 2005', models tend to abbreviate or drop 'of'. The old prompt had no rule insisting on verbatim reproduction of the citation title as it appears in the source.",
+    "new_prompt_improvement": "The new strict prompt includes the disambiguation rule: 'Legal titles that differ by even one word are DIFFERENT instruments. Never substitute a related instrument.' This forces exact title reproduction. The grounding rule further reinforces: 'Your answer must be a direct extraction from the source text.' Together, these prevent the model from paraphrasing or abbreviating a title.",
+    "expected_behavior": "The model should output the full citation title exactly as written in the source, including all prepositions (e.g. 'Data Protection Act 2018', not 'Data Protection 2018' or 'UK Data Protection Act'). If the source contains a citation clause like 'This Act may be cited as the Data Protection Act 2018', the model should reproduce that string verbatim."
+  },
+  {
+    "id": "test_6",
+    "question_type": "names",
+    "complexity": "complex",
+    "question": "What are the case references for all appeals heard by the Court of Appeal of England and Wales in 2019 concerning the interpretation of limitation periods under the Limitation Act 1980?",
+    "old_prompt_weakness": "The old prompt had no instruction about preserving exact case reference formatting across multiple items. Case references like '[2019] EWCA Civ 1234' or '[2019] EWCA Civ 567' have specific bracket-year-court-number formats that models tend to reformat, drop brackets, or merge into prose. The old prompt's names extraction could also stop after the first reference found rather than exhaustively listing all matching references in the sources.",
+    "new_prompt_improvement": "The new strict prompt's disambiguation rule ('Match titles EXACTLY as written') applies equally to case references. The grounding rule ('a direct extraction from the source text') prevents reformatting. For the names type, the system also benefits from the exhaustive enumeration instruction in the free_text prompts that carries over as a general principle: check every source block before stopping. The strict repair hint ensures output contains only the required values.",
+    "expected_behavior": "The model should list each case reference exactly as formatted in the source (e.g. '[2019] EWCA Civ 1234; [2019] EWCA Civ 567') without dropping neutral citation brackets, altering spacing, or omitting entries. If sources contain three matching references, all three must appear. The model should not paraphrase references into prose form."
+  },
+  {
+    "id": "test_7",
+    "question_type": "free_text",
+    "complexity": "simple",
+    "question": "What are the grounds on which a court may set aside an arbitral award under the Singapore International Arbitration Act?",
+    "old_prompt_weakness": "The old simple free_text prompt said 'Be concise and direct. Answer in 1-2 sentences maximum.' but also warned 'Your answer may be truncated at 280 characters.' For enumeration-type free_text questions where the answer lists multiple statutory grounds (potentially 6-8 items), the 1-2 sentence limit and 280-char truncation warning caused the model to aggressively compress, dropping later grounds. The old prompt had no instruction to prioritize completeness over brevity when the question asks for a full list.",
+    "new_prompt_improvement": "The new prompt adds 'ANSWER PRIORITY: Put the most important information FIRST' and the exhaustive enumeration rule: 'check EVERY source provided and list ALL that match.' The enumeration hint logic in generation_logic.py also adds dynamic hints for broad enumeration queries, instructing the model to inspect every source block before stopping and to output a compact numbered list rather than a truncated paragraph.",
+    "expected_behavior": "The model should list all statutory grounds from the source in a compact numbered format, ordered by importance, with the most critical grounds appearing first within the 280-char budget. The model should not stop after listing 2-3 grounds when the source contains 6-8. Each ground should be stated concisely with a citation."
+  },
+  {
+    "id": "test_8",
+    "question_type": "free_text",
+    "complexity": "complex",
+    "question": "How did the EU regulatory framework for prospectus requirements change between the Prospectus Directive (2003/71/EC) and the Prospectus Regulation (EU 2017/1129), and what are the key substantive differences?",
+    "old_prompt_weakness": "The old complex prompt said 'If sources conflict or are ambiguous, explain the conflict and cite both sides' but gave no guidance on temporal comparison across documents. When comparing two instruments from different time periods, the model could conflate provisions from the 2003 directive with the 2017 regulation, mix up which requirements belong to which instrument, or fail to organize the answer chronologically. The old prompt also lacked a rule about not transferring provisions between instruments.",
+    "new_prompt_improvement": "The new complex prompt adds 'TEMPORAL AWARENESS: When the question involves dates, time periods, or sequences, pay close attention to WHEN provisions took effect, were amended, or were repealed. Do NOT conflate dates from different versions or amendments of the same instrument.' Combined with the multi-criteria check rule ('verify EVERY criterion for the SAME law/document. Do NOT transfer a criterion from one law/document to another'), this ensures each instrument's provisions are attributed correctly.",
+    "expected_behavior": "The model should structure the answer as a comparison, clearly attributing each requirement to the correct instrument (Directive vs Regulation) with temporal context. It should not state that a 2017 Regulation requirement existed under the 2003 Directive, and vice versa. Each claimed difference should be individually cited to the specific source block for that instrument."
+  },
+  {
+    "id": "test_9",
+    "question_type": "free_text",
+    "complexity": "simple",
+    "question": "What is the standard of review applied by the Administrative Appeals Tribunal of Australia when reviewing a decision to cancel a visa on character grounds?",
+    "old_prompt_weakness": "The old prompt system was heavily tuned for financial-center regulatory law (DIFC-style statutes, regulations, and case law). When encountering an unfamiliar legal domain like Australian immigration/administrative law, the model could fall back on general legal knowledge rather than strictly adhering to the provided sources. The old prompt had no explicit instruction treating all jurisdictions and legal domains with equal rigor, risking jurisdiction-specific assumptions leaking into the answer.",
+    "new_prompt_improvement": "The new prompt explicitly adds: 'Treat all legal systems, jurisdictions, and document types (statutes, regulations, contracts, case law, decrees, ordinances) with equal rigor. Do NOT assume conventions from one legal domain apply to another.' This domain-neutrality instruction prevents the model from importing assumptions about standard of review from one jurisdiction (e.g. UK judicial review) when answering about another (Australian merits review).",
+    "expected_behavior": "The model should answer based solely on what the provided sources state about the AAT's standard of review, without importing concepts from UK or US administrative law. If the sources describe a 'merits review' standard (de novo), the model should state that without assuming it operates like a 'Wednesbury reasonableness' or 'arbitrary and capricious' standard from other jurisdictions. If sources are insufficient, the model should say so."
+  },
+  {
+    "id": "test_10",
+    "question_type": "free_text",
+    "complexity": "complex",
+    "question": "Which EU regulations enacted between 2016 and 2022 impose mandatory reporting obligations on financial institutions, and what are the specific reporting requirements under each?",
+    "old_prompt_weakness": "The old prompt's enumeration handling was weak for exhaustive multi-criteria searches. When the question requires scanning all source blocks to find every regulation matching two criteria (date range AND mandatory reporting), the model tended to stop after finding 2-3 matches from early source blocks without checking later blocks. The old prompt said 'Do NOT stop after a representative subset' but lacked the dynamic hint that tells the model the exact number of source blocks to inspect.",
+    "new_prompt_improvement": "The new generation logic dynamically injects an enumeration hint with the exact source block count: 'Inspect every source block provided (N total) before stopping. Output ONLY the numbered list items.' It also adds multi-criteria verification: 'List a law only if the source block or combined source blocks for that same law explicitly support every criterion in the question; if one criterion is missing for that law, exclude it.' This two-pronged approach ensures exhaustive coverage and per-item criterion validation.",
+    "expected_behavior": "The model should systematically check every source block, identify all regulations within the 2016-2022 date range that impose mandatory reporting obligations, and for each one list the specific reporting requirements. The model should not stop after finding SFTR and EMIR if the sources also contain MiFIR, CSDR, or AMLD provisions. Each listed regulation must satisfy both criteria (date range and mandatory reporting) with individual citations."
+  }
+]

@@ -1,0 +1,35 @@
+{
+  "model_type": "lgbm",
+  "train_example_count": 1567,
+  "dev_example_count": 369,
+  "train_question_count": 72,
+  "dev_question_count": 19,
+  "train_hit_at_1": 0.6666666666666666,
+  "train_hit_at_2": 0.8055555555555556,
+  "train_mrr": 0.7608796296296299,
+  "train_fbeta_2_5": 0.8657802308078274,
+  "dev_hit_at_1": 0.6842105263157895,
+  "dev_hit_at_2": 0.7894736842105263,
+  "dev_mrr": 0.7571560480147737,
+  "dev_fbeta_2_5": 0.7221494102228048,
+  "heuristic_dev_hit_at_1": 0.631578947368421,
+  "heuristic_dev_hit_at_2": 0.6842105263157895,
+  "heuristic_dev_mrr": 0.7078947368421052,
+  "train_supervision_question_counts": {
+    "reviewed": 72
+  },
+  "dev_supervision_question_counts": {
+    "reviewed": 19
+  },
+  "label_mode": "reviewed_weighted",
+  "feature_policy": "runtime_safe_r3",
+  "label_quality_note": "Reviewed page labels are used with confidence-aware weighting; low-confidence rows are excluded.",
+  "cv_mean_hit_at_1": 0.24983581703284816,
+  "cv_std_hit_at_1": 0.05736187245002883,
+  "cv_mean_hit_at_2": 0.26754380272550293,
+  "cv_std_hit_at_2": 0.05509335247864954,
+  "cv_mean_mrr": 0.26209308336680986,
+  "cv_std_mrr": 0.051173041720708905,
+  "cv_mean_fbeta_2_5": 0.7604455806067609,
+  "cv_std_fbeta_2_5": 0.09121211683426822
+}

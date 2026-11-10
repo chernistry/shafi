@@ -1,0 +1,140 @@
+{
+  "_comment": "Legal alias clusters derived from manual_law_overrides.py. Used for BM25 query expansion when PIPELINE_BM25_ALIAS_EXPAND=true.",
+  "clusters": [
+    {
+      "primary": "Operating Law DIFC Law No. 7 of 2018",
+      "variants": [
+        "DIFC Law No. 7 of 2018",
+        "Law No. 7 of 2018",
+        "OPERATING LAW",
+        "Operating Law",
+        "Operating Law DIFC Law No. 7 of 2018"
+      ]
+    },
+    {
+      "primary": "General Partnership Law DIFC Law No. 11 of 2004",
+      "variants": [
+        "DIFC Law No. 11 of 2004",
+        "GENERAL PARTNERSHIP LAW",
+        "General Partnership Law",
+        "General Partnership Law DIFC Law No. 11 of 2004",
+        "Law No. 11 of 2004"
+      ]
+    },
+    {
+      "primary": "Limited Liability Partnership Law DIFC Law No. 5 of 2004",
+      "variants": [
+        "DIFC Law No. 5 of 2004",
+        "Law No. 5 of 2004",
+        "LIMITED LIABILITY PARTNERSHIP LAW",
+        "Limited Liability Partnership Law",
+        "Limited Liability Partnership Law DIFC Law No. 5 of 2004"
+      ]
+    },
+    {
+      "primary": "Law on the Application of Civil and Commercial Laws in the DIFC DIFC Law No. 3 of 2004",
+      "variants": [
+        "DIFC Law No. 3 of 2004",
+        "Law No. 3 of 2004",
+        "LAW ON THE APPLICATION OF CIVIL AND COMMERCIAL LAWS IN THE DIFC",
+        "Law on the Application of Civil and Commercial Laws in the DIFC",
+        "Law on the Application of Civil and Commercial Laws in the DIFC DIFC Law No. 3 of 2004"
+      ]
+    },
+    {
+      "primary": "Foundations Law DIFC Law No. 3 of 2018",
+      "variants": [
+        "DIFC Law No. 3 of 2018",
+        "FOUNDATIONS LAW",
+        "Foundations Law",
+        "Foundations Law DIFC Law No. 3 of 2018",
+        "Law No. 3 of 2018"
+      ]
+    },
+    {
+      "primary": "Companies Law DIFC Law No. 5 of 2018",
+      "variants": [
+        "COMPANIES LAW",
+        "Companies Law",
+        "Companies Law DIFC Law No. 5 of 2018",
+        "DIFC Law No. 5 of 2018",
+        "Law No. 5 of 2018"
+      ]
+    },
+    {
+      "primary": "Employment Law DIFC Law No. 2 of 2019",
+      "variants": [
+        "DIFC Law No. 2 of 2019",
+        "EMPLOYMENT LAW",
+        "Employment Law",
+        "Employment Law DIFC Law No. 2 of 2019",
+        "Law No. 2 of 2019"
+      ]
+    },
+    {
+      "primary": "Leasing Law DIFC Law No. 1 of 2020",
+      "variants": [
+        "DIFC Law No. 1 of 2020",
+        "Law No. 1 of 2020",
+        "LEASING LAW",
+        "Leasing Law",
+        "Leasing Law DIFC Law No. 1 of 2020"
+      ]
+    },
+    {
+      "primary": "Strata Title Law DIFC Law No. 5 of 2007",
+      "variants": [
+        "DIFC Law No. 5 of 2007",
+        "Law No. 5 of 2007",
+        "STRATA TITLE LAW",
+        "Strata Title Law",
+        "Strata Title Law DIFC Law No. 5 of 2007"
+      ]
+    },
+    {
+      "primary": "Leasing Regulations",
+      "variants": [
+        "LEASING REGULATIONS",
+        "Leasing Regulations"
+      ]
+    },
+    {
+      "primary": "Employment Regulations",
+      "variants": [
+        "EMPLOYMENT REGULATIONS",
+        "Employment Regulations"
+      ]
+    },
+    {
+      "primary": "Strata Title Regulations",
+      "variants": [
+        "STRATA TITLE REGULATIONS",
+        "Strata Title Regulations"
+      ]
+    },
+    {
+      "primary": "Financial Collateral Regulations",
+      "variants": [
+        "FINANCIAL COLLATERAL REGULATIONS",
+        "Financial Collateral Regulations"
+      ]
+    },
+    {
+      "primary": "Dematerialised Investments Regulations (DIR)",
+      "variants": [
+        "DEMATERIALISED INVESTMENTS REGULATIONS",
+        "DIR",
+        "Dematerialised Investments Regulations",
+        "Dematerialised Investments Regulations (DIR)"
+      ]
+    },
+    {
+      "primary": "Incorporated Cell Company (ICC) Regulations",
+      "variants": [
+        "ICC Regulations",
+        "INCORPORATED CELL COMPANY (ICC) REGULATIONS",
+        "Incorporated Cell Company (ICC) Regulations"
+      ]
+    }
+  ]
+}
