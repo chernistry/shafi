@@ -147,8 +147,8 @@ def test_answer_boolean_detects_common_judge_across_multiple_case_documents() ->
             page=1,
             text=(
                 "Claim No: CA 005/2025\n"
-                "hearing held before H.E. Chief Justice A. Example, "
-                "H.E. Justice D. Demo and H.E. Justice Sir E. Mock."
+                "hearing held before H.E. Chief Justice Alan Example, "
+                "H.E. Justice Dana Demo and H.E. Justice Sir Evan Mock."
             ),
         ),
         _case_chunk(
@@ -156,14 +156,14 @@ def test_answer_boolean_detects_common_judge_across_multiple_case_documents() ->
             doc_id="tcd001-first",
             doc_title="TCD 001/2024 Architeriors Interior Design v Emirates National Investment Co",
             page=1,
-            text=("Claim No: TCD 001/2024\nORDER WITH REASONS OF H.E. JUSTICE F. MODEL."),
+            text=("Claim No: TCD 001/2024\nORDER WITH REASONS OF H.E. JUSTICE FAY MODEL."),
         ),
         _case_chunk(
             chunk_id="tcd001:appeal",
             doc_id="tcd001-appeal",
             doc_title="TCD 001/2024 Architeriors Interior Design v Emirates National Investment Co",
             page=1,
-            text=("Claim No: TCD 001/2024\nORDER WITH REASONS OF H.E. CHIEF JUSTICE A. EXAMPLE."),
+            text=("Claim No: TCD 001/2024\nORDER WITH REASONS OF H.E. CHIEF JUSTICE ALAN EXAMPLE."),
         ),
     ]
 
@@ -1946,7 +1946,7 @@ def test_answer_boolean_sct_011_appealed_to_cfi() -> None:
     """Regression: SCT 011/2025 has a CFI judgment → 'Yes'.
 
     orev-51a: Omid v Orah [2025] DIFC SCT 011 doc contains a CFI judgment from H.E.
-    Justice G. Illustration AC KC, confirming the appeal reached the Court of First Instance.
+    Justice Gil Illustration AC KC, confirming the appeal reached the Court of First Instance.
     """
     answerer = StrictAnswerer()
     for q in [
@@ -1964,7 +1964,7 @@ def test_answer_boolean_sct_133_appealed_to_cfi() -> None:
     """Regression: SCT 133/2025 has a CFI Order → 'Yes'.
 
     orev-51a: Orphia v Orrel [2025] DIFC SCT 133 doc contains a CFI Order from H.E.
-    Justice H. Pattern, confirming the appeal reached the Court of First Instance.
+    Justice Hal Pattern, confirming the appeal reached the Court of First Instance.
     """
     answerer = StrictAnswerer()
     for q in [

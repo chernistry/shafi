@@ -685,7 +685,7 @@ def test_build_structured_free_text_answer_handles_case_outcome_result_query(moc
             doc_title="CFI 067/2025 Example v Example",
             doc_type=DocType.CASE_LAW,
             section_path="page:2",
-            text="This Order concerns the Defendant's Application for immediate judgment and/or strike out, which was dismissed by Order of H.E. Justice B. Sample.",
+            text="This Order concerns the Defendant's Application for immediate judgment and/or strike out, which was dismissed by Order of H.E. Justice Beth Sample.",
             retrieval_score=0.94,
             rerank_score=0.94,
             doc_summary="",
@@ -714,7 +714,7 @@ def test_build_structured_free_text_answer_prefers_pre_order_dismissal_over_cost
             doc_type=DocType.CASE_LAW,
             section_path="page:1",
             text=(
-                "ORDER WITH REASONS OF H.E. JUSTICE B. SAMPLE\n"
+                "ORDER WITH REASONS OF H.E. JUSTICE BETH SAMPLE\n"
                 "Application was dismissed and the Applicant was ordered to pay the Respondent's costs of the Application.\n"
                 "IT IS HEREBY ORDERED THAT:\n"
                 "1. The Applicant shall pay the Respondent 80% of the Respondent's costs of the Application.\n"
@@ -730,7 +730,7 @@ def test_build_structured_free_text_answer_prefers_pre_order_dismissal_over_cost
             doc_title="CFI 067/2025 Example v Example",
             doc_type=DocType.CASE_LAW,
             section_path="page:2",
-            text="This Order concerns the costs of the Defendant's Application for immediate judgment and/or strike out, which was dismissed by Order of H.E. Justice B. Sample.",
+            text="This Order concerns the costs of the Defendant's Application for immediate judgment and/or strike out, which was dismissed by Order of H.E. Justice Beth Sample.",
             retrieval_score=0.94,
             rerank_score=0.94,
             doc_summary="",

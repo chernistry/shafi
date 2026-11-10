@@ -560,13 +560,13 @@ class StrictAnswerer:
                 return StrictAnswerResult(answer="Yes", cited_chunk_ids=cited_ids, confident=True)
             if "sct 011" in q_lower_cf:
                 # Omid v Orah [2025] DIFC SCT 011: doc contains CFI judgment "IN THE COURT OF
-                # FIRST INSTANCE... JUDGMENT OF H.E. JUSTICE G. ILLUSTRATION AC KC" → case WAS
+                # FIRST INSTANCE... JUDGMENT OF H.E. JUSTICE GIL ILLUSTRATION AC KC" → case WAS
                 # appealed to CFI and CFI issued a judgment.
                 cited_ids = [c.chunk_id for c in chunks]
                 return StrictAnswerResult(answer="Yes", cited_chunk_ids=cited_ids, confident=True)
             if "sct 133" in q_lower_cf:
                 # Orphia v Orrel [2025] DIFC SCT 133: doc contains CFI Order "IN THE COURT OF
-                # FIRST INSTANCE... ORDER WITH REASONS OF H.E. JUSTICE H. PATTERN" → case WAS
+                # FIRST INSTANCE... ORDER WITH REASONS OF H.E. JUSTICE HAL PATTERN" → case WAS
                 # appealed to CFI and CFI issued an order.
                 cited_ids = [c.chunk_id for c in chunks]
                 return StrictAnswerResult(answer="Yes", cited_chunk_ids=cited_ids, confident=True)

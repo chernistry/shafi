@@ -67,16 +67,16 @@ def test_apply_manual_case_override_replaces_target_roles_only() -> None:
     override = ManualDomainOverride(
         claimant=("LXT Real Estate Broker L.L.C",),
         respondent=("SIR Real Estate LLC",),
-        judges=("Chief Justice A. Example", "Justice Sir E. Mock", "Justice D. Demo"),
+        judges=("Chief Justice Alan Example", "Justice Sir Evan Mock", "Justice Dana Demo"),
     )
 
     patched = apply_manual_domain_override(compiled, override)
 
     assert isinstance(patched, CaseObject)
     assert patched.judges == [
-        "Chief Justice A. Example",
-        "Justice Sir E. Mock",
-        "Justice D. Demo",
+        "Chief Justice Alan Example",
+        "Justice Sir Evan Mock",
+        "Justice Dana Demo",
     ]
     assert patched.parties == [
         CaseParty(name="LXT Real Estate Broker L.L.C", role="claimant"),
